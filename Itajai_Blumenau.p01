@@ -1,0 +1,8 @@
+Plan Title=Simulacao_Previsao
+Program Version=7.01
+Geom File=g01
+Unsteady File=u01
+Simulation Date= 01Jan2026, 0000, 02Jan2026, 0000
+Computation Interval= 1MIN
+Output Interval= 1HOUR
+Unsteady Routing= 1

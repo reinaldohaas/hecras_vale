@@ -1,0 +1,20 @@
+Flow Title=Cenario_Previsao_Bacia_Completa
+Program Version=7.01
+Boundary Location= Itajai_do_Sul,Trecho_Sul, 100000.00 
+Interval= 1HOUR
+Flow Hydrograph= 24 
+1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200 1200
+Boundary Location= Itajai_do_Oeste,Trecho_Oeste, 100000.00 
+Interval= 1HOUR
+Flow Hydrograph= 24 
+1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500 1500
+Boundary Location= Itajai_do_Norte,Trecho_Norte, 80000.00 
+Interval= 1HOUR
+Flow Hydrograph= 24 
+2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000 2000
+Boundary Location= Itajai_Acu,Trecho_Principal, 0.00 
+Interval= 1HOUR
+Stage Hydrograph= 24 
+0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1
+Initial Stage= 2 
+Initial Flow= 1000 

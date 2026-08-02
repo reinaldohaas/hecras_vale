@@ -1,0 +1,8 @@
+requests
+pywin32
+pandas
+numpy
+geopandas
+shapely
+pyproj
+matplotlib
