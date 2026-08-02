@@ -10,11 +10,28 @@ As figuras serão salvas na pasta 'figuras/'.
 """
 
 import os
+from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Criar pasta para salvar as figuras
-os.makedirs("figuras", exist_ok=True)
+def save_fig_safely(fig, filename):
+    """Salva a figura com segurança no Windows mesmo se o arquivo estiver em uso pelo visualizador."""
+    output_dir = Path("figuras").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    target_path = output_dir / filename
+    
+    try:
+        if target_path.exists():
+            try:
+                target_path.unlink()
+            except Exception:
+                pass
+        fig.savefig(str(target_path), dpi=300, bbox_inches='tight')
+        print(f"-> Salvo com sucesso em: {target_path}")
+    except OSError:
+        alt_path = output_dir / f"novo_{filename}"
+        fig.savefig(str(alt_path), dpi=300, bbox_inches='tight')
+        print(f"-> Salvo em: {alt_path} (o arquivo original estava aberto em outro programa).")
 
 # Configurar estilo dos gráficos
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
@@ -30,19 +47,12 @@ print("Gerando Figura 1: Diagrama da Bacia e Barragens...")
 fig, ax = plt.subplots(figsize=(12, 8), dpi=300)
 
 # Desenhar Rios (linhas azuis)
-# 1. Rio Itajaí do Sul
 ax.plot([1, 4], [8, 6], color='#1f77b4', linewidth=4, label='Rio Itajaí do Sul')
-# 2. Rio Itajaí do Oeste
 ax.plot([1, 4], [4, 6], color='#17becf', linewidth=4, label='Rio Itajaí do Oeste')
-# 3. Rio Itajaí-Açu (Trecho Alto)
 ax.plot([4, 7], [6, 6], color='#004c6d', linewidth=5, label='Rio Itajaí-Açu (Principal)')
-# 4. Rio Itajaí do Norte / Hercílio
 ax.plot([5, 7], [9, 6], color='#2ca02c', linewidth=4, label='Rio Itajaí do Norte')
-# 5. Rio Benedito
 ax.plot([7.5, 8.5], [8.5, 7], color='#9467bd', linewidth=3, label='Rio Benedito')
-# 6. Rio Itajaí-Açu (Trecho Baixo até Mar)
 ax.plot([7, 12], [6, 6], color='#004c6d', linewidth=6)
-# 7. Rio Itajaí-Mirim
 ax.plot([10, 11.5], [3, 5.8], color='#e377c2', linewidth=3.5, label='Rio Itajaí-Mirim')
 
 # Desenhar Barragens (Ícones/Pontos)
@@ -81,9 +91,8 @@ for cx, cy, nome, offset in cidades:
 ax.set_title('Rede Hidrográfica e Sistema de Barragens do Vale do Itajaí (HEC-RAS)', fontsize=14, fontweight='bold', pad=15)
 ax.axis('off')
 plt.legend(loc='lower left', frameon=True, facecolor='white', framealpha=0.9)
-plt.tight_layout()
-plt.savefig('figuras/figura_1_rede_de_rios_e_barragens.png')
-plt.close()
+save_fig_safely(fig, "figura_1_rede_de_rios_e_barragens.png")
+plt.close(fig)
 
 # ==============================================================================
 # FIGURA 2: Perfil Longitudinal de Altitude (Da Nascente ao Mar)
@@ -92,11 +101,8 @@ print("Gerando Figura 2: Perfil Longitudinal do Rio...")
 
 fig, ax = plt.subplots(figsize=(10, 5), dpi=300)
 
-# Distância em km a partir do mar (0 km = Foz Itajaí, 250 km = Nascente no Alto Vale)
 distancia_km = np.linspace(250, 0, 250)
 
-# Perfil sintético de elevação do fundo do rio (em metros acima do nível do mar)
-# Nascente (450m) -> Rio do Sul (340m) -> Blumenau (12m) -> Itajaí (-15m)
 elevação_fundo = np.piecewise(distancia_km, 
     [distancia_km > 150, (distancia_km <= 150) & (distancia_km > 60), distancia_km <= 60],
     [lambda d: 340 + (d - 150) * 1.1, 
@@ -106,14 +112,12 @@ elevação_fundo = np.piecewise(distancia_km,
 ax.plot(distancia_km, elevação_fundo, color='#004c6d', linewidth=2.5, label='Fundo do Rio (Calha)')
 ax.fill_between(distancia_km, elevação_fundo, -30, color='#e6f2ff', alpha=0.5)
 
-# Marcar Barragens no perfil
 ax.axvline(x=200, color='#d62728', linestyle='--', alpha=0.7)
 ax.text(200, 380, ' Barragem Sul / Oeste\n (~350m a 390m)', color='#d62728', fontweight='bold')
 
 ax.axvline(x=180, color='#2ca02c', linestyle='--', alpha=0.7)
 ax.text(180, 280, ' Barragem Norte\n (~300m)', color='#2ca02c', fontweight='bold')
 
-# Marcar Cidades no Perfil
 ax.plot(150, 340, 'o', color='#ff7f0e', markersize=8)
 ax.text(150, 310, 'Rio do Sul (340m)', fontweight='bold', ha='center')
 
@@ -127,10 +131,9 @@ ax.set_xlabel('Distância da Foz em Itajaí (km)', fontsize=11, fontweight='bold
 ax.set_ylabel('Altitude em Relação ao Nível do Mar (m)', fontsize=11, fontweight='bold')
 ax.set_title('Perfil Longitudinal de Declividade da Bacia do Itajaí', fontsize=13, fontweight='bold')
 ax.grid(True, linestyle=':', alpha=0.6)
-ax.set_xlim(250, 0) # Inverter eixo X para fluxo ir da esquerda para direita
-plt.tight_layout()
-plt.savefig('figuras/figura_2_perfil_longitudinal_cotas.png')
-plt.close()
+ax.set_xlim(250, 0)
+save_fig_safely(fig, "figura_2_perfil_longitudinal_cotas.png")
+plt.close(fig)
 
 # ==============================================================================
 # FIGURA 3: Didática de Amortecimento de Cheia pelas Barragens
@@ -141,17 +144,12 @@ fig, ax = plt.subplots(figsize=(10, 5), dpi=300)
 
 horas = np.linspace(0, 48, 100)
 
-# Hidrograma de Entrada de Chuva (Sem Barragem - Pico alto e rápido)
 vazao_entrada = 500 + 3500 * np.exp(-((horas - 18)/6)**2)
-
-# Hidrograma Saída da Barragem (Comportas Fechadas no pico -> Amortecimento)
-# O pico fica mais baixo e atrasado no tempo
 vazao_comportas_fechadas = 500 + 1200 * np.exp(-((horas - 28)/10)**2)
 
 ax.plot(horas, vazao_entrada, color='#d62728', linestyle='--', linewidth=2.5, label='Vazão da Chuva Sem Barragem (Pico: 4000 m³/s)')
 ax.plot(horas, vazao_comportas_fechadas, color='#1f77b4', linewidth=3, label='Vazão Retida com Comportas Fechadas (Pico: 1700 m³/s)')
 
-# Sombrear volume de água retido pela barragem
 ax.fill_between(horas, vazao_entrada, vazao_comportas_fechadas, where=(vazao_entrada > vazao_comportas_fechadas),
                 color='#ffcccc', alpha=0.5, label='Volume de Água Acumulado no Reservatório (Amortecimento)')
 
@@ -160,13 +158,9 @@ ax.set_ylabel('Vazão do Rio - Q (m³/s)', fontsize=11, fontweight='bold')
 ax.set_title('Efeito Prático das Barragens: Redução do Pico de Cheia em Rio do Sul e Blumenau', fontsize=13, fontweight='bold')
 ax.legend(loc='upper right', frameon=True, facecolor='white')
 ax.grid(True, linestyle=':', alpha=0.6)
-plt.tight_layout()
-plt.savefig('figuras/figura_3_hidrogramas_e_amortecimento.png')
-plt.close()
+save_fig_safely(fig, "figura_3_hidrogramas_e_amortecimento.png")
+plt.close(fig)
 
 print("\n=========================================================================")
-print("SUCESSO: As 3 figuras didáticas foram geradas na pasta 'figuras/'!")
-print("1. figuras/figura_1_rede_de_rios_e_barragens.png")
-print("2. figuras/figura_2_perfil_longitudinal_cotas.png")
-print("3. figuras/figura_3_hidrogramas_e_amortecimento.png")
+print("SUCESSO: Todas as figuras foram salvas com segurança na pasta 'figuras/'!")
 print("=========================================================================")
