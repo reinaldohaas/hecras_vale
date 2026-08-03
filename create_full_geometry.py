@@ -18,9 +18,9 @@ def create_full_basin_hecras():
     flow_file = f"{project_name}.u01"
     plan_file = f"{project_name}.p01"
 
-    print("Gerando projeto HEC-RAS multi-trecho com 'Current Plan=p01' ativo...")
+    print("Gerando projeto HEC-RAS multi-trecho com formatação nativa HEC-RAS 7.0.1...")
 
-    # 1. PRJ File (Com 'Current Plan=p01' para carregar plano, geometria e fluxo automaticamente)
+    # 1. PRJ File
     with open(prj_file, "w") as f:
         f.write(f"Proj Title={project_name}\n")
         f.write("Current Plan=p01\n")
@@ -185,26 +185,30 @@ def create_full_basin_hecras():
         # Entrada Montante: Rio Itajaí do Sul (100000.00)
         f.write(f"Boundary Location= {format_16_str('Itajai_do_Sul')},{format_16_str('Trecho_Sul')}, 100000.00                     ,               ,               ,               ,               ,               \n")
         f.write("Interval= 1HOUR\n")
-        f.write("Flow Hydrograph= 24 \n")
-        f.write(" ".join(["1200"] * 24) + "\n")
+        f.write("Flow Hydrograph= 25 \n")
+        f.write("01SEP2008, 0000\n")
+        f.write(" ".join(["1200"] * 25) + "\n")
+        f.write("Use Simulation Period= T\n")
 
         # Entrada Montante: Rio Itajaí do Oeste (100000.00)
         f.write(f"Boundary Location= {format_16_str('Itajai_do_Oeste')},{format_16_str('Trecho_Oeste')}, 100000.00                     ,               ,               ,               ,               ,               \n")
         f.write("Interval= 1HOUR\n")
-        f.write("Flow Hydrograph= 24 \n")
-        f.write(" ".join(["1500"] * 24) + "\n")
+        f.write("Flow Hydrograph= 25 \n")
+        f.write("01SEP2008, 0000\n")
+        f.write(" ".join(["1500"] * 25) + "\n")
+        f.write("Use Simulation Period= T\n")
 
         # Entrada Montante: Rio Itajaí do Norte (80000.00)
         f.write(f"Boundary Location= {format_16_str('Itajai_do_Norte')},{format_16_str('Trecho_Norte')}, 80000.00                      ,               ,               ,               ,               ,               \n")
         f.write("Interval= 1HOUR\n")
-        f.write("Flow Hydrograph= 24 \n")
-        f.write(" ".join(["2000"] * 24) + "\n")
+        f.write("Flow Hydrograph= 25 \n")
+        f.write("01SEP2008, 0000\n")
+        f.write(" ".join(["2000"] * 25) + "\n")
+        f.write("Use Simulation Period= T\n")
 
-        # Jusante: Foz do Rio Itajaí-Açu (0.00)
+        # Jusante: Foz do Rio Itajaí-Açu (0.00) com Normal Depth (Declividade 0.001)
         f.write(f"Boundary Location= {format_16_str('Itajai_Acu')},{format_16_str('Trecho_Principal')}, 0.00                          ,               ,               ,               ,               ,               \n")
-        f.write("Interval= 1HOUR\n")
-        f.write("Stage Hydrograph= 24 \n")
-        f.write(" ".join(["0"] * 12 + ["1"] * 12) + "\n")
+        f.write("Friction Slope= 0.001\n")
 
         f.write("Initial Stage= 2 \n")
         f.write("Initial Flow= 1000 \n")
@@ -220,7 +224,7 @@ def create_full_basin_hecras():
         f.write("Output Interval= 1HOUR\n")
         f.write("Unsteady Routing= 1\n")
 
-    print("Projeto HEC-RAS 'Itajai_Bacia_Completa' atualizado com Current Plan=p01!")
+    print("Projeto HEC-RAS 'Itajai_Bacia_Completa' atualizado com Normal Depth e cabeçalho de data em .u01!")
 
 if __name__ == "__main__":
     create_full_basin_hecras()
