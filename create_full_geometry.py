@@ -18,19 +18,20 @@ def create_full_basin_hecras():
     flow_file = f"{project_name}.u01"
     plan_file = f"{project_name}.p01"
 
-    print("Gerando projeto HEC-RAS multi-trecho com formatação estrita de colunas HEC-RAS 7...")
+    print("Gerando projeto HEC-RAS multi-trecho com 'Current Plan=p01' ativo...")
 
-    # 1. PRJ File
+    # 1. PRJ File (Com 'Current Plan=p01' para carregar plano, geometria e fluxo automaticamente)
     with open(prj_file, "w") as f:
         f.write(f"Proj Title={project_name}\n")
-        f.write("Program Version=7.01\n")
+        f.write("Current Plan=p01\n")
+        f.write("Default Exp/Contr=0.3,0.1\n")
+        f.write("SI Units\n")
         f.write("Geom File=g01\n")
         f.write("Unsteady File=u01\n")
         f.write("Plan File=p01\n")
         f.write("Y Axis Title=Elevation\n")
         f.write("X Axis Title(PR)=Distance\n")
         f.write("X Axis Title(CS)=Station\n")
-        f.write("SI Units\n")
 
     # 2. Geometry File (.g01)
     with open(geom_file, "w") as f:
@@ -177,7 +178,6 @@ def create_full_basin_hecras():
             f.write(format_8(-80) + format_8(0.05) + format_8(0) + format_8(-50) + format_8(0.035) + format_8(0) + format_8(50) + format_8(0.05) + format_8(0) + "\n")
 
     # 3. Unsteady Flow File (.u01)
-    # HEC-RAS exige exatos 16 caracteres para River e 16 para Reach
     with open(flow_file, "w") as f:
         f.write("Flow Title=Cenario_Previsao_Bacia_Completa\n")
         f.write("Program Version=7.01\n")
@@ -220,7 +220,7 @@ def create_full_basin_hecras():
         f.write("Output Interval= 1HOUR\n")
         f.write("Unsteady Routing= 1\n")
 
-    print("Projeto HEC-RAS da Bacia Completa gerado com alinhamento estrito de 16 caracteres nas condições de contorno!")
+    print("Projeto HEC-RAS 'Itajai_Bacia_Completa' atualizado com Current Plan=p01!")
 
 if __name__ == "__main__":
     create_full_basin_hecras()
