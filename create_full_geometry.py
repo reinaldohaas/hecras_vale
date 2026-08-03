@@ -2,9 +2,6 @@ import os
 import math
 import numpy as np
 
-def format_16_str(s):
-    return f"{s:<16}"
-
 def format_16_num(val):
     return f"{val:>16.4f}"
 
@@ -18,7 +15,7 @@ def create_full_basin_hecras():
     flow_file = f"{project_name}.u01"
     plan_file = f"{project_name}.p01"
 
-    print("Gerando projeto HEC-RAS da Bacia Completa com cabeçalho de plano completo...")
+    print("Gerando projeto HEC-RAS da Bacia Completa com formato .u01 limpo e compatível...")
 
     # 1. PRJ File
     with open(prj_file, "w") as f:
@@ -39,7 +36,7 @@ def create_full_basin_hecras():
         f.write("Program Version=7.01\n")
 
         # --- TRECHO 1: Rio Itajaí do Sul ---
-        f.write("River Reach= Itajai_do_Sul   ,Trecho_Sul      \n")
+        f.write("River Reach= Itajai_do_Sul,Trecho_Sul\n")
         st_sul = np.arange(100000, -1000, -1000)
         f.write(f"Reach XY= 2 \n")
         f.write(format_16_num(650000) + format_16_num(6970000) + format_16_num(660000) + format_16_num(7000000) + "\n")
@@ -76,7 +73,7 @@ def create_full_basin_hecras():
             f.write(format_8(-80) + format_8(0.05) + format_8(0) + format_8(-50) + format_8(0.035) + format_8(0) + format_8(50) + format_8(0.05) + format_8(0) + "\n")
 
         # --- TRECHO 2: Rio Itajaí do Oeste ---
-        f.write("River Reach= Itajai_do_Oeste ,Trecho_Oeste    \n")
+        f.write("River Reach= Itajai_do_Oeste,Trecho_Oeste\n")
         st_oeste = np.arange(100000, -1000, -1000)
         f.write(f"Reach XY= 2 \n")
         f.write(format_16_num(600000) + format_16_num(7010000) + format_16_num(660000) + format_16_num(7000000) + "\n")
@@ -114,12 +111,12 @@ def create_full_basin_hecras():
 
         # --- JUNÇÃO 1: Rio do Sul ---
         f.write("Junction= Junc_Rio_do_Sul, , 660000, 7000000\n")
-        f.write("Upstream Reach= Itajai_do_Sul   ,Trecho_Sul      \n")
-        f.write("Upstream Reach= Itajai_do_Oeste ,Trecho_Oeste    \n")
-        f.write("Downstream Reach= Itajai_Acu      ,Trecho_Principal\n")
+        f.write("Upstream Reach= Itajai_do_Sul,Trecho_Sul\n")
+        f.write("Upstream Reach= Itajai_do_Oeste,Trecho_Oeste\n")
+        f.write("Downstream Reach= Itajai_Acu,Trecho_Principal\n")
 
         # --- TRECHO 3: Rio Itajaí-Açu ---
-        f.write("River Reach= Itajai_Acu      ,Trecho_Principal\n")
+        f.write("River Reach= Itajai_Acu,Trecho_Principal\n")
         st_acu = np.arange(150000, -1000, -1000)
         f.write(f"Reach XY= 2 \n")
         f.write(format_16_num(660000) + format_16_num(7000000) + format_16_num(730000) + format_16_num(7020000) + "\n")
@@ -141,7 +138,7 @@ def create_full_basin_hecras():
             f.write(format_8(-100) + format_8(0.05) + format_8(0) + format_8(-75) + format_8(0.035) + format_8(0) + format_8(75) + format_8(0.05) + format_8(0) + "\n")
 
         # --- TRECHO 4: Rio Itajaí do Norte ---
-        f.write("River Reach= Itajai_do_Norte ,Trecho_Norte    \n")
+        f.write("River Reach= Itajai_do_Norte,Trecho_Norte\n")
         st_norte = np.arange(80000, -1000, -1000)
         f.write(f"Reach XY= 2 \n")
         f.write(format_16_num(640000) + format_16_num(7050000) + format_16_num(680000) + format_16_num(7010000) + "\n")
@@ -177,38 +174,34 @@ def create_full_basin_hecras():
             f.write("#Mann= 3 , -1 , 0 \n")
             f.write(format_8(-80) + format_8(0.05) + format_8(0) + format_8(-50) + format_8(0.035) + format_8(0) + format_8(50) + format_8(0.05) + format_8(0) + "\n")
 
-    # 3. Unsteady Flow File (.u01)
+    # 3. Unsteady Flow File (.u01) - Sintaxe estritamente limpa idêntica ao Itajai_Blumenau.u01
     with open(flow_file, "w") as f:
         f.write("Flow Title=Cenario_Previsao_Bacia_Completa\n")
         f.write("Program Version=7.01\n")
 
-        # Entrada Montante: Rio Itajaí do Sul (100000.00)
-        f.write(f"Boundary Location= {format_16_str('Itajai_do_Sul')},{format_16_str('Trecho_Sul')}, 100000.00                     ,               ,               ,               ,               ,               \n")
+        # Entrada Montante: Rio Itajaí do Sul
+        f.write("Boundary Location= Itajai_do_Sul,Trecho_Sul, 100000.00 \n")
         f.write("Interval= 1HOUR\n")
-        f.write("Flow Hydrograph= 25 \n")
-        f.write("01SEP2008, 0000\n")
-        f.write(" ".join(["1200"] * 25) + "\n")
-        f.write("Use Simulation Period= T\n")
+        f.write("Flow Hydrograph= 24 \n")
+        f.write(" ".join(["1200"] * 24) + "\n")
 
-        # Entrada Montante: Rio Itajaí do Oeste (100000.00)
-        f.write(f"Boundary Location= {format_16_str('Itajai_do_Oeste')},{format_16_str('Trecho_Oeste')}, 100000.00                     ,               ,               ,               ,               ,               \n")
+        # Entrada Montante: Rio Itajaí do Oeste
+        f.write("Boundary Location= Itajai_do_Oeste,Trecho_Oeste, 100000.00 \n")
         f.write("Interval= 1HOUR\n")
-        f.write("Flow Hydrograph= 25 \n")
-        f.write("01SEP2008, 0000\n")
-        f.write(" ".join(["1500"] * 25) + "\n")
-        f.write("Use Simulation Period= T\n")
+        f.write("Flow Hydrograph= 24 \n")
+        f.write(" ".join(["1500"] * 24) + "\n")
 
-        # Entrada Montante: Rio Itajaí do Norte (80000.00)
-        f.write(f"Boundary Location= {format_16_str('Itajai_do_Norte')},{format_16_str('Trecho_Norte')}, 80000.00                      ,               ,               ,               ,               ,               \n")
+        # Entrada Montante: Rio Itajaí do Norte
+        f.write("Boundary Location= Itajai_do_Norte,Trecho_Norte, 80000.00 \n")
         f.write("Interval= 1HOUR\n")
-        f.write("Flow Hydrograph= 25 \n")
-        f.write("01SEP2008, 0000\n")
-        f.write(" ".join(["2000"] * 25) + "\n")
-        f.write("Use Simulation Period= T\n")
+        f.write("Flow Hydrograph= 24 \n")
+        f.write(" ".join(["2000"] * 24) + "\n")
 
-        # Jusante: Foz do Rio Itajaí-Açu (0.00) com Normal Depth (Declividade 0.001)
-        f.write(f"Boundary Location= {format_16_str('Itajai_Acu')},{format_16_str('Trecho_Principal')}, 0.00                          ,               ,               ,               ,               ,               \n")
-        f.write("Friction Slope= 0.001\n")
+        # Jusante: Foz do Rio Itajaí-Açu
+        f.write("Boundary Location= Itajai_Acu,Trecho_Principal, 0.00 \n")
+        f.write("Interval= 1HOUR\n")
+        f.write("Stage Hydrograph= 24 \n")
+        f.write(" ".join(["0"] * 12 + ["1"] * 12) + "\n")
 
         f.write("Initial Stage= 2 \n")
         f.write("Initial Flow= 1000 \n")
@@ -218,7 +211,7 @@ def create_full_basin_hecras():
         f.write("Plan Title=Simulacao_Bacia_Completa\n")
         f.write("Program Version=7.01\n")
         f.write("Short Identifier=001\n")
-        f.write("Simulation Date=01SEP2008,00,02SEP2008,00\n")
+        f.write("Simulation Date=01AUG2026,00,02AUG2026,00\n")
         f.write("Geom File=g01\n")
         f.write("Flow File=u01\n")
         f.write("Subcritical Flow\n")
@@ -231,7 +224,7 @@ def create_full_basin_hecras():
         f.write("Run PostProcess=-1\n")
         f.write("Run RASMapper=-1\n")
 
-    print("Projeto HEC-RAS 'Itajai_Bacia_Completa' atualizado com Plano .p01 100% ativado!")
+    print("Projeto HEC-RAS com sintaxe limpa de .u01 gerado com sucesso!")
 
 if __name__ == "__main__":
     create_full_basin_hecras()
