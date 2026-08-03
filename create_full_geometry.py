@@ -15,7 +15,7 @@ def create_full_basin_hecras():
     flow_file = f"{project_name}.u01"
     plan_file = f"{project_name}.p01"
 
-    print("Gerando projeto HEC-RAS da Bacia Completa com formato .u01 limpo e compatível...")
+    print("Gerando projeto HEC-RAS da Bacia Completa com Boundary Location sem espaços extra...")
 
     # 1. PRJ File
     with open(prj_file, "w") as f:
@@ -174,31 +174,31 @@ def create_full_basin_hecras():
             f.write("#Mann= 3 , -1 , 0 \n")
             f.write(format_8(-80) + format_8(0.05) + format_8(0) + format_8(-50) + format_8(0.035) + format_8(0) + format_8(50) + format_8(0.05) + format_8(0) + "\n")
 
-    # 3. Unsteady Flow File (.u01) - Sintaxe estritamente limpa idêntica ao Itajai_Blumenau.u01
+    # 3. Unsteady Flow File (.u01) - Sintaxe estritamente ajustada
     with open(flow_file, "w") as f:
         f.write("Flow Title=Cenario_Previsao_Bacia_Completa\n")
         f.write("Program Version=7.01\n")
 
         # Entrada Montante: Rio Itajaí do Sul
-        f.write("Boundary Location= Itajai_do_Sul,Trecho_Sul, 100000.00 \n")
+        f.write("Boundary Location=Itajai_do_Sul,Trecho_Sul,100000.00\n")
         f.write("Interval= 1HOUR\n")
         f.write("Flow Hydrograph= 24 \n")
         f.write(" ".join(["1200"] * 24) + "\n")
 
         # Entrada Montante: Rio Itajaí do Oeste
-        f.write("Boundary Location= Itajai_do_Oeste,Trecho_Oeste, 100000.00 \n")
+        f.write("Boundary Location=Itajai_do_Oeste,Trecho_Oeste,100000.00\n")
         f.write("Interval= 1HOUR\n")
         f.write("Flow Hydrograph= 24 \n")
         f.write(" ".join(["1500"] * 24) + "\n")
 
         # Entrada Montante: Rio Itajaí do Norte
-        f.write("Boundary Location= Itajai_do_Norte,Trecho_Norte, 80000.00 \n")
+        f.write("Boundary Location=Itajai_do_Norte,Trecho_Norte,80000.00\n")
         f.write("Interval= 1HOUR\n")
         f.write("Flow Hydrograph= 24 \n")
         f.write(" ".join(["2000"] * 24) + "\n")
 
         # Jusante: Foz do Rio Itajaí-Açu
-        f.write("Boundary Location= Itajai_Acu,Trecho_Principal, 0.00 \n")
+        f.write("Boundary Location=Itajai_Acu,Trecho_Principal,0.00\n")
         f.write("Interval= 1HOUR\n")
         f.write("Stage Hydrograph= 24 \n")
         f.write(" ".join(["0"] * 12 + ["1"] * 12) + "\n")
@@ -224,7 +224,7 @@ def create_full_basin_hecras():
         f.write("Run PostProcess=-1\n")
         f.write("Run RASMapper=-1\n")
 
-    print("Projeto HEC-RAS com sintaxe limpa de .u01 gerado com sucesso!")
+    print("Projeto HEC-RAS atualizado com alinhamento exato de Boundary Location!")
 
 if __name__ == "__main__":
     create_full_basin_hecras()
