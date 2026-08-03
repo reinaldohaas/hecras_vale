@@ -18,7 +18,7 @@ def create_full_basin_hecras():
     flow_file = f"{project_name}.u01"
     plan_file = f"{project_name}.p01"
 
-    print("Gerando projeto HEC-RAS multi-trecho com formatação nativa HEC-RAS 7.0.1...")
+    print("Gerando projeto HEC-RAS da Bacia Completa com cabeçalho de plano completo...")
 
     # 1. PRJ File
     with open(prj_file, "w") as f:
@@ -38,7 +38,7 @@ def create_full_basin_hecras():
         f.write("Geom Title=Geometria Completa Vale do Itajai com 3 Barragens\n")
         f.write("Program Version=7.01\n")
 
-        # --- TRECHO 1: Rio Itajaí do Sul (Cabeceira -> Rio do Sul) ---
+        # --- TRECHO 1: Rio Itajaí do Sul ---
         f.write("River Reach= Itajai_do_Sul   ,Trecho_Sul      \n")
         st_sul = np.arange(100000, -1000, -1000)
         f.write(f"Reach XY= 2 \n")
@@ -75,7 +75,7 @@ def create_full_basin_hecras():
             f.write("#Mann= 3 , -1 , 0 \n")
             f.write(format_8(-80) + format_8(0.05) + format_8(0) + format_8(-50) + format_8(0.035) + format_8(0) + format_8(50) + format_8(0.05) + format_8(0) + "\n")
 
-        # --- TRECHO 2: Rio Itajaí do Oeste (Cabeceira Taió -> Rio do Sul) ---
+        # --- TRECHO 2: Rio Itajaí do Oeste ---
         f.write("River Reach= Itajai_do_Oeste ,Trecho_Oeste    \n")
         st_oeste = np.arange(100000, -1000, -1000)
         f.write(f"Reach XY= 2 \n")
@@ -217,14 +217,21 @@ def create_full_basin_hecras():
     with open(plan_file, "w") as f:
         f.write("Plan Title=Simulacao_Bacia_Completa\n")
         f.write("Program Version=7.01\n")
+        f.write("Short Identifier=001\n")
+        f.write("Simulation Date=01SEP2008,00,02SEP2008,00\n")
         f.write("Geom File=g01\n")
-        f.write("Unsteady File=u01\n")
-        f.write("Simulation Date= 01SEP2008, 0000, 02SEP2008, 0000\n")
-        f.write("Computation Interval= 1MIN\n")
-        f.write("Output Interval= 1HOUR\n")
-        f.write("Unsteady Routing= 1\n")
+        f.write("Flow File=u01\n")
+        f.write("Subcritical Flow\n")
+        f.write("Computation Interval=1MIN\n")
+        f.write("Output Interval=1HOUR\n")
+        f.write("Instantaneous Interval=1HOUR\n")
+        f.write("Mapping Interval=1HOUR\n")
+        f.write("Run HTab=-1\n")
+        f.write("Run UNet=-1\n")
+        f.write("Run PostProcess=-1\n")
+        f.write("Run RASMapper=-1\n")
 
-    print("Projeto HEC-RAS 'Itajai_Bacia_Completa' atualizado com Normal Depth e cabeçalho de data em .u01!")
+    print("Projeto HEC-RAS 'Itajai_Bacia_Completa' atualizado com Plano .p01 100% ativado!")
 
 if __name__ == "__main__":
     create_full_basin_hecras()
