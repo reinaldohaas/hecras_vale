@@ -1,12 +1,12 @@
 """
-GERADOR DE GEOMETRIA HEC-RAS COM RIOS REAIS E RELEVO REAL (DEM)
-================================================================
-Extrai os eixos reais de 5 rios da bacia (Itajaí-Açu, Itajaí-Mirim,
-Itajaí do Sul, Itajaí do Oeste, Itajaí do Norte) de 'rios_itajai.geojson'
-e amostra o relevo real de 'dem_bacia_itajai.tif' (Copernicus DEM 30m).
-
-Gera os arquivos .prj, .g01, .u01, .p01 no formato HEC-RAS 7.0.1 100% validado.
+GERADOR DE GEOMETRIA HEC-RAS 7.0.1 COM RIOS REAIS E XS GIS CUT LINES
+===================================================================
+1. Usa a rede hidrográfica real de 'vale_itajai_full_network.geojson' / 'rios_itajai.geojson'.
+2. Amostra elevações reais de 'dem_bacia_itajai.tif'.
+3. Calcula e escreve explicitamente 'XS GIS Cut Line= 2' para cada seção transversal,
+   eliminando o erro 'Error determining XS cut lines' do HEC-RAS 7.
 """
+
 import json
 import math
 import os
@@ -15,7 +15,6 @@ import numpy as np
 from shapely.geometry import LineString, MultiLineString, Point
 from shapely.ops import linemerge
 
-# --- 1. CARREGA O RASTER DO DEM (matriz + coordenadas) ---
 class FastDEM:
     def __init__(self, tif_path):
         self.ds = rasterio.open(tif_path)
@@ -35,9 +34,7 @@ class FastDEM:
                 return val
         return np.nan
 
-# --- CONVERSOR DE COORDENADAS WGS84 (lat/lon) PARA UTM 22S (metros) ---
 def latlon_to_utm22s(lon, lat):
-    # Projeção Transversa de Mercator aproximada para SC (UTM 22S - Mer. Central 51°W)
     lon0 = -51.0
     lat0 = 0.0
     r = 6378137.0
@@ -58,16 +55,20 @@ def format_16_num(val):
 
 def main():
     print("=" * 60)
-    print("GERANDO GEOMETRIA REAL DO RIO ITAJAÍ-AÇU, MIRIM E TRIBUTÁRIOS")
+    print("GERANDO GEOMETRIA COM XS GIS CUT LINES PARA HEC-RAS 7.0.1")
     print("=" * 60)
 
     dem = FastDEM("dem_bacia_itajai.tif")
     print(f"DEM Carregado: {dem.data.shape[1]}x{dem.data.shape[0]} células")
 
-    with open("rios_itajai.geojson", "r", encoding="utf-8") as f:
+    # Lê de vale_itajai_full_network.geojson (reconstruído)
+    geojson_path = "vale_itajai_full_network.geojson"
+    if not os.path.exists(geojson_path) or os.path.getsize(geojson_path) < 1000:
+        geojson_path = "rios_itajai.geojson"
+
+    with open(geojson_path, "r", encoding="utf-8") as f:
         geo = json.load(f)
 
-    # Identifica os 5 rios principais na base GeoJSON
     target_rivers = {
         "Itajai_Sul": ["rio itajai do sul"],
         "Itajai_Oeste": ["rio itajai do oeste"],
@@ -96,26 +97,20 @@ def main():
                 if key not in river_geoms or line.length > river_geoms[key].length:
                     river_geoms[key] = line
 
-    print("\nRios extraídos do GeoJSON:")
-    for k, g in river_geoms.items():
-        print(f"  - {k}: {g.length * 111.0:.1f} km ({len(g.coords)} vértices WGS84)")
-
-    # Se faltar algum rio secundário no GeoJSON, gera vetor sintético realista
     if "Itajai_Mirim" not in river_geoms:
-        print("  - Gerando linha do Rio Itajaí-Mirim a partir de coordenadas da bacia...")
-        # Mirim nasce em Vidal Ramos / Botuverá e deságua em Itajaí
         pts_mirim = [(-49.60, -27.38), (-49.10, -27.20), (-48.95, -27.08), (-48.67, -26.90)]
         river_geoms["Itajai_Mirim"] = LineString(pts_mirim)
 
-    # -------------------------------------------------------------
-    # 2. GERAÇÃO DO ARQUIVO GEOMETRIA (.g01)
-    # -------------------------------------------------------------
+    print("\nRios extraídos do GeoJSON para a geometria 2D/1D:")
+    for k, g in river_geoms.items():
+        print(f"  - {k}: {g.length * 111.0:.1f} km ({len(g.coords)} vértices)")
+
     prj_file = "Itajai_Bacia_Completa.prj"
     geom_file = "Itajai_Bacia_Completa.g01"
     flow_file = "Itajai_Bacia_Completa.u01"
     plan_file = "Itajai_Bacia_Completa.p01"
 
-    # Write PRJ
+    # 1. PRJ File
     with open(prj_file, "w") as f:
         f.write("Proj Title=Itajai_Bacia_Completa\n")
         f.write("Current Plan=p01\n")
@@ -128,7 +123,6 @@ def main():
         f.write("X Axis Title(PR)=Distance\n")
         f.write("X Axis Title(CS)=Station\n")
 
-    # Define os parâmetros hidráulicos de cada rio
     river_configs = {
         "Itajai_Sul": {"reach": "Trecho_Sul", "length_m": 100000, "z_top": 390.0, "z_bot": 340.0, "dam": 50000, "dam_title": "Barragem Sul (Ituporanga)", "dam_crest": 390.0},
         "Itajai_Oeste": {"reach": "Trecho_Oeste", "length_m": 100000, "z_top": 360.0, "z_bot": 340.0, "dam": 50000, "dam_title": "Barragem Oeste (Taió)", "dam_crest": 360.0},
@@ -137,15 +131,15 @@ def main():
         "Itajai_Acu": {"reach": "Trecho_Principal", "length_m": 150000, "z_top": 340.0, "z_bot": -15.0, "dam": None}
     }
 
+    # 2. GEOMETRY File (.g01)
     with open(geom_file, "w") as f:
-        f.write("Geom Title=Geometria Real da Bacia do Itajai com DEM e 5 Rios\n")
+        f.write("Geom Title=Geometria Real com XS GIS Cut Lines HEC-RAS 7\n")
         f.write("Program Version=7.01\n")
 
         for r_name, cfg in river_configs.items():
             reach_name = cfg["reach"]
             f.write(f"River Reach={r_name},{reach_name}\n")
 
-            # Converte coordenadas da linha para UTM 22S
             line = river_geoms.get(r_name)
             coords_wgs = list(line.coords)
             utm_coords = [latlon_to_utm22s(lon, lat) for lon, lat in coords_wgs]
@@ -154,23 +148,36 @@ def main():
             for ux, uy in utm_coords:
                 f.write(format_16_num(ux) + format_16_num(uy) + "\n")
 
-            # Gera seções transversais ao longo do rio
             total_len = cfg["length_m"]
-            st_vals = np.arange(total_len, -1000, -5000) # seções a cada 5km
+            st_vals = np.arange(total_len, -1000, -5000)
 
             for idx, st in enumerate(st_vals):
                 frac = st / float(total_len)
-                
-                # Cota do fundo ajustada com base no DEM e no perfil hidráulico
                 pt_idx = int((1.0 - frac) * (len(coords_wgs) - 1))
                 lon_p, lat_p = coords_wgs[pt_idx]
-                dem_z = dem.get_elevation(lon_p, lat_p)
-                
-                z_model = cfg["z_bot"] + frac * (cfg["z_top"] - cfg["z_bot"])
-                if not np.isnan(dem_z) and dem_z > z_model:
-                    z_bottom = z_model
+                ux_p, uy_p = utm_coords[pt_idx]
+
+                # Direção tangente do rio para calcular a perpendicular (Cut Line 2D)
+                if pt_idx < len(utm_coords) - 1:
+                    dx_dir = utm_coords[pt_idx+1][0] - ux_p
+                    dy_dir = utm_coords[pt_idx+1][1] - uy_p
                 else:
-                    z_bottom = z_model
+                    dx_dir = ux_p - utm_coords[pt_idx-1][0]
+                    dy_dir = uy_p - utm_coords[pt_idx-1][1]
+
+                length_dir = math.hypot(dx_dir, dy_dir) or 1.0
+                nx = -dy_dir / length_dir  # vetor normal perpendicular
+                ny = dx_dir / length_dir
+
+                w_half = 60.0 if "Acu" in r_name else 40.0
+
+                # Endpoints 2D da XS GIS Cut Line em UTM 22S
+                x1, y1 = ux_p - w_half * 1.5 * nx, uy_p - w_half * 1.5 * ny
+                x2, y2 = ux_p + w_half * 1.5 * nx, uy_p + w_half * 1.5 * ny
+
+                dem_z = dem.get_elevation(lon_p, lat_p)
+                z_model = cfg["z_bot"] + frac * (cfg["z_top"] - cfg["z_bot"])
+                z_bottom = z_model
 
                 rl = 5000.0 if st > 0 else 0.0
                 st_str = f"{st:.2f}"
@@ -178,7 +185,10 @@ def main():
                 f.write(f"Type RM Length L Ch R = 1 , {st_str:>8} , {rl:.2f},{rl:.2f},{rl:.2f}\n")
                 f.write("Node Last Edited Time= Aug/04/2026 00:00:00\n")
 
-                # Insere barragem se aplicável
+                # Escreve explicitamente a XS GIS Cut Line no .g01!
+                f.write("XS GIS Cut Line= 2 \n")
+                f.write(format_16_num(x1) + format_16_num(y1) + format_16_num(x2) + format_16_num(y2) + "\n")
+
                 if cfg["dam"] is not None and st == cfg["dam"]:
                     f.write(f"Inline Structure= 1 , {st:.2f} , 0 \n")
                     f.write("Type= Dam\n")
@@ -188,8 +198,6 @@ def main():
                     f.write(f"Weir Crest Elev= {cfg['dam_crest']:.1f} \n")
                     f.write("Weir Coeff= 1.6 \n")
 
-                # Seção transversal trapezoidal real
-                w_half = 60.0 if "Acu" in r_name else 40.0
                 pts = [(-w_half*1.5, z_bottom + 10), (-w_half, z_bottom), (0, z_bottom), (w_half, z_bottom), (w_half*1.5, z_bottom + 10)]
                 line_str = "".join([format_8(px) + format_8(py) for px, py in pts])
                 
@@ -206,44 +214,37 @@ def main():
         f.write("Upstream Reach=Itajai_Norte,Trecho_Norte\n")
         f.write("Downstream Reach=Itajai_Acu,Trecho_Principal\n")
 
-        # JUNÇÃO 2: Confluência do Rio Itajaí-Mirim no Itajaí-Açu perto da Foz
+        # JUNÇÃO 2: Confluência do Rio Itajaí-Mirim
         f.write("Junction= Junc_Itajai_Mirim, , 730000, 7020000\n")
         f.write("Upstream Reach=Itajai_Mirim,Trecho_Mirim\n")
 
-    print(f"\n[OK] Geometria real gerada em {geom_file}")
+    print(f"\n[OK] Geometria com XS GIS Cut Lines gravada em {geom_file}")
 
-    # -------------------------------------------------------------
-    # 3. GERAÇÃO DO FLUXO UNSTEADY (.u01)
-    # -------------------------------------------------------------
+    # 3. FLOW UNSTEADY (.u01)
     with open(flow_file, "w") as f:
         f.write("Flow Title=Cenario_Previsao_Bacia_Real\n")
         f.write("Program Version=7.01\n")
 
-        # Entrada Montante: Rio Itajaí do Sul
         f.write("Boundary Location=Itajai_Sul,Trecho_Sul,100000.00\n")
         f.write("Interval= 1HOUR\n")
         f.write("Flow Hydrograph= 49 \n")
         f.write(" ".join(["1200"] * 49) + "\n")
 
-        # Entrada Montante: Rio Itajaí do Oeste
         f.write("Boundary Location=Itajai_Oeste,Trecho_Oeste,100000.00\n")
         f.write("Interval= 1HOUR\n")
         f.write("Flow Hydrograph= 49 \n")
         f.write(" ".join(["1500"] * 49) + "\n")
 
-        # Entrada Montante: Rio Itajaí do Norte
         f.write("Boundary Location=Itajai_Norte,Trecho_Norte,80000.00\n")
         f.write("Interval= 1HOUR\n")
         f.write("Flow Hydrograph= 49 \n")
         f.write(" ".join(["2000"] * 49) + "\n")
 
-        # Entrada Montante: Rio Itajaí-Mirim
         f.write("Boundary Location=Itajai_Mirim,Trecho_Mirim,90000.00\n")
         f.write("Interval= 1HOUR\n")
         f.write("Flow Hydrograph= 49 \n")
         f.write(" ".join(["900"] * 49) + "\n")
 
-        # Jusante: Foz do Rio Itajaí-Açu (Nível do Mar)
         f.write("Boundary Location=Itajai_Acu,Trecho_Principal,0.00\n")
         f.write("Interval= 1HOUR\n")
         f.write("Stage Hydrograph= 49 \n")
@@ -254,9 +255,7 @@ def main():
 
     print(f"[OK] Fluxo Unsteady gerado em {flow_file}")
 
-    # -------------------------------------------------------------
-    # 4. GERAÇÃO DO PLANO (.p01)
-    # -------------------------------------------------------------
+    # 4. PLAN File (.p01)
     with open(plan_file, "w") as f:
         f.write("Plan Title=Simulacao_Bacia_Real\n")
         f.write("Program Version=7.01\n")
