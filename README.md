@@ -53,6 +53,35 @@ python create_full_geometry.py
 ```
 
 ### 3. Rodar a Simulação no HEC-RAS via Python
+> Use o **Python 3.10** (que tem o `pywin32` instalado). O Python 3.14 padrão não tem `win32com`.
 ```bash
-python run_hecras.py
+py -3.10 run_hecras.py
 ```
+Saída esperada (com as 3 barragens laminando os picos; confluência no Itajaí-Açu):
+```
+=== Simulacao concluida com SUCESSO ===
+Trecho                Q max (m3/s)   Nivel max (m)
+Trecho_Norte                2000.0          153.46
+Trecho_Oeste                1500.0          133.12
+Trecho_Sul                  1200.0          142.65
+Trecho_Principal            4257.7           57.52   ← laminado (sem barragens seria 4480.9)
+```
+
+---
+
+## ✅ Estado do modelo
+
+**O modelo completo roda de ponta a ponta no HEC-RAS 7.0.1**, headless via COM: rede 1D (3 afluentes → confluência → Itajaí-Açu → mar) **com as 3 barragens** (inline structures com vertedouro + comportas), hidrogramas de cheia a montante e profundidade normal a jusante. Resultados em `Itajai_Bacia_Completa.p01.hdf` (erro de balanço de volume ~0,0015%).
+
+- `INCLUDE_DAMS=True` / `DAM_GATES=True` em `create_full_geometry.py` liga as barragens; as comportas usam abertura fixa (`GATE_OPEN`), o que reduz o pico no Itajaí-Açu de 4480,9 para ~4257,7 m³/s (laminação).
+
+### Detalhes técnicos que destravaram o modelo
+Todos os formatos foram validados contra os **projetos-exemplo oficiais** do HEC-RAS (repos `neeraip/hecras-example-models` e `gpt-cmdr/ras-commander`):
+
+1. **Séries em colunas fixas de 8 caracteres, 10 valores por linha** — vale para os hidrogramas E para o perfil do vertedouro (`#Inline Weir SE`). Era a causa raiz do *"missing data"* / do diálogo de load. Valores em linha única eram mal-lidos.
+2. `Boundary Location` com 6 campos e padding fixo (Rio=16, Reach=16, RS=8).
+3. Profundidade normal a jusante = `Friction Slope=<decl>` (um valor).
+4. Condição inicial unsteady = `Use Restart= 0` + `Initial Flow Loc=Rio,Reach,RS_montante,Q`.
+5. Junção liga por **nome**: `Up River,Reach=` / `Dn River,Reach=` / `Junc L&A=`.
+6. Comportas exigem controle no `.u01`: bloco `Gate Name=` + `Gate Openings=` (série de aberturas).
+7. Abrir o projeto via COM com caminho **Windows** (`\`); barras `/` corrompem o caminho do DSS.

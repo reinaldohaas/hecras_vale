@@ -1,8 +1,15 @@
-Plan Title=Simulacao_Bacia_Completa
+Plan Title=Simulacao_Bacia_Real
 Program Version=7.01
+Short Identifier=001
+Simulation Date=01SEP2008,00,02SEP2008,24
 Geom File=g01
-Unsteady File=u01
-Simulation Date= 01Aug2026, 0000, 02Aug2026, 0000
-Computation Interval= 1MIN
-Output Interval= 1HOUR
-Unsteady Routing= 1
+Flow File=u01
+Subcritical Flow
+Computation Interval=1MIN
+Output Interval=1HOUR
+Instantaneous Interval=1HOUR
+Mapping Interval=1HOUR
+Run HTab=-1
+Run UNet=-1
+Run PostProcess=-1
+Run RASMapper=-1

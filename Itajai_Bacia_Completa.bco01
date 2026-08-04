@@ -1,0 +1,66 @@
+ 
+                                              HEC-RAS - River Analysis System
+ 
+ 
+Project File:  C:\Users\haas\github\hecras_vale\Itajai_Bacia_Completa.prj
+ 
+Project Name:  Itajai_Bacia_Completa
+ 
+ 
+Plan Name:     Simulacao_Bacia_Completa
+ 
+Short ID:      BaciaFull
+ 
+
+Starting Time:   31Aug2008 2400
+
+Ending Time:     02Sep2008 2400
+
+
+                ################################################
+                #                                              #
+                #                                              #
+                #       1D and 2D Unsteady Flow Module         #
+                #                                              #
+                #                                              #
+                #          HEC-RAS 7.0.1 June 2026             #
+                #                                              #
+                #             03AUG26 at 08:54:36              #
+                #                                              #
+                ################################################
+                
+ 
+ 
+ 
+
+
+
+                 ***   Volume Accounting for 1D Flow Area in 1000 m^3   ***
+
+         US Inflow      DS Outflow       Lat Hydro        SA Hydro     Groundwater      Diversions   Precip Excess
+         *********      **********       *********        ********     ***********      **********   *************
+           414000.         360255.                                                                                                
+
+    Start 1D Reach  Final 1D Reach   Starting SA's      Final SA's
+    **************  **************   *************      **********
+           108473.         162211.                                
+
+ 
+
+
+
+                 ***  Total Volume Accounting (for the entire model) in 1000 m^3   ***
+
+Total Boundary Flux of Water In          414000.
+Total Boundary Flux of Water Out         360255.
+
+Starting Volume                          108473.
+Ending Volume                            162211.
+
+
+                             Error   Percent Error
+                             *****   *************
+                            -7.969        0.001525
+
+
+

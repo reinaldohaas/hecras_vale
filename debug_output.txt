@@ -1,0 +1,6 @@
+Iniciando 03_gerar_geometria.py...
+STDOUT:
+
+STDERR:
+
+RETURNCODE: 3228369023

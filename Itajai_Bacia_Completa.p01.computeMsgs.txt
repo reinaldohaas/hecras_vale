@@ -1,0 +1,255 @@
+Message  | Plan: 'Simulacao_Bacia_Completa' (Itajai_Bacia_Completa.p01)
+Message  | Simulation started at: 03Aug2026 12:51:09 AM
+Message  | 
+Message  | PROCESS:RasProcess
+Message  | Writing Plan GIS Data...
+Progress | 100
+Message  | Completed Writing Plan GIS Data
+Message  | Writing Geometry...
+Message  | Completed Writing Geometry
+Message  | Writing Event Conditions ...
+Message  | Completed Writing Event Condition Data
+Message  | 
+Message  | PROCESS:RASGeomPreprocess
+Message  | 	
+Message  | Geometric Preprocessor HEC-RAS 7.0.1 June 2026
+Progress | 0.2
+Progress | 0.3
+Message  |  
+Progress | 6.993007E-03
+Progress | 2.797203E-02
+Progress | 4.895105E-02
+Progress | 6.993007E-02
+Progress | 9.090909E-02
+Progress | 0.1118881
+Progress | 0.1328671
+Progress | 0.1538462
+Progress | 0.1748252
+Progress | 0.1958042
+Progress | 0.2167832
+Progress | 0.2377622
+Progress | 0.2587413
+Progress | 0.2797203
+Progress | 0.3006993
+Progress | 0.3216783
+Progress | 0.3426574
+Progress | 0.3636364
+Progress | 0.3846154
+Progress | 0.4055944
+Progress | 0.4265734
+Progress | 0.4475524
+Progress | 0.4685315
+Progress | 0.4895105
+Progress | 0.5104895
+Progress | 0.5314685
+Progress | 0.5524476
+Progress | 0.5734265
+Progress | 0.5944056
+Progress | 0.6153846
+Progress | 0.6363636
+Progress | 0.6573427
+Progress | 0.6783217
+Progress | 0.6993007
+Progress | 0.7202797
+Progress | 0.7412587
+Progress | 0.7622378
+Progress | 0.7832168
+Progress | 0.8041958
+Progress | 0.8251748
+Progress | 0.8461539
+Progress | 0.8671328
+Progress | 0.8881119
+Progress | 0.9090909
+Progress | 0.9300699
+Progress | 0.951049
+Progress | 0.972028
+Progress | 0.993007
+Progress | 1
+Progress | 0.1188811
+Progress | 1
+Progress | 0.3356643
+Progress | 1
+Progress | 0.5524476
+Progress | 1
+Message  | 
+Message  | Finished Processing Geometry
+Message  | 
+Message  | PROCESS:RasUnsteady
+Message  | 
+Message  | Performing Unsteady Flow Simulation  HEC-RAS 7.0.1 June 2026
+Progress | 0.1
+Progress | 0.2
+Progress | 0.3
+Message  |  
+Message  | 	
+Message  | Unsteady Input Summary:
+Message  | 
+Message  |      1D Unsteady Finite Difference Numerical Solution
+Message  |      Number of cross sections:      143
+Progress | 0.4
+Progress | 0.5
+Progress | 0.6
+Progress | 0.7
+Progress | 0.8000001
+Progress | 0.9000001
+Progress | 0.6
+Progress | 0.6223776
+Progress | 0.6447552
+Progress | 0.6671329
+Progress | 0.6895105
+Progress | 0.7118881
+Progress | 0.7342657
+Progress | 0.7566434
+Progress | 0.779021
+Progress | 0.8013986
+Progress | 0.8237762
+Progress | 0.8461539
+Progress | 0.8713287
+Progress | 0.8937063
+Progress | 0.9160839
+Progress | 0.9384615
+Progress | 0.9608392
+Progress | 0.9832168
+Progress | 3.472222E-04
+Progress | 2.048611E-02
+Progress | 0.040625
+Progress | 6.076389E-02
+Progress | 8.090278E-02
+Progress | 0.1010417
+Progress | 0.1211806
+Progress | 0.1413194
+Progress | 0.1614583
+Progress | 0.1815972
+Progress | 0.2017361
+Progress | 0.221875
+Progress | 0.2420139
+Progress | 0.2621528
+Progress | 0.2822917
+Progress | 0.3024305
+Progress | 0.3225695
+Progress | 0.3427083
+Progress | 0.3628472
+Progress | 0.3829861
+Progress | 0.403125
+Progress | 0.4232639
+Progress | 0.4434028
+Progress | 0.4635417
+Progress | 0.4836806
+Progress | 0.5038194
+Progress | 0.5239583
+Progress | 0.5440972
+Progress | 0.5642361
+Progress | 0.584375
+Progress | 0.6045139
+Progress | 0.6246528
+Progress | 0.6447917
+Progress | 0.6649305
+Progress | 0.6850695
+Progress | 0.7052083
+Progress | 0.7253472
+Progress | 0.7454861
+Progress | 0.765625
+Progress | 0.7857639
+Progress | 0.8059028
+Progress | 0.8260417
+Progress | 0.8461805
+Progress | 0.8663194
+Progress | 0.8864583
+Progress | 0.9065972
+Progress | 0.9267361
+Progress | 0.946875
+Progress | 0.9670139
+Progress | 0.9871528
+Message  | 
+Message  | Overall Volume Accounting Error in 1000 m^3:            -7.969
+Message  | Overall Volume Accounting Error as percentage:          0.001525
+Message  | Please review "Computational Log File" output for volume accounting details
+Message  | 
+Message  | Writing Results to DSS
+Progress | 1
+Message  | 
+Message  | Finished Unsteady Flow Simulation
+Message  | 
+Message  | Reading Unsteady Data for Post Process...
+Message  | Completed Reading Unsteady Data for Post Process
+Message  | 
+Message  | PROCESS:RasSteady
+Progress | 0.1
+Progress | 0.2
+Message  | 	
+Message  | Running Post Processor  HEC-RAS 7.0.1 June 2026
+Progress | 0.1
+Progress | 0.3
+Progress | 0.4
+Message  |  
+Progress | 0.5
+Progress | 0.6
+Progress | 0.7
+Progress | 0.8
+Progress | 0.9
+Progress | 1
+Progress | 0.012
+Progress | 0.04
+Progress | 0.067
+Progress | 0.092
+Progress | 0.12
+Progress | 0.147
+Progress | 0.172
+Progress | 0.2
+Progress | 0.227
+Progress | 0.252
+Progress | 0.28
+Progress | 0.307
+Progress | 0.332
+Progress | 0.36
+Progress | 0.387
+Progress | 0.412
+Progress | 0.44
+Progress | 0.467
+Progress | 0.492
+Progress | 0.516
+Progress | 0.54
+Progress | 0.567
+Progress | 0.592
+Progress | 0.62
+Progress | 0.647
+Progress | 0.672
+Progress | 0.7
+Progress | 0.727
+Progress | 0.752
+Progress | 0.78
+Progress | 0.807
+Progress | 0.832
+Progress | 0.86
+Progress | 0.887
+Progress | 0.912
+Progress | 0.94
+Progress | 0.967
+Progress | 0.992
+Progress | 1
+Message  | 
+Message  | Finished Post Processing
+Message  | 
+Message  | 
+Message  | PROCESS:RasProcess
+Message  | Generating Time Series Post Process File ...
+Message  |    Writing 1D Data: Water-Surface
+Progress | 35
+Message  |    Writing 1D Data: Flow
+Progress | 50
+Progress | 100
+Message  | Time Series Post Process file generated [96 ms]
+Message  | 
+Message  | Computations Summary
+Message  | 
+Message  | Computation Task	Time(hh:mm:ss)
+Message  | Completing Geometry, Flow and Plan	       1
+Message  | Preprocessing Geometry	       1
+Message  | Unsteady Flow Computations	       1
+Message  | Post-Processing	<1
+Message  | Generating Time Series Post Process	<1
+Message  | Complete Process	       5
+Message  | 
+Message  | Computation Speed	Simulation/Runtime
+Message  | Unsteady Flow Computations	140032x
+Message  | Complete Process	32245x
