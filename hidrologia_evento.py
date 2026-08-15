@@ -53,6 +53,15 @@ BARRAGENS_REAIS = {            # rio -> (capacidade hm3, vertedouro max m3/s)
     "norte": (357.0, 3000.0),
 }
 
+# Quais barragens ja existiam em cada evento. A Norte (a maior, 357 hm3) so
+# entrou em operacao depois de 1983 -- na cheia de 1983 ela estava em obras.
+BARRAGENS_POR_EVENTO = {
+    "1983": {"sul", "oeste"},          # Norte em construcao
+    "2008": {"sul", "oeste", "norte"},
+    "2011": {"sul", "oeste", "norte"},
+    "2023": {"sul", "oeste", "norte"},
+}
+
 SUBBACIAS = {
     "sul":      {"area": 2280.0, "tc": 12.8, "cn": 78, "col": "sul",
                  "dam_hm3": 93.5,  "qbase": None},
@@ -157,7 +166,8 @@ def hidrogramas(evento, barragens=True, horas=None):
         if qbase is None:
             qbase = RENDIMENTO_BASE * sb["area"]
         q = np.convolve(pe, u)[:n] + qbase
-        if barragens and chave in BARRAGENS_REAIS:
+        ativas = BARRAGENS_POR_EVENTO.get(str(evento), set(BARRAGENS_REAIS))
+        if barragens and chave in BARRAGENS_REAIS and chave in ativas:
             cap, vert = BARRAGENS_REAIS[chave]
             q, _ = puls_barragem(q, cap, FRACAO_FUNDO * vert, vert)
         saida[chave] = q
