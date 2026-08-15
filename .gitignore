@@ -1,5 +1,8 @@
-
-# Saidas de execucao do HEC-RAS (regeneraveis a partir do .g01/.u01/.p01)
+*.projection
+*.rasmap.backup
+REDE/
+01/
+eraveis a partir do .g01/.u01/.p01)
 *.O0*
 *.b0[0-9]
 *.bco*
