@@ -672,6 +672,23 @@ def main():
         if t is not acu_head:
             t["q_pico"] = Q_REF_FOZ * a / area_total
             t["q_base"] = max(t["q_pico"] * 0.15, 20.0)
+            if q_ev and not t.get("k"):
+                # Com evento, a vazao inicial dos trechos do Acu TEM de vir da
+                # mesma fonte da cabeceira. Misturar serie real na cabeceira
+                # com valor sintetico aqui cria um degrau de vazao na juncao
+                # (R1 com 119 e R2 com 386 m3/s) e o solver nao converge.
+                q0 = float(q_ev["sul"][0] + q_ev["oeste"][0])
+                for c in conf:                    # afluentes ja incorporados
+                    if c["s"] <= t["a"] + 1.0 and c["k"] in q_ev:
+                        q0 += float(q_ev[c["k"]][0])
+                for k_lat in LATERAIS:            # laterais ja incorporadas
+                    if k_lat in rede and k_lat in q_ev:
+                        p_lat = Point(list(rede[k_lat]["linha"].coords)[-1])
+                        if acu.project(p_lat) <= t["a"] + 1.0:
+                            q0 += float(q_ev[k_lat][0])
+                if "acu_incr" in q_ev:            # incremental ja acumulado
+                    q0 += float(q_ev["acu_incr"][0]) * (t["a"] / max(acu.length, 1.0))
+                t["q_base"] = q0
         if t.get("k"):
             if q_ev and t["k"] in q_ev:
                 t["serie"] = q_ev[t["k"]]

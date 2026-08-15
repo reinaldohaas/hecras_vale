@@ -113,6 +113,13 @@ def hidrogramas(evento, barragens=True, horas=None):
         q = np.convolve(pe, u)[:n] + qbase
         if barragens and sb["dam_hm3"] > 0:
             q = reservoir_puls_routing(q, sb["dam_hm3"], True, dt_hours=1.0)
+            # BUG do hydrology_engine.reservoir_puls_routing: ele cria
+            # q_out = np.zeros(n) e so preenche a partir do indice 1, entao
+            # q_out[0] fica ZERO. Como a cabeceira do Acu e Sul+Oeste (ambos
+            # com barragem), o HEC-RAS partia com vazao nula e instabilizava
+            # ja no primeiro minuto. Restaura a continuidade no instante 0.
+            if q[0] <= 0.0 and len(q) > 1:
+                q[0] = q[1]
         saida[chave] = q
     return saida, n
 
