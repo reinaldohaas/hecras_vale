@@ -80,6 +80,10 @@ MARE_MEDIA    = 0.30           # nivel medio do mar (m)
 MARE_AMPLITUDE= 0.50           # semi-amplitude (m) -> variacao de ~1,0 m
 MARE_PERIODO  = 12.42          # componente M2 (h)
 DS_SLOPE  = 0.0005             # declividade (usada so se MARE = False)
+# EVENTO: usa a chuva REAL observada (via hidrologia_evento) no lugar do
+# hidrograma triangular sintetico. None = sintetico.
+EVENTO      = None       # "2008"/"2011"/... usa chuva real (ver nota abaixo)
+BARRAGENS   = True             # False = cenario "sem obras" (comportas abertas)
 NHORAS    = 97                 # ordinatas horarias (h = 0..96). 48 h nao
                                # bastam: o pico leva mais de 48 h para
                                # percorrer os 187 km ate a foz, e a
@@ -145,13 +149,15 @@ WARMUP = 8                     # horas de vazao constante antes da cheia:
                                # primeiros minutos (partida a frio nas juncoes)
 
 
-def mare(n=NHORAS):
+def mare(n=None):
     """Nivel do mar na foz: onda semidiurna M2."""
+    n = n or NHORAS          # NAO usar default: NHORAS muda com o evento
     return [MARE_MEDIA + MARE_AMPLITUDE * np.sin(2 * np.pi * h / MARE_PERIODO)
             for h in range(n)]
 
 
-def hidrograma(pico, base=None, n=NHORAS, tp=26, te=46):
+def hidrograma(pico, base=None, n=None, tp=26, te=46):
+    n = n or NHORAS          # idem: o default congelaria o valor antigo
     base = base if base is not None else max(pico * 0.15, 20.0)
     v = []
     for h in range(n):
@@ -445,12 +451,14 @@ def escrever_fluxo(trechos, cabeceiras, saida, laterais=(), uniformes=()):
         u.append(bl(t["rio"], t["reach"], f"{t['xs'][0]['rs']:.2f}"))
         u.append("Interval=1HOUR")
         u.append(f"Flow Hydrograph= {NHORAS} ")
-        u.append(serie8(hidrograma(t["q_pico"])))
+        u.append(serie8(t.get("serie") if t.get("serie") is not None
+                        else hidrograma(t["q_pico"])))
     for lt in laterais:
         u.append(bl(lt["rio"], lt["reach"], f"{lt['rs']:.2f}"))
         u.append("Interval=1HOUR")
         u.append(f"Lateral Inflow Hydrograph= {NHORAS} ")
-        u.append(serie8(hidrograma(lt["q_pico"])))
+        u.append(serie8(lt.get("serie") if lt.get("serie") is not None
+                        else hidrograma(lt["q_pico"])))
     for un in uniformes:
         # Uniform Lateral Inflow: o campo 4 do Boundary Location recebe o RS
         # de JUSANTE do intervalo (formato do exemplo oficial UngagedAreaInflows)
@@ -460,12 +468,13 @@ def escrever_fluxo(trechos, cabeceiras, saida, laterais=(), uniformes=()):
                  f"{rs_hi},{rs_lo},                ,                ")
         u.append("Interval=1HOUR")
         u.append(f"Uniform Lateral Inflow Hydrograph= {NHORAS} ")
-        u.append(serie8(hidrograma(un["q_pico"])))
+        u.append(serie8(un.get("serie") if un.get("serie") is not None
+                        else hidrograma(un["q_pico"])))
     u.append(bl(saida["rio"], saida["reach"], f"{saida['xs'][-1]['rs']:.2f}"))
     if MARE:
         u.append("Interval=1HOUR")
         u.append(f"Stage Hydrograph= {NHORAS} ")
-        u.append(serie8(mare()))
+        u.append(serie8(mare(NHORAS)))
     else:
         u.append(f"Friction Slope={DS_SLOPE}")
     open(f"{PROJECT}.u01", "w", encoding="ascii", errors="replace").write(
@@ -475,11 +484,21 @@ def escrever_fluxo(trechos, cabeceiras, saida, laterais=(), uniformes=()):
 
 
 def escrever_plano_prj():
+    # A janela tem de terminar EXATAMENTE na ultima ordinata da serie
+    # (h = NHORAS-1). Terminar depois disso aborta o calculo com
+    # "Time series data ends before the end of the simulation".
+    total_h = NHORAS - 1
+    DIA_FIM = 1 + total_h // 24
+    HORA_FIM = f"{(total_h % 24) * 100:04d}"
     open(f"{PROJECT}.p01", "w", encoding="ascii").write("\n".join([
         "Plan Title=Rede_Real_Bacia_Itajai", "Program Version=7.01",
         "Short Identifier=REDE", "Geom File=g01", "Flow File=u01",
-        "Simulation Date=01AUG2026,0000,05AUG2026,0000", "Mixed Flow Regime",
-        "Computation Interval=15SEC", "Output Interval=1HOUR",
+        f"Simulation Date=01AUG2026,0000,{DIA_FIM:02d}AUG2026,{HORA_FIM}",
+        "Mixed Flow Regime",
+        # 15SEC era necessario para a rede instavel de varias juncoes; com
+        # uma juncao so, 1MIN converge e roda ~4x mais rapido (relevante para
+        # eventos reais de 168-312 h).
+        "Computation Interval=1MIN", "Output Interval=1HOUR",
         "Instantaneous Interval=1HOUR", "Mapping Interval=1HOUR",
         "Run HTab=-1", "Run UNet=-1", "Run PostProcess=-1",
         "Run RASMapper=0"]) + "\n")
@@ -496,6 +515,17 @@ def main():
     print("=" * 68)
     print("REDE 1D REAL DA BACIA DO ITAJAI — topologia ANA + relevo DEM")
     print("=" * 68)
+
+    global NHORAS
+    q_ev = None
+    if EVENTO:
+        from hidrologia_evento import hidrogramas
+        q_ev, NHORAS = hidrogramas(EVENTO, barragens=BARRAGENS)
+        print(f"[0/4] Evento {EVENTO}: chuva real observada, "
+              f"{NHORAS} h, barragens "
+              f"{'ATIVAS' if BARRAGENS else 'ABERTAS (sem obras)'}")
+        for k, v in q_ev.items():
+            print(f"      {k:<10} Q pico {v.max():8.1f} m3/s")
 
     rede = montar_rede()
     acu = rede[MAIN]["linha"]
@@ -595,6 +625,10 @@ def main():
     acu_head = acu_reaches[0]
     acu_head["q_pico"] = Q_REF_FOZ * AREA_CABECEIRA_ACU / area_total
     acu_head["q_base"] = max(acu_head["q_pico"] * 0.15, 20.0)
+    if q_ev:
+        # a cabeceira do Acu e a confluencia Sul + Oeste (Rio do Sul)
+        acu_head["serie"] = q_ev["sul"] + q_ev["oeste"]
+        acu_head["q_base"] = float(acu_head["serie"][0])
 
     cabeceiras = [acu_head]
     for t in trechos:
@@ -609,6 +643,9 @@ def main():
             t["q_pico"] = Q_REF_FOZ * a / area_total
             t["q_base"] = max(t["q_pico"] * 0.15, 20.0)
         if t.get("k"):
+            if q_ev and t["k"] in q_ev:
+                t["serie"] = q_ev[t["k"]]
+                t["q_base"] = float(t["serie"][0])
             cabeceiras.append(t)
     print("      vazao inicial acumulada na calha:")
     for t in acu_reaches:
@@ -637,7 +674,8 @@ def main():
         rs_sec = min((d["rs"] for d in alvo["xs"]), key=lambda r: abs(r - rs_conf))
         pico = Q_REF_FOZ * rede[k]["area"] / area_total
         laterais.append({"rio": alvo["rio"], "reach": alvo["reach"], "rs": rs_sec,
-                         "nome": rede[k]["nome"], "q_pico": pico})
+                         "nome": rede[k]["nome"], "q_pico": pico,
+                         "serie": q_ev.get(k) if q_ev else None})
         print(f"      lateral: {rede[k]['nome']:<14} entra em {alvo['reach']} "
               f"RS {rs_sec/1000:6.1f} km, Q pico {pico:7.1f} m3/s")
 
@@ -663,8 +701,11 @@ def main():
                 continue                      # trecho curto demais p/ uniforme
             rs_hi = ordenadas[1]
             rs_lo = ordenadas[-2]
+            frac = t["linha"].length / L_tot
             uniformes.append({"rio": t["rio"], "reach": t["reach"],
-                              "rs_hi": rs_hi, "rs_lo": rs_lo, "q_pico": pico})
+                              "rs_hi": rs_hi, "rs_lo": rs_lo, "q_pico": pico,
+                              "serie": (q_ev["acu_incr"] * frac)
+                                       if (q_ev and "acu_incr" in q_ev) else None})
             print(f"        {t['reach']}: {a:7.0f} km2  ->  Q pico {pico:6.1f} m3/s"
                   f"  (RS {rs_hi/1000:.1f} a {rs_lo/1000:.1f} km)")
 

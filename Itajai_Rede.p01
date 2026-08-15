@@ -5,7 +5,7 @@ Geom File=g01
 Flow File=u01
 Simulation Date=01AUG2026,0000,05AUG2026,0000
 Mixed Flow Regime
-Computation Interval=15SEC
+Computation Interval=1MIN
 Output Interval=1HOUR
 Instantaneous Interval=1HOUR
 Mapping Interval=1HOUR
