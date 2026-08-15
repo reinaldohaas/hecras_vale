@@ -31,17 +31,23 @@ from scipy import ndimage
 from shapely.geometry import LineString, shape, mapping
 import h5py
 
-PROJECT   = "Itajai_Rede"
+import sys
+# Projeto de origem. Padrao: a cheia de 1983, que e o evento de referencia
+# do vale (regua de Blumenau em 15,34 m) e o que valida melhor:
+#   Blumenau +5,4% | foz -6,8% contra a vazao observada.
+PROJECT   = sys.argv[1] if len(sys.argv) > 1 else "Itajai_Rede_1983"
 DEM       = "dem_itajai.tif"
 UTM_EPSG  = 31982
 SAIDA     = os.path.join("app", "manchas_inundacao_hecras.geojson")
 
-BUFFER    = 700.0      # corredor em torno do rio (m). DEVE casar com a
-                       # meia-largura das secoes: um modelo 1D so tem
-                       # validade dentro da secao que ele roteou. Extrapolar
-                       # a cota para alem disso inventa area inundada.
+BUFFER    = 2500.0     # corredor em torno do rio (m). DEVE casar com o
+                       # HALFWIDTH de gerar_rede_hecras: um modelo 1D so tem
+                       # validade dentro da secao que ele roteou -- extrapolar
+                       # alem disso inventa area, e cortar aquem dela descarta
+                       # area que o modelo de fato calculou.
 DMIN      = 0.10       # profundidade minima considerada inundada (m)
-PASSOS    = [12, 18, 24, 30, 36, 48]      # horas exportadas
+PASSOS    = None      # None = escolhe automaticamente 8 instantes
+                      # distribuidos ate o pico e um pouco alem
 CLASSES = [                              # (limite inf, limite sup, nome, cor)
     (0.1, 1.0, "Lâmina Baixa (0.1 - 1.0m)",  "#38bdf8"),
     (1.0, 2.5, "Lâmina Média (1.0 - 2.5m)",  "#0284c7"),
@@ -137,8 +143,17 @@ def main():
     tr2 = Transformer.from_crs(ds.crs.to_epsg(), UTM_EPSG, always_xy=True)
     gx, gy = tr2.transform(lon, lat)
 
+    # instantes exportados: do inicio da subida ate depois do pico
+    passos = PASSOS
+    if passos is None:
+        qmax = ws.max(axis=1)
+        hp = int(np.argmax(qmax))
+        passos = sorted(set(int(round(x)) for x in
+                            np.linspace(max(hp - 36, 6), min(hp + 12, ws.shape[0] - 1), 8)))
+        print(f"pico da lamina em h={hp}; instantes exportados: {passos}")
+
     feats = []
-    for h in PASSOS:
+    for h in passos:
         t = min(h, ws.shape[0] - 1)
         px, py, pz = pontos_com_cota(ws, riv, rch, rs, eixos, t)
         tree = cKDTree(np.c_[px, py])

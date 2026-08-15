@@ -1524,7 +1524,12 @@
       }
 
       const t = parseInt(document.getElementById('slider-time').value || 0);
-      const horas = [12, 18, 24, 30, 36, 48];
+      // As horas disponiveis vem DO PROPRIO arquivo: a mancha do HEC-RAS e
+      // gerada em torno do pico do evento simulado, que varia de evento para
+      // evento (1983 pica em h=87). Fixar [12,18,...,48] nao casava com nada.
+      const horas = [...new Set(hecrasFloodData.features
+                        .map(f => f.properties.time_hour))].sort((a, b) => a - b);
+      if (!horas.length) return;
       const alvo = horas.reduce((a, b) => Math.abs(b - t) < Math.abs(a - t) ? b : a);
 
       hecrasFloodLayer = L.geoJSON(hecrasFloodData, {
