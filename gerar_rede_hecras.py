@@ -45,9 +45,13 @@ DEM       = "dem_itajai.tif"
 UTM_EPSG  = 31982              # SIRGAS 2000 / UTM 22S
 
 SPACING   = 1000.0             # espacamento entre secoes (m)
-HALFWIDTH = 700.0              # meia-largura MAXIMA da secao (m); a largura
-                               # real e proporcional a sqrt(area de drenagem)
-NPTS      = 200                # pontos por secao (limite HEC-RAS: 450).
+HALFWIDTH = 2500.0             # meia-largura MAXIMA da secao (m). A secao TEM
+                               # de conter a cheia: com 700 m o HEC-RAS avisava
+                               # "Extrapolated above Cross Section Table" nos
+                               # ultimos 27 km do Acu (agua ate 2,45 m acima do
+                               # topo da secao), assumia paredes verticais e
+                               # estrangulava a conducao no baixo vale.
+NPTS      = 280                # pontos por secao (limite HEC-RAS: 450).
                                # Denso o bastante p/ resolver o canal
                                # dentro de uma secao larga o suficiente
                                # para conter a cheia.
@@ -294,7 +298,7 @@ def largura(area_km2):
     """Meia-largura da secao proporcional ao porte do rio. Usar 700 m num
     afluente de montanha desperdicava quase todos os pontos na encosta e
     deixava o canal com 1-3 pontos."""
-    return float(np.clip(60.0 * np.sqrt(max(area_km2, 1.0) / 100.0), 450.0, HALFWIDTH))
+    return float(np.clip(180.0 * np.sqrt(max(area_km2, 1.0) / 100.0), 500.0, HALFWIDTH))
 
 
 def secoes(linha, dem, rs0, hw=HALFWIDTH):
@@ -506,8 +510,31 @@ def escrever_plano_prj():
         f"Proj Title={PROJECT}", "Current Plan=p01",
         "Default Exp/Contr=0.3,0.1", "SI Units", "Geom File=g01",
         "Unsteady File=u01", "Plan File=p01", "Y Axis Title=Elevation",
-        "X Axis Title(PR)=Distance", "X Axis Title(CS)=Station"]) + "\n")
-    print(f"  [OK] {PROJECT}.p01 / {PROJECT}.prj")
+        "X Axis Title(PR)=Distance", "X Axis Title(CS)=Station",
+        f"RASMap Filename={PROJECT}.rasmap"]) + "\n")
+
+    # Sem estes dois arquivos o RAS termina com
+    #   "Error executing: StoreAllMaps / RasMapFilename '' does not exist."
+    # Alem de silenciar o erro, fazem o projeto abrir georreferenciado no
+    # RAS Mapper, com o DEM ja carregado como terreno.
+    wkt = ('PROJCS["SIRGAS 2000 / UTM zone 22S",GEOGCS["SIRGAS 2000",'
+           'DATUM["Sistema_de_Referencia_Geocentrico_para_las_Americas_2000",'
+           'SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],'
+           'UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],'
+           'PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",-51],'
+           'PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],'
+           'PARAMETER["false_northing",10000000],UNIT["metre",1]]')
+    with open(f"{PROJECT}.projection", "w", encoding="utf-8") as f:
+        f.write(wkt)
+    with open(f"{PROJECT}.rasmap", "w", encoding="utf-8") as f:
+        f.write('<?xml version="1.0" encoding="utf-8"?>\n<RASMapper>\n'
+                '  <Version>2.00</Version>\n'
+                f'  <RASProjectionFilename Filename="{PROJECT}.projection" />\n'
+                '  <Terrains>\n'
+                f'    <Layer Name="Terreno" Filename="{DEM}" />\n'
+                '  </Terrains>\n'
+                '  <Results />\n</RASMapper>\n')
+    print(f"  [OK] {PROJECT}.p01 / {PROJECT}.prj / {PROJECT}.rasmap")
 
 
 # ------------------------------------------------------------------- PIPELINE
