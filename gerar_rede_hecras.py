@@ -59,9 +59,24 @@ MAX_SLOPE = 0.008              # declividade maxima (0,8%): acima disso o
                                # vale usam 0,15%-1,0% (reaches_bacia_completa)
 MIN_AREA  = 200.0              # area de drenagem minima (km2) p/ iniciar um
                                # rio: abaixo disso e torrente de montanha
+# n de Manning do CANAL por zona, lido de
+# itajai_flood_model/data/reaches_bacia_completa.csv. As zonas sao delimitadas
+# por uma cidade de referencia, cuja estaca e calculada projetando as
+# coordenadas sobre o eixo do rio (as distancias do CSV nao batem com a
+# geometria da ANA: o Acu tem 153 km la e 187,6 km aqui).
+#   rio -> (cidade, lat, lon, n acima da cidade, n abaixo)
+MANNING = {
+    "Itajai_Acu":   ("Blumenau", -26.9180, -49.0660, 0.035, 0.030),
+    "Itajai_Mirim": ("Brusque",  -27.0980, -48.9120, 0.038, 0.028),
+}
+N_CANAL_PADRAO   = 0.035
+RAZAO_PLANICIE   = 1.8         # n da planicie = n do canal x isto
 BANK_H    = 3.0                # altura acima do talvegue p/ definir a margem
 DS_SLOPE  = 0.0005             # declividade p/ profundidade normal na foz
-NHORAS    = 49                 # ordinatas horarias (h = 0..48)
+NHORAS    = 97                 # ordinatas horarias (h = 0..96). 48 h nao
+                               # bastam: o pico leva mais de 48 h para
+                               # percorrer os 187 km ate a foz, e a
+                               # simulacao truncava antes de ele chegar.
 
 # rios modelados: chave -> (padrao de nome na ANA, nome HEC-RAS)
 RIOS = {
@@ -390,11 +405,13 @@ def escrever(trechos, juncoes):
             g += [ "".join(f8(v) for v in par[i:i + 10])
                    for i in range(0, len(par), 10) ]
             lb, rb = margens(sta, z)
+            n_ch = d.get("n", N_CANAL_PADRAO)
+            n_fp = round(n_ch * RAZAO_PLANICIE, 3)
             g.append("#Mann= 3 ,-1,0")
             g.append("".join(f"{v:>8}" for v in
-                             [f"{sta[0]:.2f}", ".06", "0",
-                              f"{lb:.2f}", ".035", "0",
-                              f"{rb:.2f}", ".06", "0"]))
+                             [f"{sta[0]:.2f}", f"{n_fp:.3f}", "0",
+                              f"{lb:.2f}", f"{n_ch:.3f}", "0",
+                              f"{rb:.2f}", f"{n_fp:.3f}", "0"]))
             g.append(f"Bank Sta={lb:.2f},{rb:.2f}")
             g.append("XS Rating Curve= 0 ,0")
             g.append("Exp/Cntr=0.3,0.1")
@@ -443,7 +460,7 @@ def escrever_plano_prj():
     open(f"{PROJECT}.p01", "w", encoding="ascii").write("\n".join([
         "Plan Title=Rede_Real_Bacia_Itajai", "Program Version=7.01",
         "Short Identifier=REDE", "Geom File=g01", "Flow File=u01",
-        "Simulation Date=01AUG2026,0000,03AUG2026,0000", "Mixed Flow Regime",
+        "Simulation Date=01AUG2026,0000,05AUG2026,0000", "Mixed Flow Regime",
         "Computation Interval=15SEC", "Output Interval=1HOUR",
         "Instantaneous Interval=1HOUR", "Mapping Interval=1HOUR",
         "Run HTab=-1", "Run UNet=-1", "Run PostProcess=-1",
@@ -632,6 +649,26 @@ def main():
                               "rs_hi": rs_hi, "rs_lo": rs_lo, "q_pico": pico})
             print(f"        {t['reach']}: {a:7.0f} km2  ->  Q pico {pico:6.1f} m3/s"
                   f"  (RS {rs_hi/1000:.1f} a {rs_lo/1000:.1f} km)")
+
+    # --- n de Manning por secao, a partir da zona de cada rio
+    for t in trechos:
+        cfg = MANNING.get(t["rio"])
+        if cfg:
+            cidade, la_, lo_, n_cima, n_baixo = cfg
+            pc = gpd.GeoSeries([Point(lo_, la_)], crs=4326).to_crs(UTM_EPSG).iloc[0]
+            s_c = t["linha"].project(pc)
+            # RS da cidade no sistema do trecho: RS decresce rio abaixo
+            rs_topo = max(d["rs"] for d in t["xs"])
+            rs_cidade = rs_topo - s_c
+            for d in t["xs"]:
+                d["n"] = n_cima if d["rs"] > rs_cidade else n_baixo
+            dentro = 0 <= s_c <= t["linha"].length
+            print(f"      Manning {t['rio']}/{t['reach']}: {cidade} em RS "
+                  f"{rs_cidade/1000:.1f} km -> n {n_cima} acima / {n_baixo} abaixo"
+                  f"{'' if dentro else '  (cidade fora do trecho)'}")
+        else:
+            for d in t["xs"]:
+                d["n"] = N_CANAL_PADRAO
 
     escrever(trechos, juncoes)
     escrever_fluxo(trechos, cabeceiras, acu_reaches[-1], laterais, uniformes)
