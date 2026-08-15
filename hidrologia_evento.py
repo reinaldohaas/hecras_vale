@@ -28,7 +28,7 @@ import os
 
 import numpy as np
 
-from hydrology_engine import get_scs_unit_hydrograph, reservoir_puls_routing
+from hydrology_engine import get_scs_unit_hydrograph
 
 DIR_CHUVA = os.path.join("itajai_flood_model", "data", "rainfall_events")
 
@@ -41,6 +41,17 @@ DIR_CHUVA = os.path.join("itajai_flood_model", "data", "rainfall_events")
 # com 33 m3/s para 5.033 km2 -- lamina fina demais numa secao de 1.400 m, e o
 # solver instabiliza nas dezenas de horas antes de a cheia chegar.
 RENDIMENTO_BASE = 0.022        # m3/s por km2 (22 L/s.km2)
+
+# Barragens de contencao, de dados_estruturas/barragens_itajai.json.
+# q_fundo = descarga controlada pelas comportas de fundo durante a cheia.
+# Nao ha valor publicado por comporta, entao adota-se uma fracao do
+# vertedouro (FRACAO_FUNDO), explicita para poder ser calibrada.
+FRACAO_FUNDO = 0.15
+BARRAGENS_REAIS = {            # rio -> (capacidade hm3, vertedouro max m3/s)
+    "sul":   (110.0, 1200.0),
+    "oeste": (110.0, 1500.0),
+    "norte": (357.0, 3000.0),
+}
 
 SUBBACIAS = {
     "sul":      {"area": 2280.0, "tc": 12.8, "cn": 78, "col": "sul",
@@ -88,6 +99,41 @@ def chuva_efetiva_scs(p_horaria, cn):
     return np.clip(pe_inc, 0.0, None)
 
 
+def puls_barragem(q_in, cap_hm3, q_fundo, q_vert_max, dt_h=1.0):
+    """Modified Puls (level-pool) com descarga de fundo controlada + vertedouro.
+
+    Substitui hydrology_engine.reservoir_puls_routing(), que tem dois
+    problemas para este uso:
+      1. q_gate_max = 50 m3/s fixo no codigo, para TODAS as barragens. As
+         reais do Itajai tem vertedouro de 1.200 / 1.500 / 3.000 m3/s
+         (dados_estruturas/barragens_itajai.json) e comportas de fundo bem
+         maiores que 50 m3/s -- travar em 50 seca o alto vale.
+      2. cheio o reservatorio, ele repassa a vazao de entrada inteira de uma
+         vez, em vez de verter progressivamente.
+
+    Aqui: libera ate q_fundo enquanto ha volume; ao encher, verte o excedente
+    limitado a q_vert_max.
+    """
+    q_in = np.asarray(q_in, dtype=float)
+    n = len(q_in)
+    cap = cap_hm3 * 1e6
+    dt = dt_h * 3600.0
+    q_out = np.zeros(n)
+    vol = np.zeros(n)
+    q_out[0] = min(q_in[0], q_fundo)
+    for t in range(n - 1):
+        q = min(q_in[t + 1], q_fundo)
+        entra = 0.5 * (q_in[t] + q_in[t + 1])
+        v = vol[t] + (entra - 0.5 * (q_out[t] + q)) * dt
+        if v > cap:                      # reservatorio cheio: verte
+            excedente = (v - cap) / dt
+            q = min(q + 2.0 * excedente, q_vert_max)
+            v = vol[t] + (entra - 0.5 * (q_out[t] + q)) * dt
+        vol[t + 1] = max(0.0, min(v, cap))
+        q_out[t + 1] = q
+    return q_out, vol
+
+
 def hidrogramas(evento, barragens=True, horas=None):
     """Q(t) por sub-bacia, em m3/s, para o evento pedido.
 
@@ -111,15 +157,9 @@ def hidrogramas(evento, barragens=True, horas=None):
         if qbase is None:
             qbase = RENDIMENTO_BASE * sb["area"]
         q = np.convolve(pe, u)[:n] + qbase
-        if barragens and sb["dam_hm3"] > 0:
-            q = reservoir_puls_routing(q, sb["dam_hm3"], True, dt_hours=1.0)
-            # BUG do hydrology_engine.reservoir_puls_routing: ele cria
-            # q_out = np.zeros(n) e so preenche a partir do indice 1, entao
-            # q_out[0] fica ZERO. Como a cabeceira do Acu e Sul+Oeste (ambos
-            # com barragem), o HEC-RAS partia com vazao nula e instabilizava
-            # ja no primeiro minuto. Restaura a continuidade no instante 0.
-            if q[0] <= 0.0 and len(q) > 1:
-                q[0] = q[1]
+        if barragens and chave in BARRAGENS_REAIS:
+            cap, vert = BARRAGENS_REAIS[chave]
+            q, _ = puls_barragem(q, cap, FRACAO_FUNDO * vert, vert)
         saida[chave] = q
     return saida, n
 

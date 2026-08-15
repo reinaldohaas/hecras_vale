@@ -302,6 +302,10 @@ def largura(area_km2):
 
 
 def secoes(linha, dem, rs0, hw=HALFWIDTH):
+    # hw pode ser um numero OU uma funcao da fracao percorrida (0=montante,
+    # 1=jusante). A largura TEM de crescer rio abaixo: usar a largura da foz
+    # na cabeceira do Acu (4.390 m para 120 m3/s) cria uma lamina de papel,
+    # o trecho vira lago estagnado (vazoes negativas) e o solver instabiliza.
     """Corta as secoes de um trecho. rs0 = RS do extremo de JUSANTE."""
     L = linha.length
     ss = list(np.arange(0.0, L, SPACING))
@@ -311,7 +315,8 @@ def secoes(linha, dem, rs0, hw=HALFWIDTH):
         ss.append(L - SPACING * 0.5)
     xs = []
     for s in ss:
-        r = cortar(linha, s, dem, hw)
+        hw_s = hw(s / max(L, 1.0)) if callable(hw) else hw
+        r = cortar(linha, s, dem, hw_s)
         if r is None:
             continue
         sta, z, cut = r
@@ -581,7 +586,10 @@ def main():
 
     # --- Acu: corta e condiciona como UM perfil continuo (evita degrau de
     #     leito nas juncoes internas), so depois divide em trechos
-    acu_xs = condicionar(secoes(acu, dem, 0.0, largura(area_total)), rede[MAIN]["nome"])
+    def hw_acu(frac):
+        a = AREA_CABECEIRA_ACU + (area_total - AREA_CABECEIRA_ACU) * frac
+        return largura(a)
+    acu_xs = condicionar(secoes(acu, dem, 0.0, hw_acu), rede[MAIN]["nome"])
     acu_bed = {d["rs"]: d["z"].min() for d in acu_xs}
 
     def bed_em(rs_alvo):
