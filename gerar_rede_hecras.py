@@ -72,7 +72,14 @@ MANNING = {
 N_CANAL_PADRAO   = 0.035
 RAZAO_PLANICIE   = 1.8         # n da planicie = n do canal x isto
 BANK_H    = 3.0                # altura acima do talvegue p/ definir a margem
-DS_SLOPE  = 0.0005             # declividade p/ profundidade normal na foz
+# Contorno de jusante. O trecho final e ESTUARIO sob mare, nao canal com
+# declividade: com Friction Slope numa foz quase plana a profundidade normal
+# fica alta, gera remanso e o baixo vale estoca agua demais.
+MARE          = True
+MARE_MEDIA    = 0.30           # nivel medio do mar (m)
+MARE_AMPLITUDE= 0.50           # semi-amplitude (m) -> variacao de ~1,0 m
+MARE_PERIODO  = 12.42          # componente M2 (h)
+DS_SLOPE  = 0.0005             # declividade (usada so se MARE = False)
 NHORAS    = 97                 # ordinatas horarias (h = 0..96). 48 h nao
                                # bastam: o pico leva mais de 48 h para
                                # percorrer os 187 km ate a foz, e a
@@ -136,6 +143,12 @@ def serie8(vals):
 WARMUP = 8                     # horas de vazao constante antes da cheia:
                                # sem aquecimento o solver diverge nos
                                # primeiros minutos (partida a frio nas juncoes)
+
+
+def mare(n=NHORAS):
+    """Nivel do mar na foz: onda semidiurna M2."""
+    return [MARE_MEDIA + MARE_AMPLITUDE * np.sin(2 * np.pi * h / MARE_PERIODO)
+            for h in range(n)]
 
 
 def hidrograma(pico, base=None, n=NHORAS, tp=26, te=46):
@@ -449,7 +462,12 @@ def escrever_fluxo(trechos, cabeceiras, saida, laterais=(), uniformes=()):
         u.append(f"Uniform Lateral Inflow Hydrograph= {NHORAS} ")
         u.append(serie8(hidrograma(un["q_pico"])))
     u.append(bl(saida["rio"], saida["reach"], f"{saida['xs'][-1]['rs']:.2f}"))
-    u.append(f"Friction Slope={DS_SLOPE}")
+    if MARE:
+        u.append("Interval=1HOUR")
+        u.append(f"Stage Hydrograph= {NHORAS} ")
+        u.append(serie8(mare()))
+    else:
+        u.append(f"Friction Slope={DS_SLOPE}")
     open(f"{PROJECT}.u01", "w", encoding="ascii", errors="replace").write(
         "\n".join(u) + "\n")
     print(f"  [OK] {PROJECT}.u01  ({len(cabeceiras)} hidrogramas de cabeceira, "
