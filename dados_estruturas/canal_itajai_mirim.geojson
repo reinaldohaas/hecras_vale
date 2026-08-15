@@ -1,0 +1,86 @@
+{
+  "type": "FeatureCollection",
+  "generator": "overpass-turbo",
+  "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL.",
+  "timestamp": "2026-08-14T23:22:48Z",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "way/290409480",
+        "boat": "no",
+        "name": "Canal Retificado Rio Itajaí-Mirim",
+        "waterway": "canal"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -48.7136045,
+            -26.9087124
+          ],
+          [
+            -48.6885296,
+            -26.8936282
+          ]
+        ]
+      },
+      "id": "way/290409480"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "@id": "way/290766868",
+        "boat": "no",
+        "name": "Canal Retificado Rio Itajaí Mirim",
+        "waterway": "canal"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -48.7520435,
+            -26.9308143
+          ],
+          [
+            -48.7505806,
+            -26.9304634
+          ],
+          [
+            -48.7494158,
+            -26.9300371
+          ],
+          [
+            -48.7477974,
+            -26.9293703
+          ],
+          [
+            -48.746277,
+            -26.9285668
+          ],
+          [
+            -48.744057,
+            -26.9271706
+          ],
+          [
+            -48.7431253,
+            -26.9265455
+          ],
+          [
+            -48.7355617,
+            -26.9219456
+          ],
+          [
+            -48.7146262,
+            -26.9093282
+          ],
+          [
+            -48.7136045,
+            -26.9087124
+          ]
+        ]
+      },
+      "id": "way/290766868"
+    }
+  ]
+}

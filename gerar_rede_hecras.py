@@ -34,7 +34,7 @@ import unicodedata
 import numpy as np
 import geopandas as gpd
 import rasterio
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, shape
 from shapely.ops import substring
 from pyproj import Transformer
 
@@ -75,6 +75,13 @@ MANNING = {
 }
 N_CANAL_PADRAO   = 0.035
 RAZAO_PLANICIE   = 1.8         # n da planicie = n do canal x isto
+# --- escavacao da calha (bathymetry) -------------------------------------
+# O DEM e de SUPERFICIE: sobre o rio ele mede a lamina d'agua, nao o leito.
+CAVAR_CANAL = True
+CANAL_KH  = 0.277              # h = KH * A^EH   -> ~8,0 m na foz (14.871 km2)
+CANAL_EH  = 0.35               #                    ~1,8 m com 200 km2
+CANAL_KW  = 5.0                # w = KW * A^EW   -> ~233 m na foz
+CANAL_EW  = 0.40               #                    ~35 m com 200 km2
 BANK_H    = 3.0                # altura acima do talvegue p/ definir a margem
 # Contorno de jusante. O trecho final e ESTUARIO sob mare, nao canal com
 # declividade: com Friction Slope numa foz quase plana a profundidade normal
@@ -102,6 +109,11 @@ RIOS = {
     "benedito": ("Benedito",                  "Rio_Benedito"),
     "mirim":    ("Itajaí-mirim",              "Itajai_Mirim"),
 }
+# Canais retificados que SUBSTITUEM o curso natural. A base da ANA traz o
+# leito antigo meandrante; onde houve retificacao, o rio real corre pelo
+# canal. No Itajai-Mirim isso troca 19,23 km de meandros por 7,55 km de
+# canal -- muda declividade e tempo de viagem de forma relevante.
+CANAIS = {"mirim": os.path.join("dados_estruturas", "canal_itajai_mirim.geojson")}
 MAIN = "acu"
 # ESCOPO: quais afluentes entram na rede. Reduzir o escopo diminui o numero
 # de juncoes (cada uma e um ponto potencial de instabilidade) e permite
@@ -206,6 +218,35 @@ class Dem:
 
 
 # ------------------------------------------------------------------- TOPOLOGIA
+def aplicar_canal(linha, caminho):
+    """Substitui o trecho do eixo entre as pontas do canal pelo proprio canal."""
+    import json as _json
+    from shapely.ops import linemerge as _lm
+    if not os.path.exists(caminho):
+        print(f"      ! canal nao encontrado: {caminho}")
+        return linha
+    feats = _json.load(open(caminho, encoding="utf-8"))["features"]
+    cu = gpd.GeoSeries([shape(f["geometry"]) for f in feats],
+                       crs=4326).to_crs(UTM_EPSG)
+    canal = _lm(list(cu))
+    if canal.geom_type != "LineString":
+        canal = max(canal.geoms, key=lambda g: g.length)
+    a, b = Point(canal.coords[0]), Point(canal.coords[-1])
+    sa, sb = linha.project(a), linha.project(b)
+    if sa > sb:                       # canal digitalizado ao contrario
+        canal = LineString(list(canal.coords)[::-1])
+        sa, sb = sb, sa
+    if sb - sa < canal.length * 0.5:  # nao encurta: nao e retificacao
+        return linha
+    montante = list(substring(linha, 0, sa).coords)
+    jusante = list(substring(linha, sb, linha.length).coords)
+    nova = LineString(montante + list(canal.coords) + jusante)
+    print(f"      canal retificado: {(sb-sa)/1000:.2f} km de meandros -> "
+          f"{canal.length/1000:.2f} km de canal "
+          f"(eixo {linha.length/1000:.1f} -> {nova.length/1000:.1f} km)")
+    return nova
+
+
 def montar_rede():
     g = gpd.read_file(GEOJSON).to_crs(UTM_EPSG)
     g["NORIOCOMP"] = g["NORIOCOMP"].astype(str)
@@ -249,7 +290,10 @@ def montar_rede():
         if k != MAIN and k not in ESCOPO and k not in LATERAIS:
             continue
         ch = cadeia(pat)
-        rede[k] = {"nome": nome, "linha": eixo(ch),
+        ln = eixo(ch)
+        if k in CANAIS:
+            ln = aplicar_canal(ln, CANAIS[k])
+        rede[k] = {"nome": nome, "linha": ln,
                    "area": float(by[ch[-1]].NUAREAMONT)}
     return rede
 
@@ -278,6 +322,50 @@ def cortar(linha, s, dem, hw=HALFWIDTH):
     return np.round(sta, 2), z, cut
 
 
+def canal_geometria(area_km2):
+    """Profundidade e largura da calha por geometria hidraulica.
+
+    O DEM Copernicus e modelo de SUPERFICIE: sobre o rio ele registra a
+    lamina d'agua no instante da aquisicao, nao o leito. Sem escavar a calha,
+    toda a secao de escoamento abaixo dessa lamina fica faltando -- a area
+    molhada e subestimada e a cota calculada nao se apoia em nada.
+
+    Usa-se a forma classica de Leopold & Maddock, com a area de drenagem como
+    substituto da vazao de margens plenas:
+        h = CANAL_KH * A^CANAL_EH     (m)
+        w = CANAL_KW * A^CANAL_EW     (m)
+    Os coeficientes foram fixados para reproduzir a ordem de grandeza
+    conhecida do Itajai: ~8 m de profundidade e ~230 m de largura na foz
+    (canal do porto de Itajai, dragado), caindo a ~1,8 m e ~35 m nos
+    afluentes de 200 km2.
+    """
+    a = max(float(area_km2), 1.0)
+    h = CANAL_KH * a ** CANAL_EH
+    w = CANAL_KW * a ** CANAL_EW
+    return float(h), float(w)
+
+
+def cavar_canal(sta, z, area_km2):
+    """Rebaixa a calha no ponto mais baixo da secao (a lamina do DEM).
+
+    Escava um trapezio de largura w e profundidade h centrado no talvegue,
+    com taludes de 1 celula para nao criar degrau vertical.
+    """
+    if not CAVAR_CANAL:
+        return z
+    h, w = canal_geometria(area_km2)
+    z = np.asarray(z, dtype=float).copy()
+    i0 = int(np.nanargmin(z))
+    centro = sta[i0]
+    d = np.abs(sta - centro)
+    meia = w / 2.0
+    talude = max(w * 0.25, 30.0)          # transicao suave ate o terreno
+    # perfil de escavacao: 1 no fundo, decaindo linearmente ate 0 no talude
+    frac = np.clip(1.0 - (d - meia) / talude, 0.0, 1.0)
+    frac[d <= meia] = 1.0
+    return z - h * frac
+
+
 def margens(sta, z):
     """Margens topograficas: do talvegue ate BANK_H m de cada lado.
     O valor DEVE coincidir com um sta da tabela, na mesma precisao (.2f)."""
@@ -301,7 +389,7 @@ def largura(area_km2):
     return float(np.clip(180.0 * np.sqrt(max(area_km2, 1.0) / 100.0), 500.0, HALFWIDTH))
 
 
-def secoes(linha, dem, rs0, hw=HALFWIDTH):
+def secoes(linha, dem, rs0, hw=HALFWIDTH, area=None):
     # hw pode ser um numero OU uma funcao da fracao percorrida (0=montante,
     # 1=jusante). A largura TEM de crescer rio abaixo: usar a largura da foz
     # na cabeceira do Acu (4.390 m para 120 m3/s) cria uma lamina de papel,
@@ -320,8 +408,10 @@ def secoes(linha, dem, rs0, hw=HALFWIDTH):
         if r is None:
             continue
         sta, z, cut = r
+        a_km2 = area(s / max(L, 1.0)) if callable(area) else (area or 1000.0)
+        z = cavar_canal(sta, z, a_km2)     # escava a calha no talvegue
         xs.append({"rs": round(rs0 + (L - s), 2), "sta": sta, "z": z,
-                   "cut": cut})
+                   "cut": cut, "area_km2": a_km2})
     xs.sort(key=lambda d: -d["rs"])           # montante -> jusante
     # remove RS repetido (o RAS exige unicidade)
     fin, visto = [], set()
@@ -409,9 +499,10 @@ def escrever(trechos, juncoes):
 
     for t in trechos:
         g.append(f"River Reach={p16(t['rio'])},{p16(t['reach'])}")
+        # Eixo em RESOLUCAO CHEIA. Decimar para 400 pontos cortava as curvas
+        # e o rio aparecia poligonal no RAS Mapper e no app -- as cutlines
+        # sempre usaram a linha completa, mas o traçado desenhado nao.
         c = list(t["linha"].coords)
-        if len(c) > 400:
-            c = [c[i] for i in np.linspace(0, len(c) - 1, 400).astype(int)]
         g.append(f"Reach XY= {len(c)} ")
         for i in range(0, len(c), 2):
             par = c[i:i + 2]
@@ -586,10 +677,12 @@ def main():
 
     # --- Acu: corta e condiciona como UM perfil continuo (evita degrau de
     #     leito nas juncoes internas), so depois divide em trechos
+    def hw_area(frac):
+        return AREA_CABECEIRA_ACU + (area_total - AREA_CABECEIRA_ACU) * frac
+
     def hw_acu(frac):
-        a = AREA_CABECEIRA_ACU + (area_total - AREA_CABECEIRA_ACU) * frac
-        return largura(a)
-    acu_xs = condicionar(secoes(acu, dem, 0.0, hw_acu), rede[MAIN]["nome"])
+        return largura(hw_area(frac))
+    acu_xs = condicionar(secoes(acu, dem, 0.0, hw_acu, hw_area), rede[MAIN]["nome"])
     acu_bed = {d["rs"]: d["z"].min() for d in acu_xs}
 
     def bed_em(rs_alvo):
@@ -620,7 +713,8 @@ def main():
     DROP = 0.5                                # desnivel na juncao (m)
     for c in conf:
         k = c["k"]; ln = rede[k]["linha"]
-        xs = condicionar(secoes(ln, dem, 0.0, largura(rede[k]["area"])), rede[k]["nome"])
+        xs = condicionar(secoes(ln, dem, 0.0, largura(rede[k]["area"]),
+                                rede[k]["area"]), rede[k]["nome"])
         alvo = bed_em(acu.length - c["s"]) + DROP
         desl = alvo - xs[-1]["z"].min()
         for d in xs:                          # desloca o trecho inteiro

@@ -3,7 +3,7 @@ Program Version=7.01
 Use Restart= 0 
 Initial Flow Loc=Itajai_Acu      ,R1              ,187612  ,119
 Initial Flow Loc=Itajai_Acu      ,R2              ,6612    ,336
-Initial Flow Loc=Itajai_Mirim    ,R1              ,158003  ,37
+Initial Flow Loc=Itajai_Mirim    ,R1              ,146335  ,37
 Boundary Location=Itajai_Acu      ,R1              ,187611.9,        ,                ,                
 Interval=1HOUR
 Flow Hydrograph= 192 
@@ -27,7 +27,7 @@ Flow Hydrograph= 192
  2700.00 2700.00 2700.00 2700.00 2700.00 2700.00 2700.00 2700.00 2400.07 2050.48
  1792.73 1501.02 1311.60 1090.43  965.10  799.07  718.35  589.02  554.15  419.39
   442.77  356.06
-Boundary Location=Itajai_Mirim    ,R1              ,158003.2,        ,                ,                
+Boundary Location=Itajai_Mirim    ,R1              ,146334.8,        ,                ,                
 Interval=1HOUR
 Flow Hydrograph= 192 
    36.96   36.96   36.96   36.96   36.96   36.96   36.96   36.96   36.96   36.96
