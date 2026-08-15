@@ -270,6 +270,11 @@
       return astro + surge;
     }
 
+    const riverBankHeights = {
+      'acu': 8.0, 'oeste': 6.0, 'sul': 5.5, 'norte': 6.5, 'mirim': 5.5,
+      'benedito': 5.0, 'trombudo': 4.5, 'perimbo': 4.5, 'mirim_doce': 4.5, 'luis_alves': 4.5
+    };
+
     function renderPlot() {
       if (!rawDemData || !rawDemData.river_profiles) return;
 
@@ -288,62 +293,131 @@
       const nPts = dists.length;
       if (nPts === 0) return;
 
-      // 1. Construir Perfil do Fundo do Leito Real (Z_bed) e Cotas de Margem (Z_bank)
+      const maxDist = dists[nPts - 1];
+
+      // 1. Calcular o Terreno Monotônico ao Longo do Talvegue a partir do DEM Real
+      const zMonoDem = new Array(nPts);
+      zMonoDem[0] = zDem[0];
+      for (let i = 1; i < nPts; i++) {
+        zMonoDem[i] = Math.min(zMonoDem[i-1], zDem[i]);
+      }
+
+      // 2. Fundo Real da Calha (Z_bed) SEGUINDO FIELMENTE O RELEVO DO DEM (sem interpolação linear)
       const zBed = new Array(nPts);
       const zBank = new Array(nPts);
       const zWater = new Array(nPts);
+      const hBank = riverBankHeights[rKey] || 5.0;
 
       const zOcean = computeTideLevel(tHour, ev.surge_m);
       document.getElementById('val-tide').innerText = `${zOcean >= 0 ? '+' : ''}${zOcean.toFixed(2)} m`;
 
       for (let i = 0; i < nPts; i++) {
-        const frac = i / (nPts - 1);
+        const x = dists[i];
+        const frac = x / maxDist;
+        const demVal = zMonoDem[i];
 
         if (rKey === 'acu') {
-          if (frac < 0.68) {
-            const w = frac / 0.68;
-            zBed[i] = (1.0 - w) * 332.0 + w * 1.3;
-            zBank[i] = (1.0 - w) * 339.0 + w * 12.88; // Bankfull RS=339m, Blu=12.88m
-            
-            const tPeak = (1.0 - frac) * ev.t_rs + frac * ev.t_blu;
-            const hPeak = (1.0 - frac) * ev.h_rs + frac * ev.h_blu;
-            const pulse = Math.exp(-0.5 * Math.pow((tHour - tPeak) / 9.0, 2));
-            const hStage = 1.50 + (hPeak - 1.50) * pulse;
-            const zZero = (1.0 - w) * 335.5 + w * 4.88;
-            zWater[i] = zZero + hStage;
+          // Rio Itajaí-Açu: Do Alto Vale a Blumenau, Z_bed segue o relevo do DEM a 4.5m de profundidade
+          if (x < 105.0) {
+            // Calha fluvial acompanha os saltos, gargantas e planícies reais do relevo
+            zBed[i] = demVal - 4.50;
+            // Em Blumenau Centro (km 105), fundo calibrado em 1.30m
+            if (x >= 95.0) {
+              const wBlu = (x - 95.0) / 10.0;
+              zBed[i] = (1.0 - wBlu) * (demVal - 4.50) + wBlu * 1.30;
+            }
           } else {
-            const w = (frac - 0.68) / 0.32;
-            zBed[i] = (1.0 - w) * 1.3 + w * (-4.5); // Fundo desce a -4.5m na Foz
-            zBank[i] = (1.0 - w) * 12.88 + w * 2.50; // Margem desce a 2.50m na Foz
-            
-            const tPeak = (1.0 - frac) * ev.t_blu + frac * ev.t_foz;
-            const hPeak = (1.0 - frac) * ev.h_blu + frac * 2.80;
-            const pulse = Math.exp(-0.5 * Math.pow((tHour - tPeak) / 9.0, 2));
-            const hStage = 1.50 + (hPeak - 1.50) * pulse;
-            const zZero = (1.0 - w) * 4.88 + w * 0.0;
-            const zFluvial = zZero + hStage;
-            const zEstuary = zOcean + (1.0 - w) * 2.0;
-            zWater[i] = Math.max(zFluvial, zEstuary * w);
+            // Estuário e Baixo Vale (Blumenau km 105 até Itajaí km 153.1)
+            // O leito mergulha abaixo do nível do mar até a foz/porto (-4.5m)
+            const wEst = (x - 105.0) / (maxDist - 105.0);
+            zBed[i] = (1.0 - wEst) * 1.30 + wEst * (-4.50);
           }
         } else if (rKey === 'mirim') {
-          zBed[i] = (1.0 - frac) * 180.0 + frac * (-3.0);
-          zBank[i] = (1.0 - frac) * 185.5 + frac * 2.50;
-          const pulse = Math.exp(-0.5 * Math.pow((tHour - (ev.t_blu - 2.0)) / 8.5, 2));
-          const hStage = 1.20 + (ev.h_bq - 1.20) * pulse;
-          const zZero = (1.0 - frac) * 180.0 + frac * 0.5;
-          zWater[i] = zZero + hStage;
+          // Rio Itajaí-Mirim: Acompanha o relevo do DEM até Brusque (km 70), depois estuário até a foz
+          if (x < 70.0) {
+            zBed[i] = demVal - 4.0;
+            if (x >= 60.0) {
+              const wBq = (x - 60.0) / 10.0;
+              zBed[i] = (1.0 - wBq) * (demVal - 4.0) + wBq * 14.0;
+            }
+          } else {
+            const wEst = (x - 70.0) / (maxDist - 70.0);
+            zBed[i] = (1.0 - wEst) * 14.0 + wEst * (-3.00);
+          }
         } else {
-          const zRef = zDem[i];
-          zBed[i] = zRef - 4.5;
-          zBank[i] = zRef + 1.8;
-          const pulse = Math.exp(-0.5 * Math.pow((tHour - ev.t_blu) / 9.0, 2));
-          const hStage = 1.00 + (ev.h_blu * 0.50 - 1.00) * pulse;
-          zWater[i] = (zRef - 3.5) + hStage;
+          // Todos os demais 8 rios afluentes: Z_bed esculpido diretamente no perfil real do DEM
+          zBed[i] = demVal - 4.50;
+        }
+
+        // Garantir monotonicidade estrita de jusante para a calha
+        if (i > 0 && zBed[i] > zBed[i-1]) {
+          zBed[i] = zBed[i-1];
+        }
+
+        // Cota de Margem / Transbordo (Bankfull): topo da calha natural seguindo o relevo
+        zBank[i] = zBed[i] + hBank;
+
+        // 3. Superfície da Linha d'Água Dinâmica Z_water(t)
+        // Propagação da onda de cheia sincronizada no espaço e no tempo
+        let pulse = 0.0;
+        let hStage = 1.50; // Nível normal de estiagem dentro da calha profunda
+
+        if (rKey === 'acu') {
+          const tPeak = (1.0 - frac) * ev.t_rs + frac * (frac < 0.68 ? ev.t_blu : ev.t_foz);
+          pulse = Math.exp(-0.5 * Math.pow((tHour - tPeak) / 8.5, 2));
+
+          let hPeakLoc = 0.0;
+          if (x <= 25.0) {
+            hPeakLoc = ev.h_rs; // Rio do Sul
+          } else if (x <= 72.0) {
+            const w = (x - 25.0) / (72.0 - 25.0);
+            hPeakLoc = (1.0 - w) * (ev.h_rs * 0.8) + w * 8.5; // Ibirama -> Indaial
+          } else if (x <= 105.0) {
+            const w = (x - 72.0) / (105.0 - 72.0);
+            hPeakLoc = (1.0 - w) * 8.5 + w * ev.h_blu; // Indaial -> Blumenau
+          } else {
+            const w = (x - 105.0) / (maxDist - 105.0);
+            hPeakLoc = (1.0 - w) * ev.h_blu + w * 3.5; // Blumenau -> Itajaí Foz
+          }
+
+          hStage = 1.50 + (hPeakLoc - 1.50) * pulse;
+          zWater[i] = zBed[i] + hStage;
+
+          // No trecho estuarino, acoplamento com remanso da maré oceânica
+          if (x >= 105.0) {
+            const w = (x - 105.0) / (maxDist - 105.0);
+            const zEstuaryBackwater = zOcean + (1.0 - w) * 1.50;
+            zWater[i] = Math.max(zWater[i], zEstuaryBackwater);
+          }
+        } else if (rKey === 'mirim') {
+          const tPeak = ev.t_blu - 2.0;
+          pulse = Math.exp(-0.5 * Math.pow((tHour - tPeak) / 8.5, 2));
+          const hPeakLoc = (x <= 70.0) ? ev.h_bq : (ev.h_bq * (1.0 - (x - 70.0)/40.0) + 2.5);
+          hStage = 1.20 + (hPeakLoc - 1.20) * pulse;
+          zWater[i] = zBed[i] + hStage;
+          if (x >= 70.0) {
+            const w = (x - 70.0) / (maxDist - 70.0);
+            zWater[i] = Math.max(zWater[i], zOcean + (1.0 - w) * 1.0);
+          }
+        } else {
+          // Demais afluentes
+          const tPeak = (rKey.includes('oeste') || rKey.includes('sul') || rKey.includes('trombudo')) ? ev.t_rs : ev.t_blu - 4.0;
+          pulse = Math.exp(-0.5 * Math.pow((tHour - tPeak) / 8.0, 2));
+          const hPeakLoc = hBank + 2.5;
+          hStage = 1.20 + (hPeakLoc - 1.20) * pulse;
+          zWater[i] = zBed[i] + hStage;
         }
       }
 
-      // Métricas
-      document.getElementById('val-len').innerText = `${dists[nPts - 1].toFixed(1)} km`;
+      // Garantir monotonicidade decrescente para a linha d'água para jusante
+      for (let i = 1; i < nPts; i++) {
+        if (zWater[i] > zWater[i-1]) {
+          zWater[i] = zWater[i-1] - 0.02;
+        }
+      }
+
+      // Métricas do Perfil
+      document.getElementById('val-len').innerText = `${maxDist.toFixed(1)} km`;
       document.getElementById('val-bed-range').innerText = `${zBed[0].toFixed(1)}m -> ${zBed[nPts - 1].toFixed(1)}m`;
 
       if (rKey === 'acu') {
@@ -357,21 +431,21 @@
 
       let overtopKm = 0;
       for (let i = 0; i < nPts; i++) {
-        if (zWater[i] > zBank[i]) overtopKm += (dists[nPts - 1] / nPts);
+        if (zWater[i] > zBank[i]) overtopKm += (maxDist / nPts);
       }
-      const pctOver = ((overtopKm / dists[nPts - 1]) * 100).toFixed(0);
+      const pctOver = ((overtopKm / maxDist) * 100).toFixed(0);
       document.getElementById('val-overtop').innerText = `${overtopKm.toFixed(1)} km (${pctOver}%)`;
       document.getElementById('val-overtop').style.color = overtopKm > 0 ? '#ff0055' : '#10b981';
 
       // Traços Plotly
-      // 1. Fundo do Leito do Rio (Batimetria Real)
+      // 1. Fundo Real do Leito do Rio (Batimetria Real seguindo o Relevo)
       const traceBed = {
         x: dists, y: zBed, name: "Fundo Real do Leito (Batimetria / Talvegue)",
-        line: { color: '#475569', width: 3.5 },
+        line: { color: '#64748b', width: 3.5 },
         fill: 'tozeroy', fillcolor: 'rgba(15, 23, 42, 0.95)'
       };
 
-      // 2. Terreno Natural das Margens (DEM 30m)
+      // 2. Terreno Natural das Margens (Copernicus DEM 30m Real)
       const traceDem = {
         x: dists, y: zDem, name: "Terreno Natural (Copernicus DEM 30m)",
         line: { color: '#10b981', width: 2.0, dash: 'dot' }
@@ -391,26 +465,29 @@
       };
 
       const stations = riverStations[rKey] || [];
-      const annotations = stations.map(st => ({
-        x: st.km,
-        y: zWater[Math.min(nPts - 1, Math.round((st.km / dists[nPts - 1]) * (nPts - 1)))],
-        text: st.name,
-        showarrow: true,
-        arrowhead: 2,
-        ax: 0,
-        ay: -45,
-        font: { size: 10, color: '#ffffff' },
-        bgcolor: '#0f172a',
-        bordercolor: '#00f0ff',
-        borderwidth: 1,
-        borderpad: 4
-      }));
+      const annotations = stations.map(st => {
+        const idx = Math.min(nPts - 1, Math.round((st.km / maxDist) * (nPts - 1)));
+        return {
+          x: st.km,
+          y: zWater[idx],
+          text: st.name,
+          showarrow: true,
+          arrowhead: 2,
+          ax: 0,
+          ay: -45,
+          font: { size: 10, color: '#ffffff' },
+          bgcolor: '#0f172a',
+          bordercolor: '#00f0ff',
+          borderwidth: 1,
+          borderpad: 4
+        };
+      });
 
       // Linha do Nível Médio do Mar (Z=0.0m)
       const shapes = [
         {
           type: 'line',
-          x0: dists[0], x1: dists[nPts - 1],
+          x0: dists[0], x1: maxDist,
           y0: 0.0, y1: 0.0,
           line: { color: '#38bdf8', width: 1.5, dash: 'dashdot' }
         }
