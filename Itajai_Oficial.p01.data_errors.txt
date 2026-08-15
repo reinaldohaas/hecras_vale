@@ -1,3 +1,0 @@
-River: ITAJAI           Reach: CALHA_PRINCIPAL  needs an downstream boundary condition.
-Boundary at River: ITAJAI  Reach: CALHA_PRINCIPAL  RS: 89310.7
-      Time series data ends before the end of the simulation.

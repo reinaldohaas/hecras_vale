@@ -49,6 +49,22 @@ HALFWIDTH = 600.0  # Meia-largura da seção transversal (m)
 STEP = 30.0        # Passo de amostragem no DEM (m)
 MAXPTS = 120       # Máximo de pontos por seção (limite HEC-RAS = 450)
 MIN_SLOPE = 1e-4   # Declividade mínima para monotonicidade do talvegue
+N_HORAS = 49       # ordinatas horárias (h=0..48) — deve cobrir TODA a simulação
+
+
+def fmt_rs(station_m):
+    """RS em campo de 8 caracteres alinhado à ESQUERDA (formato oficial HEC-RAS)."""
+    return f"{station_m:.1f}"[:8].ljust(8)
+
+
+def bc_line(river16, reach16, station_m):
+    """Linha 'Boundary Location' no formato oficial de 6 campos:
+       River(16), Reach(16), RS(8), + 3 campos vazios (8, 16, 16).
+       Validado contra os projetos-exemplo oficiais do HEC-RAS; escrever
+       menos campos (ou sem padding) faz o RAS associar a BC a uma storage
+       area inexistente -> 'needs a upstream boundary condition'."""
+    return (f"Boundary Location={river16[:16]:<16},{reach16[:16]:<16},"
+            f"{fmt_rs(station_m)},        ,                ,                ")
 
 def sanitizar_ascii(texto):
     """Remove totalmente acentos e caracteres não-ASCII para total compatibilidade HEC-RAS."""
@@ -88,9 +104,16 @@ class DemSampler:
             self.rows, self.cols = self.arr.shape
             self.to_dem = Transformer.from_crs(UTM_EPSG, 4326, always_xy=True)
         elif RASTERIO_OK:
+            # NOTA: NAO usar ds.sample() — em rasterio 1.5.x essa chamada
+            # derruba o processo (crash nativo, sem traceback). Carregamos a
+            # banda inteira em memoria (~155 MB p/ o DEM da bacia) e indexamos
+            # direto pela transform afim: mais robusto e muito mais rapido.
             self.mode = "rasterio"
             self.ds = rasterio.open(dem_path)
             self.nodata = self.ds.nodata
+            self.arr = self.ds.read(1)
+            self.rows, self.cols = self.arr.shape
+            self.inv = ~self.ds.transform
             self.to_dem = Transformer.from_crs(UTM_EPSG, self.ds.crs.to_epsg(), always_xy=True)
         else:
             raise RuntimeError("Nem GDAL nem Rasterio estão disponíveis para amostragem do DEM.")
@@ -112,10 +135,20 @@ class DemSampler:
                     vals.append(np.nan)
             return np.array(vals)
         else:
-            pts = list(zip(lons, lats))
-            sampled = list(self.ds.sample(pts))
-            vals = [float(v[0]) if (self.nodata is None or v[0] != self.nodata) else np.nan for v in sampled]
-            return np.array(vals)
+            lons = np.asarray(lons, dtype=float)
+            lats = np.asarray(lats, dtype=float)
+            a, b, c, d, e, f = (self.inv.a, self.inv.b, self.inv.c,
+                                self.inv.d, self.inv.e, self.inv.f)
+            cols = np.floor(a * lons + b * lats + c).astype(int)
+            rows = np.floor(d * lons + e * lats + f).astype(int)
+            dentro = ((rows >= 0) & (rows < self.rows) &
+                      (cols >= 0) & (cols < self.cols))
+            vals = np.full(lons.shape, np.nan, dtype=float)
+            vals[dentro] = self.arr[rows[dentro], cols[dentro]]
+            if self.nodata is not None:
+                vals[vals == self.nodata] = np.nan
+            vals[vals < -1000] = np.nan          # sentinelas de oceano/void
+            return vals
 
 def cortar_secao_dem(line, dist_m, dem_sampler):
     pt = line.interpolate(dist_m)
@@ -152,13 +185,28 @@ def cortar_secao_dem(line, dist_m, dem_sampler):
     cutline = (xs_utm[valid_idx[0]], ys_utm[valid_idx[0]], xs_utm[valid_idx[-1]], ys_utm[valid_idx[-1]])
     return sta, z, cutline
 
-def estacoes_margem(sta, z):
-    mid = len(sta) // 2
-    li = max(1, mid - int(len(sta)*0.15))
-    ri = min(len(sta) - 2, mid + int(len(sta)*0.15))
+def estacoes_margem(sta, z, altura_margem=3.0):
+    """Margens TOPOGRAFICAS: parte do talvegue (ponto mais baixo) e sobe ate
+    'altura_margem' metros de cada lado.
+
+    IMPORTANTE: o valor devolvido tem de ser EXATAMENTE um dos valores da
+    tabela #Sta/Elev, com a MESMA precisao com que ela e escrita (2 casas),
+    senao o HEC-RAS recusa: "Left bank station not in station elevation data".
+    """
+    z = np.asarray(z, dtype=float)
+    i0 = int(np.nanargmin(z))
+    limiar = z[i0] + altura_margem
+    li = i0
+    while li > 0 and z[li] < limiar:
+        li -= 1
+    ri = i0
+    while ri < len(z) - 1 and z[ri] < limiar:
+        ri += 1
+    # margens estritamente interiores e distintas
     li = min(max(li, 1), len(sta) - 3)
     ri = max(min(ri, len(sta) - 2), li + 1)
-    return float(sta[li]), float(sta[ri])
+    # arredonda para a MESMA precisao usada em #Sta/Elev (fixed_series_8 -> .2f)
+    return round(float(sta[li]), 2), round(float(sta[ri]), 2)
 
 def processar_geometria_bacia(nome_bacia, pasta_trabalho):
     bacia_ascii = sanitizar_ascii(nome_bacia)
@@ -257,8 +305,13 @@ def processar_geometria_bacia(nome_bacia, pasta_trabalho):
                 f.write(f"{pair1[0]:16.4f}{pair1[1]:16.4f}\n")
         f.write("\n")
 
-        for xs in xs_list:
-            f.write(f"Type RM Length L Ch R = 1 ,{xs['station_m']:.1f},1000,1000,1000\n")
+        for i_xs, xs in enumerate(xs_list):
+            # Comprimento ATE a proxima secao de jusante; a ultima secao deve ser 0,0,0
+            if i_xs < len(xs_list) - 1:
+                dx = round(abs(xs['station_m'] - xs_list[i_xs + 1]['station_m']), 1)
+            else:
+                dx = 0.0
+            f.write(f"Type RM Length L Ch R = 1 ,{xs['station_m']:.1f},{dx:.1f},{dx:.1f},{dx:.1f}\n")
             f.write("XS GIS Cut Line=2\n")
             cl = xs['cutline']
             f.write(f"     {cl[0]:11.4f}     {cl[1]:11.4f}     {cl[2]:11.4f}     {cl[3]:11.4f}\n")
@@ -270,8 +323,13 @@ def processar_geometria_bacia(nome_bacia, pasta_trabalho):
                 pts_pair.extend([s_val, z_val])
             f.write(fixed_series_8(pts_pair) + "\n")
             f.write("#Mann= 3 ,-1,0\n")
-            f.write(f"    0.00     .05       0{xs['lb']:8.1f}     .035       0{xs['rb']:8.1f}     .05       0\n")
-            f.write(f"Bank Sta={xs['lb']:.1f},{xs['rb']:.1f}\n")
+            # 9 campos de EXATAMENTE 8 caracteres (sta, n, 0) x3
+            f.write("".join(f"{v:>8}" for v in
+                            [f"{float(sta[0]):.2f}", ".05", "0",
+                             f"{xs['lb']:.2f}", ".035", "0",
+                             f"{xs['rb']:.2f}", ".05", "0"]) + "\n")
+            # MESMA precisao de #Sta/Elev (.2f) — obrigatorio p/ o RAS casar
+            f.write(f"Bank Sta={xs['lb']:.2f},{xs['rb']:.2f}\n")
             f.write("XS Rating Curve= 0 ,0\n")
             f.write("XS HTab Horizontal Distribution= 5 , 5 , 5 \n")
             f.write("Exp/Cntr=0.3,0.1\n\n")
@@ -286,9 +344,14 @@ def processar_geometria_bacia(nome_bacia, pasta_trabalho):
         f.write(f"Proj Title={prj_name}\n")
         f.write("Current Plan=p01\n")
         f.write("Default Directory=\n")
+        f.write("Default Exp/Contr=0.3,0.1\n")
+        f.write("SI Units\n")          # CRITICO: sem isto o HEC-RAS assume pes
         f.write(f"Geom File=g01\n")
         f.write(f"Unsteady File=u01\n")
         f.write(f"Plan File=p01\n")
+        f.write("Y Axis Title=Elevation\n")
+        f.write("X Axis Title(PR)=Distance\n")
+        f.write("X Axis Title(CS)=Station\n")
         f.write(f"RASMap Filename={prj_name}.rasmap\n")
 
     # Criar arquivo de projeção WKT para RASMapper (.projection sidecar)
@@ -309,19 +372,26 @@ def processar_geometria_bacia(nome_bacia, pasta_trabalho):
         
     with open(u01_file, "w", encoding="ascii", errors="replace") as f:
         f.write(f"Flow Title=Cheia_Sintetica_{bacia_ascii}\n")
-        f.write("Program Version=6.10\n\n")
+        f.write("Program Version=7.01\n")
+        f.write("Use Restart= 0 \n")
         if xs_list:
             vazao_pico = 1500.0
-            hidro = gerar_hidrograma(vazao_pico)
-            # Condição de Contorno Montante: Hidrograma de Vazão
-            f.write(f"Boundary Location={rv:<16},{rc:<16},{xs_list[0]['station_m']:8.1f}, , , , , \n")
+            hidro = gerar_hidrograma(vazao_pico, n_horas=N_HORAS)
+            base_ini = hidro[0]
+
+            # Condicao inicial (obrigatoria no unsteady) no RS de montante
+            f.write(f"Initial Flow Loc={rv},{rc},"
+                    f"{fmt_rs(xs_list[0]['station_m'])},{base_ini:.0f}\n")
+
+            # Contorno de MONTANTE: hidrograma de vazao
+            f.write(bc_line(rv, rc, xs_list[0]['station_m']) + "\n")
             f.write("Interval=1HOUR\n")
-            f.write(f"Flow Hydrograph= {len(hidro)}\n")
+            f.write(f"Flow Hydrograph= {len(hidro)} \n")
             f.write(fixed_series_8(hidro) + "\n")
-            
-            # Condição de Contorno Jusante: Declividade de Frito (Normal Depth / Friction Slope)
-            f.write(f"Boundary Location={rv:<16},{rc:<16},{xs_list[-1]['station_m']:8.1f}, , ,1, , \n")
-            f.write("Friction Slope= 0.001\n")
+
+            # Contorno de JUSANTE: profundidade normal (Friction Slope)
+            f.write(bc_line(rv, rc, xs_list[-1]['station_m']) + "\n")
+            f.write("Friction Slope=0.001\n")
 
     with open(p01_file, "w", encoding="ascii", errors="replace") as f:
         f.write(f"Plan Title=Plano_Simulacao_Inundacao\n")
@@ -330,13 +400,20 @@ def processar_geometria_bacia(nome_bacia, pasta_trabalho):
         f.write("Geom File=g01\n")
         f.write("Flow File=u01\n")
         f.write("Unsteady File=u01\n")
-        f.write("Simulation Date= 01AUG2026, 0000, 03AUG2026, 0100\n")
-        f.write("Computation Interval= 1MIN\n")
-        f.write("Output Interval= 1HOUR\n")
-        f.write("Run HTab= 1 \n")
-        f.write("Run UNet= 1 \n")
+        # A serie tem N_HORAS ordinatas (h=0..N_HORAS-1); a simulacao deve
+        # terminar em h=N_HORAS-1, senao: "Time series data ends before the
+        # end of the simulation."
+        f.write("Simulation Date=01AUG2026,0000,03AUG2026,0000\n")
+        f.write("Subcritical Flow\n")
+        f.write("Computation Interval=1MIN\n")
+        f.write("Output Interval=1HOUR\n")
+        f.write("Instantaneous Interval=1HOUR\n")
+        f.write("Mapping Interval=1HOUR\n")
+        f.write("Run HTab=-1\n")
+        f.write("Run UNet=-1\n")
         f.write("Run Sediment= 0 \n")
-        f.write("Run PostProcess= 1 \n")
+        f.write("Run PostProcess=-1\n")
+        f.write("Run RASMapper=0\n")
 
     print(f"\n[3/3] Projeto HEC-RAS criado com sucesso: {prj_name}.prj")
     return True

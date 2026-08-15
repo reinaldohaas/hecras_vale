@@ -37,9 +37,6 @@ class OperationalForecastEngine:
         }
         
         self.dam_operations = dam_operations or {
-            'oeste': {'total_gates': 7, 'open_gates': 7, 'cap_hm3': 83.0, 'base_flow': 12.0},
-            'sul': {'total_gates': 5, 'open_gates': 5, 'cap_hm3': 93.5, 'base_flow': 7.0},
-            'norte': {'total_gates': 2, 'open_gates': 2, 'cap_hm3': 357.0, 'base_flow': 20.0}
             'oeste': {'total_gates': 7, 'gates_open': 7, 'capacity_hm3': 83.0, 'base_flow': 12.0},
             'sul': {'total_gates': 5, 'gates_open': 5, 'capacity_hm3': 93.5, 'base_flow': 7.0},
             'norte': {'total_gates': 2, 'gates_open': 2, 'capacity_hm3': 357.0, 'base_flow': 20.0}
