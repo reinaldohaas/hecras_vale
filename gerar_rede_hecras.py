@@ -39,7 +39,7 @@ from shapely.ops import substring
 from pyproj import Transformer
 
 # ------------------------------------------------------------------ PARAMETROS
-PROJECT   = "Itajai_Rede"
+PROJECT   = "Itajai_Rede"      # recebe sufixo _<EVENTO> se houver evento
 GEOJSON   = "rios_itajai.geojson"
 DEM       = "dem_itajai.tif"
 UTM_EPSG  = 31982              # SIRGAS 2000 / UTM 22S
@@ -513,6 +513,10 @@ def escrever_plano_prj():
         "X Axis Title(PR)=Distance", "X Axis Title(CS)=Station",
         f"RASMap Filename={PROJECT}.rasmap"]) + "\n")
 
+    # O terreno NAO e referenciado aqui de proposito: o RAS Mapper espera
+    # terreno no formato HDF dele (gerado pelo import de terreno), e apontar
+    # para o GeoTIFF cru produz uma cascata de HDF5-DIAG "file signature not
+    # found". Para ver o relevo, importe o DEM pelo RAS Mapper uma vez.
     # Sem estes dois arquivos o RAS termina com
     #   "Error executing: StoreAllMaps / RasMapFilename '' does not exist."
     # Alem de silenciar o erro, fazem o projeto abrir georreferenciado no
@@ -530,9 +534,7 @@ def escrever_plano_prj():
         f.write('<?xml version="1.0" encoding="utf-8"?>\n<RASMapper>\n'
                 '  <Version>2.00</Version>\n'
                 f'  <RASProjectionFilename Filename="{PROJECT}.projection" />\n'
-                '  <Terrains>\n'
-                f'    <Layer Name="Terreno" Filename="{DEM}" />\n'
-                '  </Terrains>\n'
+                '  <Terrains />\n'
                 '  <Results />\n</RASMapper>\n')
     print(f"  [OK] {PROJECT}.p01 / {PROJECT}.prj / {PROJECT}.rasmap")
 
@@ -543,11 +545,12 @@ def main():
     print("REDE 1D REAL DA BACIA DO ITAJAI — topologia ANA + relevo DEM")
     print("=" * 68)
 
-    global NHORAS
+    global NHORAS, PROJECT
     q_ev = None
     if EVENTO:
         from hidrologia_evento import hidrogramas
         q_ev, NHORAS = hidrogramas(EVENTO, barragens=BARRAGENS)
+        PROJECT = f"Itajai_Rede_{EVENTO}"   # projeto separado do sintetico
         print(f"[0/4] Evento {EVENTO}: chuva real observada, "
               f"{NHORAS} h, barragens "
               f"{'ATIVAS' if BARRAGENS else 'ABERTAS (sem obras)'}")
