@@ -1,22 +1,21 @@
 """
-Pacote de Gestão e Processamento de Dados Pluviométricos:
-- Provedores de Chuva Observada e Prevista
-- Interpolação Espacial de Chuva por Sub-bacia (Thiessen / IDW)
-- Condição de Umidade Antecedente (P5 e AMC I, II, III)
-- Séries Temporais Contínuas de Previsão com Cenários de Incerteza
+Pacote rainfall:
+Módulo de gestão, download de chuva real, interpolação espacial e desagregação temporal.
 """
 
-from .provider import RainfallProvider, CSVRainfallProvider, SyntheticRainfallProvider, RainfallObservation
+from .provider import RainfallProvider
 from .spatial import SpatialRainfallInterpolator
 from .antecedent_moisture import AntecedentMoistureCondition
 from .forecast import RainfallForecastTimeline
+from .disaggregation import RainfallDisaggregator, DisaggregationMethod
+from .downloader import RainfallDownloader
 
 __all__ = [
     'RainfallProvider',
-    'CSVRainfallProvider',
-    'SyntheticRainfallProvider',
-    'RainfallObservation',
     'SpatialRainfallInterpolator',
     'AntecedentMoistureCondition',
-    'RainfallForecastTimeline'
+    'RainfallForecastTimeline',
+    'RainfallDisaggregator',
+    'DisaggregationMethod',
+    'RainfallDownloader'
 ]

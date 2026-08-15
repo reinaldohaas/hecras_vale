@@ -1,17 +1,18 @@
-# Plataforma de Previsão Operacional de Cheias & Simulação Hidrodinâmica da Bacia do Rio Itajaí
+# Plataforma de Previsão Operacional de Cheias, Inundação & Cenários de Engenharia (Bacia do Rio Itajaí)
 
 **Repositório:** `C:\Users\haas\github\hecras_vale`  
-**Autor / Projeto:** Plataforma Hidrológica e Hidrodinâmica do Vale do Itajaí / HEC-RAS Bridge  
+**Autor / Projeto:** Plataforma Hidrológica, Hidrodinâmica & Engenharia de Cheias do Vale do Itajaí  
 **Data da Documentação:** Agosto / 2026  
+**Status do Projeto:** ETAPA 1 CONCLUÍDA E VALIDADA  
 
 ---
 
 ## 📑 Sumário Executivo do Projeto
 
-Este projeto consiste em uma plataforma integrada em **Python e Web/Leaflet/Plotly** para **modelagem hidrológica, previsão operacional em tempo real com faixas de incerteza, replay de cheias históricas (1983, 2008, 2011, 2023) e ponte de exportação para modelos hidrodinâmicos HEC-RAS 1D/2D**.
+Este projeto consiste em uma plataforma integrada em **Python e Web/Leaflet/Plotly** para **modelagem hidrológica, previsão operacional em tempo real, mapeamento de cotas e manchas de inundação, análise de alternativas de engenharia (Projeto JICA e JICA+) e avaliação custo-benefício**.
 
-O sistema evoluiu da onda sintética inicial para um motor hidrológico operacional capaz de responder:
-> **“Dada a chuva observada nas últimas 24h e a chuva prevista para as próximas horas, qual será a vazão e o tempo de chegada da crista em Rio do Sul, Ibirama, Indaial, Blumenau, Brusque e Itajaí?”**
+O sistema evolui gradualmente pela cadeia:
+$$\text{CHUVA} \longrightarrow \text{VAZÃO } Q(t) \longrightarrow \text{PROPAGAÇÃO} \longrightarrow \text{COTA } H(t) \longrightarrow \text{ÁREA INUNDADA } A(t) \longrightarrow \text{IMPACTOS} \longrightarrow \text{CUSTOS} \longrightarrow \text{COMPARAÇÃO}$$
 
 ---
 
@@ -61,125 +62,58 @@ A rede de drenagem modelada cobre integralmente as sub-bacias do Vale do Itajaí
                   5. ITAJAÍ FOZ & OCEANO (km 153)
 ```
 
-### Detalhes das 10 Calhas Fluviais Modeladas:
-
-1. **🌊 Rio Itajaí-Açu (Tronco Principal)**: $153.1\text{ km}$ desde a confluência de Rio do Sul até a Foz no Oceano Atlântico em Itajaí.
-2. **💧 Rio Itajaí do Oeste**: $65.0\text{ km}$ ($2.480\text{ km}^2$), controlado pela Barragem Oeste (Taió).
-3. **💧 Rio Mirim Doce**: $42.0\text{ km}$ ($640\text{ km}^2$), afluente da margem esquerda do Rio do Oeste.
-4. **💧 Rio Itajaí do Sul**: $50.0\text{ km}$ ($1.250\text{ km}^2$), controlado pela Barragem Sul (Ituporanga).
-5. **💧 Rio Perimbó**: $38.5\text{ km}$ ($510\text{ km}^2$), drena Petrolândia e deságua no Rio do Sul em Ituporanga.
-6. **💧 Rio Trombudo**: $48.5\text{ km}$ ($720\text{ km}^2$), drena Agrolândia, Braço do Trombudo e Trombudo Central, desaguando em Agronômica.
-7. **💧 Rio Hercílio / Norte**: $85.0\text{ km}$ ($3.450\text{ km}^2$), controlado pela Barragem Norte (José Boiteux) e deságua em Ibirama.
-8. **💧 Rio Benedito**: $35.0\text{ km}$ ($1.540\text{ km}^2$), drena Timbó e deságua no Açú em Indaial.
-9. **💧 Rio Itajaí-Mirim**: $110.0\text{ km}$ ($1.680\text{ km}^2$), drena Vidal Ramos, Botuverá, Brusque e escoa via Canal Retificado em Itajaí.
-10. **💧 Rio Luís Alves**: $25.0\text{ km}$ ($580\text{ km}^2$), drena Luís Alves e deságua no Baixo Vale.
-
 ---
 
-## 🔬 Fundamentação Matemática dos Modelos
+## 📈 ETAPA 1 CONCLUÍDA: Módulo de Curva-Chave Q-H (`rating_curve/`)
 
-### 1. Precipitação Efetiva (SCS-CN Dinâmico)
-A chuva excedente $P_e(t)$ é calculada com abstração inicial $I_a = 0.2 S$:
-$$S = \frac{25400}{CN} - 254$$
-$$P_e(t) = \frac{(P(t) - 0.2 S)^2}{P(t) + 0.8 S} \quad \text{para } P(t) > 0.2 S$$
+O módulo `itajai_flood_model/src/rating_curve/` estabelece a ponte bidirecional precisa entre a vazão prevista $Q(t)$ ($m^3/s$) e o nível de régua / cota altimétrica $H(t)$ ($m$).
 
-### 2. Condição de Umidade Antecedente (AMC I, II, III)
-Baseada no acumulado dos últimos 5 dias ($P_5$):
-- **AMC I ($P_5 < 35\text{ mm}$)**: $CN_{\text{I}} = \frac{CN_{\text{II}}}{2.281 - 0.0128 \cdot CN_{\text{II}}}$
-- **AMC II ($35 \le P_5 \le 53\text{ mm}$)**: $CN_{\text{II}}$ (Condição média)
-- **AMC III ($P_5 > 53\text{ mm}$)**: $CN_{\text{III}} = \frac{CN_{\text{II}}}{0.427 + 0.00573 \cdot CN_{\text{II}}}$
+### 1. Distinção Estrita entre Tipos de Curvas:
+- **`CURVA OFICIAL / OBSERVADA (ANA / CEOPS)`**: Ajustada com base em medições de campo linimétricas e histórico hidrométrico.
+- **`CURVA ESTIMADA (Manning / Seção Transversal / DEM)`**: Calculada analiticamente através da geometria da calha, rugosidade de Manning e declividade de fundo.
 
-### 3. Hidrograma Unitário Curvilíneo do SCS
-Pico unitário:
-$$Q_p = \frac{2.08 \cdot A}{T_p}, \quad T_p = 0.5 \Delta t + 0.6 T_c$$
-Convolução discreta:
-$$Q(t) = Q_{\text{base}} + \sum_{k=0}^{t} P_e(k) \cdot U(t - k)$$
+### 2. Estações Oficiais Calibradas:
+| Estação / Cidade | Código ANA | Rio | Tipo | Zero da Régua ($Z_0$) | Faixa de Validade |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Blumenau Centro** | `83700000` | Rio Itajaí-Açu | **OFICIAL (CEOPS/ANA)** | $11.20\text{ m}$ | $0.20\text{ m}$ a $18.00\text{ m}$ |
+| **Rio do Sul** | `83100000` | Rio Itajaí-Açu / Alto Vale | **OFICIAL (ANA/CEOPS)** | $335.50\text{ m}$ | $0.50\text{ m}$ a $16.00\text{ m}$ |
+| **Brusque Centro** | `83800000` | Rio Itajaí-Mirim | **OFICIAL (ANA/Defesa Civil)** | $18.40\text{ m}$ | $0.30\text{ m}$ a $11.00\text{ m}$ |
+| **Indaial (Ponte)** | `83500000` | Rio Itajaí-Açu | **OFICIAL (ANA)** | $58.20\text{ m}$ | $0.40\text{ m}$ a $14.00\text{ m}$ |
+| **Ibirama** | `83300000_EST` | Rio Itajaí-Açu | **ESTIMADA (Manning/DEM)** | $118.50\text{ m}$ | $0.30\text{ m}$ a $16.00\text{ m}$ |
+| **Itajaí Foz** | `83900000_EST` | Rio Itajaí-Açu / Foz | **ESTIMADA (Manning/DEM)** | $0.50\text{ m}$ | $0.20\text{ m}$ a $8.00\text{ m}$ |
 
-### 4. Propagação Fluvial Muskingum com Sub-stepping Estável
-Para evitar coeficientes negativos ($C_0 < 0$) quando $2KX > \Delta t$, o trecho é subdividido em $n_{\text{sub}} = \lceil \frac{2KX}{\Delta t} \rceil$:
-$$K_{\text{sub}} = \frac{K}{n_{\text{sub}}}$$
-$$Q_{t+1} = C_0 I_{t+1} + C_1 I_t + C_2 Q_t$$
-$$\sum C_i = 1.0, \quad C_0, C_1, C_2 \ge 0$$
-
-### 5. Hidráulica de Operação de Barragens
-Para as comportas de fundo com vazão ecológica/base $Q_{\text{base}}$:
-$$Q_{\text{efluente}}(t) = Q_{\text{base}} + \left(\frac{N_{\text{abertas}}}{N_{\text{total}}}\right) \cdot \max(0, Q_{\text{afluente}}(t) - Q_{\text{base}})$$
-Armazenamento no reservatório:
-$$V(t+1) = V(t) + \max(0, Q_{\text{afluente}} - Q_{\text{efluente}}) \cdot \Delta t$$
-Ao atingir $V_{\text{máx}} = \text{Capacidade (hm}^3)$, o excedente verte livremente.
-
----
-
-## 📦 Estrutura de Arquivos do Projeto
-
-```text
-hecras_vale/
-├── app/
-│   ├── index.html                   # Interface Web com Modos Simulação, Previsão e Replay
-│   ├── itajai_real_dem_model.json   # Perfis DEM 30m, 10 rios, coordenadas e distâncias
-│   └── data.json                    # Base completa dos rios da bacia
-│
-├── itajai_flood_model/
-│   ├── src/
-│   │   ├── rainfall/
-│   │   │   ├── provider.py          # Leitor de chuva CSV + Sintética + Qualidade
-│   │   │   ├── spatial.py           # Interpolação espacial (Thiessen / IDW P_bacia(t))
-│   │   │   ├── antecedent_moisture.py # P5 -> AMC I/II/III -> CN ajustado
-│   │   │   └── forecast.py          # Timeline contínua [AGORA] + Cenários Low/Mean/High
-│   │   ├── forecasting/
-│   │   │   ├── engine.py            # Motor operacional com 10 rios e propagação em cascata
-│   │   │   ├── assimilation.py      # Assimilação telemétrica com decaimento exponencial
-│   │   │   └── alerts.py            # Sistema de alertas (NORMAL, ATENÇÃO, ALERTA, EMERGÊNCIA)
-│   │   ├── historical_events/
-│   │   │   ├── events_loader.py     # Séries horárias de 1983, 2008, 2011 e 2023
-│   │   │   └── auto_calibration.py  # Otimização multievento e teste cego
-│   │   └── export/
-│   │       └── hecras_bridge.py     # Gerador de hidrogramas de contorno para HEC-RAS 1D/2D
-│   ├── data/
-│   │   └── thresholds.json          # Limiares de alerta e emergência por município
-│   └── examples/
-│       ├── forecast_itajai_mirim.py # Laboratório operacional no Rio Itajaí-Mirim
-│       ├── replay_evento_historico.py # Replay dos 4 grandes eventos históricos
-│       └── auto_calibration_demo.py # Calibração multievento
-│
-├── DOCUMENTACAO_TECNICA_COMPLETA.md # Esta documentação detalhada
-└── README.md                        # Guia rápido de execução
-```
-
----
-
-## 🚀 Como Executar Localmente
-
-### 1. Iniciar o Servidor Web da Aplicação
-No terminal (PowerShell / Bash):
-```powershell
-python -m http.server 8050 --directory "app"
-```
-Acesse no navegador: **`http://localhost:8050`**
-
-### 2. Executar os Scripts de Previsão e Calibração
-```powershell
-# Previsão operacional no Itajaí-Mirim:
-python itajai_flood_model/examples/forecast_itajai_mirim.py
-
-# Replay dos eventos históricos (1983, 2008, 2011, 2023):
-python itajai_flood_model/examples/replay_evento_historico.py
-
-# Calibração multievento e validação cega em 2023:
-python itajai_flood_model/examples/auto_calibration_demo.py
-```
-
----
-
-## 📊 Validação da Propagação em Cascata
-
-A verificação do motor hidrológico confirmou a cronologia física da onda de cheia:
-
+### 3. Aderência aos Grandes Recordes Históricos de Blumenau:
 $$\begin{aligned}
-\text{1. Tributários Rápidos (Mirim Doce, Perimbó, Trombudo)} &\longrightarrow \text{Picos em } t = 7\text{h} \text{ a } 9\text{h} \\
-\text{2. Confluência de Rio do Sul (Oeste + Sul)} &\longrightarrow \text{Pico em } t = 24\text{h} \quad (5.338\text{ m}^3/\text{s}) \\
-\text{3. Ibirama (+ Rio Hercílio)} &\longrightarrow \text{Pico em } t = 30\text{h} \quad (7.809\text{ m}^3/\text{s}) \\
-\text{4. Indaial (+ Rio Benedito)} &\longrightarrow \text{Pico em } t = 37\text{h} \quad (7.543\text{ m}^3/\text{s}) \\
-\text{5. Blumenau Centro (Médio Vale)} &\longrightarrow \text{Pico em } t = 40\text{h} \quad (7.425\text{ m}^3/\text{s}) \\
-\text{6. Itajaí Foz (+ Canal Mirim e Luís Alves)} &\longrightarrow \text{Pico em } t = 47\text{h} \quad (7.529\text{ m}^3/\text{s})
+\text{Cheia Secular de Julho/1983:} \quad & H_{\text{obs}} = 15.34\text{ m} \longleftrightarrow Q_{\text{calc}} = 5.856\text{ m}^3/\text{s} \quad (+0.1\%) \\
+\text{Grande Cheia de Setembro/2011:} \quad & H_{\text{obs}} = 12.60\text{ m} \longleftrightarrow Q_{\text{calc}} = 4.486\text{ m}^3/\text{s} \quad (-3.5\%) \\
+\text{Complexo de Desastres de 2008:} \quad & H_{\text{obs}} = 11.52\text{ m} \longleftrightarrow Q_{\text{calc}} = 3.970\text{ m}^3/\text{s} \quad (-5.5\%) \\
+\text{Cheia de Múltiplos Pulsos de 2023:} \quad & H_{\text{obs}} = 10.76\text{ m} \longleftrightarrow Q_{\text{calc}} = 3.616\text{ m}^3/\text{s} \quad (-8.4\%) \\
+\text{Nível de Alerta Blumenau (CEOPS):} \quad & H_{\text{obs}} = 8.00\text{ m} \longleftrightarrow Q_{\text{calc}} = 2.402\text{ m}^3/\text{s} \quad (+0.1\%)
 \end{aligned}$$
+
+### 4. Formulação Hidráulica por Subseções Divididas (Divided Channel Method):
+Para as seções naturais compostas sem régua, calcula-se:
+$$Q_{\text{total}}(H) = Q_{\text{leito}}(H) + Q_{\text{planície}}(H)$$
+$$Q_{\text{leito}} = \frac{1}{n_{\text{leito}}} A_{\text{leito}} R_{\text{leito}}^{2/3} S_0^{1/2}, \quad Q_{\text{planície}} = \frac{1}{n_{\text{planície}}} A_{\text{planície}} R_{\text{planície}}^{2/3} S_0^{1/2}$$
+Garante estrita monotonicidade e reversibilidade sem artefatos numéricos de estrangulamento na cota de transbordo.
+
+---
+
+## 🧪 Suíte de Testes Automatizados da Etapa 1
+Arquivo: `itajai_flood_model/tests/test_rating_curves.py`
+- Validação de reversibilidade $Q \rightarrow H \rightarrow Q$.
+- Validação contra os picos históricos.
+- Validação de monotonicidade de Manning.
+- Validação de integridade do catálogo `RatingCurveManager`.
+- **Status:** `5/5 OK (100% aprovado)`.
+
+---
+
+## 🛑 Status do Roteiro de Desenvolvimento:
+
+- [x] **ETAPA 1:** Módulo de Curva-Chave Q-H Oficial & Estimada (`rating_curve/`)
+- [ ] **ETAPA 2:** Transformação Q-H em Cota Espacial ao longo da calha
+- [ ] **ETAPA 3:** Geração de Mancha Simplificada de Inundação no DEM
+- [ ] **ETAPA 4:** Validação de Enchente Histórica de Blumenau
+- [ ] **ETAPA 5 a 15:** Banco das 103 Enchentes, Gerador Sintético e Projeto JICA
+- [ ] **ETAPA 16 a 20:** Camada JICA+ e Análise Custo-Benefício Probabilística Final

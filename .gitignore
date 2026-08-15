@@ -1,1 +1,5 @@
 *.tif
+__pycache__/
+*.pyc
+app/debug_rasters/
+.pytest_cache/

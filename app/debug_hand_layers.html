@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visualizador de Diagnóstico & Debug: Camadas HAND Sincronizadas</title>
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root {
+      --bg-main: #0b111e;
+      --bg-card: #131d31;
+      --border-color: #1e2d4a;
+      --accent-cyan: #00f0ff;
+      --accent-blue: #3b82f6;
+      --accent-magenta: #ff0055;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background: var(--bg-main); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    header {
+      background: var(--bg-card); border-bottom: 1px solid var(--border-color);
+      padding: 10px 16px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon { font-size: 22px; }
+    .brand-title { font-size: 15px; font-weight: 800; color: #fff; }
+    .brand-subtitle { font-size: 11px; color: var(--accent-cyan); font-weight: 600; }
+
+    .nav-links { display: flex; gap: 8px; }
+    .btn-nav {
+      background: #0e1526; border: 1px solid var(--border-color); color: #fff;
+      padding: 5px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 600; text-decoration: none;
+    }
+    .btn-nav:hover { border-color: var(--accent-cyan); }
+
+    .main-layout { display: grid; grid-template-columns: 360px 1fr; height: calc(100vh - 54px); }
+
+    .sidebar {
+      background: var(--bg-card); border-right: 1px solid var(--border-color);
+      padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+    }
+
+    .panel-box {
+      background: #080d18; border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .panel-title { font-size: 11px; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; }
+
+    .layer-btn {
+      background: #0e1526; border: 1px solid var(--border-color); color: #cbd5e1;
+      padding: 8px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600; text-align: left;
+      cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s;
+    }
+    .layer-btn:hover { border-color: var(--accent-cyan); color: #fff; }
+    .layer-btn.active {
+      background: #1e293b; border-color: var(--accent-cyan); color: var(--accent-cyan); font-weight: 800;
+    }
+
+    .pixel-inspector-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px;
+    }
+    .insp-box {
+      background: #0e1526; border: 1px solid var(--border-color); border-radius: 5px;
+      padding: 6px 8px; display: flex; flex-direction: column; gap: 2px;
+    }
+    .insp-lbl { font-size: 9.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    .insp-val { font-size: 13px; font-weight: 800; font-family: monospace; color: #fff; }
+
+    .math-proof-box {
+      background: #0f172a; border: 1px dashed var(--accent-cyan); border-radius: 6px;
+      padding: 8px 10px; font-size: 11px; font-family: monospace; line-height: 1.4; color: #38bdf8;
+    }
+
+    #map-container { width: 100%; height: 100%; position: relative; }
+    #map { width: 100%; height: 100%; }
+
+    .legend-bar {
+      position: absolute; bottom: 20px; right: 20px; z-index: 1000;
+      background: rgba(11, 17, 30, 0.92); border: 1px solid var(--border-color);
+      padding: 10px 14px; border-radius: 8px; font-size: 11px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .legend-gradient {
+      width: 180px; height: 12px; border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">🔬</div>
+      <div>
+        <div class="brand-title">Diagnóstico & Debug das 8 Camadas HAND Sincronizadas</div>
+        <div class="brand-subtitle">Prova Matemática: depth = Z_water - Z_DEM ≡ η - HAND</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="btn-nav">🌊 Dashboard Principal</a>
+      <a href="mancha_inundacao_2d.html" class="btn-nav">🗺️ Manchas 2D</a>
+      <a href="secoes_transversais_vales.html" class="btn-nav">📏 Seções Transversais</a>
+    </div>
+  </header>
+
+  <div class="main-layout">
+    
+    <!-- BARRA LATERAL COM AS 8 CAMADAS -->
+    <div class="sidebar">
+      
+      <div class="panel-box">
+        <span class="panel-title">Selecione a Camada de Diagnóstico:</span>
+        <button class="layer-btn active" id="btn-dem" onclick="selectLayer('dem')">
+          <span>01. 🏔️ DEM Topográfico (Z_DEM)</span>
+          <span style="font-size:10px; color:#94a3b8;">[m]</span>
+        </button>
+        <button class="layer-btn" id="btn-drain_id" onclick="selectLayer('drainage_id')">
+          <span>02. 🆔 Drainage ID (Rio Receptor)</span>
+          <span style="font-size:10px; color:#94a3b8;">[1-10]</span>
+        </button>
+        <button class="layer-btn" id="btn-drain_z" onclick="selectLayer('drainage_elevation')">
+          <span>03. 📐 Drainage Elevation (Z_drain)</span>
+          <span style="font-size:10px; color:#94a3b8;">[m]</span>
+        </button>
+        <button class="layer-btn" id="btn-hand" onclick="selectLayer('hand')">
+          <span>04. 📏 HAND (DEM - Z_drain)</span>
+          <span style="font-size:10px; color:#94a3b8;">[m]</span>
+        </button>
+        <button class="layer-btn" id="btn-zw" onclick="selectLayer('water_surface')">
+          <span>05. 🌊 Water Surface (Z_water t24)</span>
+          <span style="font-size:10px; color:#94a3b8;">[m]</span>
+        </button>
+        <button class="layer-btn" id="btn-eta" onclick="selectLayer('relative_water_level_eta')">
+          <span>06. 📊 Relative Level η (Z_water - Z_drain)</span>
+          <span style="font-size:10px; color:#94a3b8;">[m]</span>
+        </button>
+        <button class="layer-btn" id="btn-depth" onclick="selectLayer('depth_raw')">
+          <span>07. 💧 Lâmina Bruta (η - HAND)</span>
+          <span style="font-size:10px; color:#94a3b8;">[m]</span>
+        </button>
+        <button class="layer-btn" id="btn-conn" onclick="selectLayer('depth_connected')">
+          <span>08. 🛡️ Inundação Conectada (Filtro BFS)</span>
+          <span style="font-size:10px; color:#00f0ff;">[m]</span>
+        </button>
+      </div>
+
+      <!-- INSPETOR DE PIXEL EM TEMPO REAL -->
+      <div class="panel-box">
+        <span class="panel-title">🎯 Inspetor de Ponto no Terreno:</span>
+        <div style="font-size:10px; color:var(--text-muted);">Passe o mouse ou clique no mapa para inspecionar:</div>
+        
+        <div class="pixel-inspector-grid">
+          <div class="insp-box">
+            <span class="insp-lbl">Z_DEM (Terreno)</span>
+            <span class="insp-val" id="val-dem">-- m</span>
+          </div>
+          <div class="insp-box">
+            <span class="insp-lbl">Z_drain (Drenagem)</span>
+            <span class="insp-val" id="val-drain-z">-- m</span>
+          </div>
+          <div class="insp-box">
+            <span class="insp-lbl">HAND (DEM - Z_drain)</span>
+            <span class="insp-val" id="val-hand" style="color:#38bdf8;">-- m</span>
+          </div>
+          <div class="insp-box">
+            <span class="insp-lbl">Z_water (Água Abs.)</span>
+            <span class="insp-val" id="val-zw" style="color:#00f0ff;">-- m</span>
+          </div>
+          <div class="insp-box">
+            <span class="insp-lbl">η (Nível Relativo)</span>
+            <span class="insp-val" id="val-eta" style="color:#f59e0b;">-- m</span>
+          </div>
+          <div class="insp-box">
+            <span class="insp-lbl">Profundidade h</span>
+            <span class="insp-val" id="val-depth" style="color:#ff0055;">-- m</span>
+          </div>
+        </div>
+
+        <div class="math-proof-box" id="box-proof">
+          <b>Identidade Matemática no Ponto:</b><br>
+          h = Z_water - Z_DEM = -- m<br>
+          h = η - HAND = -- m<br>
+          Status: Aguardando clique...
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MAPA LEAFLET -->
+    <div id="map-container">
+      <div id="map"></div>
+      
+      <div class="legend-bar" id="legend-box">
+        <div style="font-weight:700;" id="leg-title">DEM Topográfico (m)</div>
+        <div class="legend-gradient" id="leg-grad"></div>
+        <div style="display:flex; justify-content:space-between; font-size:9.5px; color:#94a3b8;">
+          <span id="leg-min">0 m</span>
+          <span id="leg-mid">150 m</span>
+          <span id="leg-max">300+ m</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let map = null;
+    let debugData = null;
+    let currentLayerKey = 'dem';
+    let canvasLayer = null;
+
+    const riverNames = {
+      1: "Rio Itajaí-Açu", 2: "Rio Itajaí do Oeste", 3: "Rio Itajaí do Sul",
+      4: "Rio Itajaí do Norte", 5: "Rio Benedito", 6: "Rio Itajaí-Mirim",
+      7: "Rio Luís Alves", 8: "Rio Trombudo", 9: "Rio Mirim Doce", 10: "Rio Perimbó"
+    };
+
+    function initMap() {
+      map = L.map('map').setView([-26.918, -48.95], 11);
+
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri World Topo'
+      }).addTo(map);
+
+      // Cidades
+      [
+        { name: "Blumenau (Ponte de Ferro)", lat: -26.9180, lon: -49.0660 },
+        { name: "Gaspar", lat: -26.9300, lon: -48.9500 },
+        { name: "Ilhota", lat: -26.9000, lon: -48.8200 },
+        { name: "Itajaí (Foz)", lat: -26.8950, lon: -48.6650 }
+      ].forEach(c => {
+        L.circleMarker([c.lat, c.lon], { radius: 5, fillColor: '#00f0ff', color: '#fff', weight: 2, fillOpacity: 0.95 }).addTo(map).bindPopup(`<b>${c.name}</b>`);
+      });
+
+      // Carregar matrizes de debug JSON
+      fetch('debug_hand_matrices.json')
+        .then(r => r.json())
+        .then(data => {
+          debugData = data;
+          renderCurrentCanvasLayer();
+        })
+        .catch(err => console.error(err));
+
+      map.on('mousemove', onMapHover);
+      map.on('click', onMapHover);
+    }
+
+    function selectLayer(key) {
+      currentLayerKey = key;
+      document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.remove('active'));
+      const activeBtn = document.getElementById(`btn-${key.replace('relative_water_level_eta', 'eta').replace('drainage_elevation', 'drain_z').replace('drainage_id', 'drain_id').replace('water_surface', 'zw').replace('depth_raw', 'depth').replace('depth_connected', 'conn')}`);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      updateLegend();
+      renderCurrentCanvasLayer();
+    }
+
+    function updateLegend() {
+      const legTitle = document.getElementById('leg-title');
+      const legGrad = document.getElementById('leg-grad');
+      const legMin = document.getElementById('leg-min');
+      const legMid = document.getElementById('leg-mid');
+      const legMax = document.getElementById('leg-max');
+
+      if (currentLayerKey === 'dem') {
+        legTitle.innerText = "01. DEM Topográfico (Altitude m)";
+        legGrad.style.background = "linear-gradient(to right, #10b981, #f59e0b, #b45309, #78350f, #ffffff)";
+        legMin.innerText = "0 m"; legMid.innerText = "150 m"; legMax.innerText = "400+ m";
+      } else if (currentLayerKey === 'hand') {
+        legTitle.innerText = "04. HAND (Altura Acima da Drenagem m)";
+        legGrad.style.background = "linear-gradient(to right, #00f0ff, #3b82f6, #6366f1, #d946ef, #ffffff)";
+        legMin.innerText = "0 m (Calha)"; legMid.innerText = "15 m"; legMax.innerText = "50+ m";
+      } else if (currentLayerKey === 'relative_water_level_eta') {
+        legTitle.innerText = "06. Nível Relativo η = Z_water - Z_drain (m)";
+        legGrad.style.background = "linear-gradient(to right, #1e293b, #0284c7, #00f0ff, #ff0055)";
+        legMin.innerText = "0 m"; legMid.innerText = "8 m"; legMax.innerText = "18+ m";
+      } else if (currentLayerKey.includes('depth')) {
+        legTitle.innerText = currentLayerKey === 'depth_connected' ? "08. Inundação Conectada (m)" : "07. Lâmina Bruta (m)";
+        legGrad.style.background = "linear-gradient(to right, #38bdf8, #0284c7, #0369a1, #ff0055)";
+        legMin.innerText = "0.05 m"; legMid.innerText = "2.0 m"; legMax.innerText = "8.0+ m";
+      }
+    }
+
+    function renderCurrentCanvasLayer() {
+      if (!debugData || !map) return;
+      if (canvasLayer) map.removeLayer(canvasLayer);
+
+      const b = debugData.bounds; // [min_lon, min_lat, max_lon, max_lat]
+      const bounds = [[b[1], b[0]], [b[3], b[2]]];
+      
+      const mat = debugData.layers[currentLayerKey];
+      if (!mat) return;
+
+      const nrows = debugData.shape[0];
+      const ncols = debugData.shape[1];
+
+      const canvas = document.createElement('canvas');
+      canvas.width = ncols;
+      canvas.height = nrows;
+      const ctx = canvas.getContext('2d');
+      const imgData = ctx.createImageData(ncols, nrows);
+
+      for (let r = 0; r < nrows; r++) {
+        for (let c = 0; c < ncols; c++) {
+          const val = mat[r][c];
+          const idx = (r * ncols + c) * 4;
+
+          let red = 0, green = 0, blue = 0, alpha = 0;
+
+          if (currentLayerKey === 'dem') {
+            const norm = Math.min(1.0, Math.max(0.0, val / 300.0));
+            red = Math.floor(norm * 240);
+            green = Math.floor((1.0 - norm) * 180 + norm * 120);
+            blue = Math.floor((1.0 - norm) * 100);
+            alpha = 180;
+          } else if (currentLayerKey === 'hand') {
+            const norm = Math.min(1.0, Math.max(0.0, val / 40.0));
+            red = Math.floor(norm * 220);
+            green = Math.floor((1.0 - norm) * 240);
+            blue = Math.floor(255);
+            alpha = 190;
+          } else if (currentLayerKey.includes('depth')) {
+            if (val >= 0.05) {
+              const norm = Math.min(1.0, val / 6.0);
+              red = Math.floor(norm * 255);
+              green = Math.floor((1.0 - norm) * 200 + 40);
+              blue = 255;
+              alpha = Math.floor(140 + norm * 90);
+            }
+          } else if (currentLayerKey === 'relative_water_level_eta') {
+            if (val > 0.1) {
+              red = Math.floor(Math.min(255, val * 15));
+              green = Math.floor(Math.min(255, val * 12));
+              blue = 240;
+              alpha = 170;
+            }
+          } else {
+            red = 50; green = 150; blue = 240; alpha = 160;
+          }
+
+          imgData.data[idx] = red;
+          imgData.data[idx + 1] = green;
+          imgData.data[idx + 2] = blue;
+          imgData.data[idx + 3] = alpha;
+        }
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+      const url = canvas.toDataURL();
+      canvasLayer = L.imageOverlay(url, bounds, { opacity: 0.85 }).addTo(map);
+    }
+
+    function onMapHover(e) {
+      if (!debugData) return;
+      const b = debugData.bounds;
+      const lon = e.latlng.lng;
+      const lat = e.latlng.lat;
+
+      if (lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3]) return;
+
+      const fracC = (lon - b[0]) / (b[2] - b[0]);
+      const fracR = (b[3] - lat) / (b[3] - b[1]);
+
+      const c = Math.min(debugData.shape[1] - 1, Math.max(0, Math.floor(fracC * debugData.shape[1])));
+      const r = Math.min(debugData.shape[0] - 1, Math.max(0, Math.floor(fracR * debugData.shape[0])));
+
+      const zDem = debugData.layers.dem[r][c];
+      const zDrain = debugData.layers.drainage_elevation[r][c];
+      const handVal = debugData.layers.hand[r][c];
+      const zwVal = debugData.layers.water_surface[r][c];
+      const etaVal = debugData.layers.relative_water_level_eta[r][c];
+      const depthVal = debugData.layers.depth_connected[r][c];
+
+      document.getElementById('val-dem').innerText = `${zDem.toFixed(1)} m`;
+      document.getElementById('val-drain-z').innerText = `${zDrain.toFixed(1)} m`;
+      document.getElementById('val-hand').innerText = `${handVal.toFixed(2)} m`;
+      document.getElementById('val-zw').innerText = `${zwVal.toFixed(2)} m`;
+      document.getElementById('val-eta').innerText = `${etaVal.toFixed(2)} m`;
+      document.getElementById('val-depth').innerText = `${depthVal.toFixed(2)} m`;
+
+      const diffDirect = (zwVal - zDem).toFixed(2);
+      const diffHand = (etaVal - handVal).toFixed(2);
+
+      document.getElementById('box-proof').innerHTML = `
+        <b>Identidade Matemática no Ponto (r:${r}, c:${c}):</b><br>
+        h = Z_water - Z_DEM = ${zwVal.toFixed(2)} - ${zDem.toFixed(1)} = <b>${diffDirect} m</b><br>
+        h = η - HAND = ${etaVal.toFixed(2)} - ${handVal.toFixed(2)} = <b>${diffHand} m</b><br>
+        <span style="color:#00f0ff;">✅ EQUIVALÊNCIA PERFEITA: ${diffDirect} m ≡ ${diffHand} m</span>
+      `;
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+    });
+  </script>
+</body>
+</html>

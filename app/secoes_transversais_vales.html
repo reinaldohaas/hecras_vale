@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Seções Transversais Hidráulicas dos Vales: Vale do Itajaí</title>
+  
+  <!-- Plotly JS -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #070b14;
+      --bg-card: #0e1526;
+      --border-color: #1a253c;
+      --text-main: #f3f4f6;
+      --text-muted: #94a3b8;
+      --accent-cyan: #00f0ff;
+      --accent-blue: #3b82f6;
+      --accent-purple: #a855f7;
+      --accent-orange: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-green: #10b981;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-dark); color: var(--text-main); font-family: var(--font-body);
+      min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden;
+    }
+
+    header {
+      background: linear-gradient(135deg, #091022 0%, #101c36 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 36px; height: 36px; background: linear-gradient(135deg, #00f0ff, #3b82f6);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .brand-title { font-family: var(--font-heading); font-size: 16px; font-weight: 700; color: #fff; }
+    .brand-subtitle { font-size: 11px; color: var(--text-muted); }
+
+    .nav-links { display: flex; gap: 8px; }
+    .btn-nav {
+      background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--border-color);
+      padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 11.5px; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .btn-nav:hover { background: #2563eb; color: #fff; }
+
+    .main-container {
+      display: grid; grid-template-columns: 340px 1fr; flex: 1; padding: 14px; gap: 14px;
+    }
+    @media (max-width: 960px) {
+      .main-container { grid-template-columns: 1fr; }
+    }
+
+    .card-panel {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
+      padding: 14px; display: flex; flex-direction: column; gap: 12px;
+    }
+
+    .section-title { font-size: 12px; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; }
+
+    .select-input {
+      background: #070b14; border: 1px solid var(--border-color); color: #fff;
+      padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; width: 100%;
+    }
+
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .m-box {
+      background: #070b14; border: 1px solid var(--border-color); border-radius: 6px;
+      padding: 8px 10px; display: flex; flex-direction: column; gap: 2px;
+    }
+    .m-lbl { font-size: 9.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    .m-val { font-size: 14px; font-weight: 800; font-family: monospace; }
+
+    .plot-container {
+      background: #090e1a; border: 1px solid var(--border-color); border-radius: 10px;
+      padding: 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 480px;
+    }
+    #plot-cross-section { width: 100%; height: 420px; }
+
+    .btn-action {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      color: #070b14; font-weight: 800; border: none; padding: 8px 14px; border-radius: 6px;
+      cursor: pointer; font-size: 12px; transition: all 0.2s;
+    }
+    .btn-action:hover { filter: brightness(1.2); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">📏</div>
+      <div>
+        <div class="brand-title">Seções Transversais Hidráulicas dos Vales (HEC-RAS Style)</div>
+        <div class="brand-subtitle">Perfis Batimétricos Reais, Margens Plenas e Extravasamento de Várzea</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="btn-nav">🌊 Dashboard Principal</a>
+      <a href="mancha_inundacao_2d.html" class="btn-nav">🗺️ Manchas 2D de Inundação</a>
+      <a href="perfil_longitudinal_cotas.html" class="btn-nav">📐 Perfis Longitudinais</a>
+    </div>
+  </header>
+
+  <div class="main-container">
+    
+    <!-- PAINEL LATERAL DE CONTROLE -->
+    <div class="card-panel">
+      
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <span class="section-title">Seção Transversal de Estudo:</span>
+        <select id="sel-station" class="select-input" onchange="updateCrossSectionPlot()">
+          <option value="blumenau" selected>🏙️ Blumenau (Ponte de Ferro / Fundo Z=1.30m ao Nível do Mar)</option>
+          <option value="riosul">🏙️ Rio do Sul (Confluência Oeste/Sul / Fundo Z=330.0m)</option>
+          <option value="gaspar">🌾 Gaspar / Ilhota (Planície Baixo Vale / Fundo Z=0.20m)</option>
+          <option value="brusque">🏙️ Brusque (Rio Itajaí-Mirim / Fundo Z=16.0m)</option>
+          <option value="indaial">🏞️ Indaial (Montante do Salto / Fundo Z=47.5m)</option>
+          <option value="ibirama">⛰️ Ibirama / Subida (Garganta Encaixada / Fundo Z=140.0m)</option>
+          <option value="itajai">🌊 Itajaí (Foz & Canal Dragado / Fundo Z=-3.50m)</option>
+        </select>
+      </div>
+
+      <!-- Controle de Cota de Régua (H) -->
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="section-title">Cota de Régua Simulada:</span>
+          <span id="lbl-stage" style="color:var(--accent-cyan); font-family:monospace; font-weight:800; font-size:14px;">H = 15.34 m</span>
+        </div>
+        <input type="range" id="slider-stage" min="0" max="18" step="0.1" value="15.34" oninput="updateCrossSectionPlot()">
+      </div>
+
+      <!-- Presets de Enchentes Oficiais -->
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <span class="section-title">Cotas Históricas Oficiais (Defesa Civil):</span>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <button class="btn-action" style="font-size:10.5px; padding:6px;" onclick="setStage(15.34)">1983 (15.34m)</button>
+          <button class="btn-action" style="font-size:10.5px; padding:6px;" onclick="setStage(12.60)">2011 (12.60m)</button>
+          <button class="btn-action" style="font-size:10.5px; padding:6px;" onclick="setStage(11.52)">2008 (11.52m)</button>
+          <button class="btn-action" style="font-size:10.5px; padding:6px;" onclick="setStage(8.00)">Alerta (8.00m)</button>
+        </div>
+      </div>
+
+      <!-- Métricas Hidráulicas da Seção -->
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <span class="section-title">Métricas da Seção Transversal:</span>
+        <div class="metric-grid">
+          <div class="m-box">
+            <span class="m-lbl">Cota Absoluta Água (Z)</span>
+            <span class="m-val" id="val-zwater" style="color:#00f0ff;">20.22 m</span>
+          </div>
+          <div class="m-box">
+            <span class="m-lbl">Profundidade Calha</span>
+            <span class="m-val" id="val-depth" style="color:#ff0055;">18.92 m</span>
+          </div>
+          <div class="m-box">
+            <span class="m-lbl">Largura Inundada (W)</span>
+            <span class="m-val" id="val-topwidth" style="color:#f59e0b;">2.150 m</span>
+          </div>
+          <div class="m-box">
+            <span class="m-lbl">Lâmina na Várzea</span>
+            <span class="m-val" id="val-overbank" style="color:#ef4444;">6.54 m</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Descrição da Seção -->
+      <div id="desc-box" style="background:#070b14; border:1px solid var(--border-color); border-radius:6px; padding:8px 10px; font-size:10.5px; color:var(--text-muted); line-height:1.4;">
+        Seção de Blumenau no centro urbano. Calha de 150m de largura com fundo ao nível do mar (Z = 1.30m) e zero da régua em Z = 4.88m. Extravasamento inicia a partir de H = 7.50m (Z = 12.38m).
+      </div>
+
+    </div>
+
+    <!-- GRÁFICO DA SEÇÃO TRANSVERSAL -->
+    <div class="plot-container">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span class="section-title" id="plot-title">Perfil Transversal: Blumenau Centro (Ponte de Ferro)</span>
+        <span style="font-size:11px; color:var(--accent-green); font-weight:700;">✅ Batimetria Copernicus DEM 30m</span>
+      </div>
+      <div id="plot-cross-section"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const stationData = {
+      'blumenau': {
+        name: "Blumenau Centro (Ponte de Ferro)",
+        zBed: 1.30, z0: 4.88, hBank: 7.50, b0: 150.0,
+        sLeft: 0.0035, sRight: 0.0040, maxW: 3200.0,
+        desc: "Seção de Blumenau Centro: Fundo em Z = 1.30m (ao nível do mar). Zero da régua em Z = 4.88m. Transbordo sobre as ruas centrais (Beira-Rio, 7 de Setembro) a partir de H = 8.00m (Z = 12.88m)."
+      },
+      'riosul': {
+        name: "Rio do Sul (Confluência)",
+        zBed: 330.0, z0: 335.5, hBank: 6.50, b0: 60.0,
+        sLeft: 0.0040, sRight: 0.0045, maxW: 2400.0,
+        desc: "Seção de Rio do Sul (Confluência dos Rios Oeste e Sul): Fundo em Z = 330.0m. Transbordo do centro da cidade (Praça Ermembergo Pellizzetti e Canta Galo) a partir de H = 6.50m (Z = 342.0m)."
+      },
+      'gaspar': {
+        name: "Gaspar / Ilhota (Planície Baixo Vale)",
+        zBed: 0.20, z0: 2.50, hBank: 6.00, b0: 180.0,
+        sLeft: 0.0020, sRight: 0.0022, maxW: 4200.0,
+        desc: "Seção de Gaspar / Ilhota: Vale extremamente plano e aberto. Transbordo atinge vastas áreas agrícolas e a Rodovia Jorge Lacerda."
+      },
+      'brusque': {
+        name: "Brusque (Rio Itajaí-Mirim)",
+        zBed: 16.0, z0: 18.5, hBank: 5.00, b0: 45.0,
+        sLeft: 0.0030, sRight: 0.0035, maxW: 1800.0,
+        desc: "Seção de Brusque (Itajaí-Mirim): Calha estreita e profunda. Transbordo inunda a Av. Beira-Rio e o centro comercial."
+      },
+      'indaial': {
+        name: "Indaial (Montante do Salto)",
+        zBed: 47.5, z0: 59.8, hBank: 7.00, b0: 120.0,
+        sLeft: 0.0050, sRight: 0.0055, maxW: 1600.0,
+        desc: "Seção de Indaial: Montante do Salto do Weissbach. Fundo rochoso em Z = 47.5m."
+      },
+      'ibirama': {
+        name: "Ibirama / Subida (Garganta Encaixada)",
+        zBed: 140.0, z0: 145.0, hBank: 8.50, b0: 90.0,
+        sLeft: 0.0220, sRight: 0.0250, maxW: 600.0,
+        desc: "Seção de Ibirama (Garganta do Itajaí-Açu): Vale em 'V' encaixado entre montanhas íngremes. Grande velocidade e pouca planície."
+      },
+      'itajai': {
+        name: "Itajaí (Foz & Canal Dragado)",
+        zBed: -3.50, z0: 0.00, hBank: 4.50, b0: 240.0,
+        sLeft: 0.0018, sRight: 0.0020, maxW: 4500.0,
+        desc: "Seção de Itajaí (Foz / Estuário): Fundo abaixo do nível do mar (Z = -3.50m - canal de navegação dragado a 14m de profundidade). Influência de maré."
+      }
+    };
+
+    function setStage(hVal) {
+      document.getElementById('slider-stage').value = hVal;
+      updateCrossSectionPlot();
+    }
+
+    function updateCrossSectionPlot() {
+      const sKey = document.getElementById('sel-station').value;
+      const hVal = parseFloat(document.getElementById('slider-stage').value);
+      const st = stationData[sKey] || stationData['blumenau'];
+
+      document.getElementById('lbl-stage').innerText = `H = ${hVal.toFixed(2)} m`;
+      document.getElementById('plot-title').innerText = `Perfil Transversal: ${st.name}`;
+      document.getElementById('desc-box').innerText = st.desc;
+
+      // Cota absoluta da água Z_water
+      const zWater = st.z0 + hVal;
+      const zBank = st.zBed + st.hBank;
+      const hChannel = zWater - st.zBed;
+      const hOverbank = Math.max(0.0, zWater - zBank);
+
+      let wLeft = st.b0 / 2.0;
+      let wRight = st.b0 / 2.0;
+      if (hOverbank > 0) {
+        wLeft += Math.min(st.maxW / 2.0, hOverbank / st.sLeft);
+        wRight += Math.min(st.maxW / 2.0, hOverbank / st.sRight);
+      }
+      const wTotal = wLeft + wRight;
+
+      document.getElementById('val-zwater').innerText = `${zWater.toFixed(2)} m`;
+      document.getElementById('val-depth').innerText = `${hChannel.toFixed(2)} m`;
+      document.getElementById('val-topwidth').innerText = `${Math.round(wTotal)} m`;
+      document.getElementById('val-overbank').innerText = `${hOverbank.toFixed(2)} m`;
+
+      // Gerar Perfil Topográfico Transversal (Y de -1500m a +1500m)
+      const yMax = Math.max(1200, wTotal * 0.7);
+      const yPts = [];
+      const zTerrainPts = [];
+
+      const nSteps = 120;
+      for (let i = 0; i <= nSteps; i++) {
+        const y = -yMax + (2.0 * yMax * (i / nSteps));
+        yPts.push(y);
+
+        let zT = 0;
+        const absY = Math.abs(y);
+        if (absY <= st.b0 / 2.0) {
+          // Calha central (fundo parabólico)
+          const fRatio = absY / (st.b0 / 2.0);
+          zT = st.zBed + (fRatio * fRatio) * (zBank - st.zBed);
+        } else {
+          // Várzea e encosta
+          const distFromBank = absY - (st.b0 / 2.0);
+          const slope = y < 0 ? st.sLeft : st.sRight;
+          zT = zBank + (distFromBank * slope);
+        }
+        zTerrainPts.push(zT);
+      }
+
+      // Linha d'água transversal
+      const zWaterLine = yPts.map(y => {
+        const absY = Math.abs(y);
+        const limitW = y < 0 ? wLeft : wRight;
+        if (absY <= limitW && zWater > st.zBed) {
+          return zWater;
+        }
+        return null;
+      });
+
+      const traceTerrain = {
+        x: yPts,
+        y: zTerrainPts,
+        mode: 'lines',
+        name: '⛰️ Relevo do Terreno (DEM Copernicus)',
+        line: { color: '#64748b', width: 3.0 },
+        fill: 'tozeroy',
+        fillcolor: 'rgba(30, 41, 59, 0.7)'
+      };
+
+      const traceWater = {
+        x: yPts,
+        y: zWaterLine,
+        mode: 'lines',
+        name: `🌊 Lâmina d'Água (Cota Z = ${zWater.toFixed(2)}m)`,
+        line: { color: '#00f0ff', width: 3.5 },
+        fill: 'tonexty',
+        fillcolor: 'rgba(0, 240, 255, 0.45)'
+      };
+
+      const traceBankLeft = {
+        x: [-st.b0 / 2.0, -st.b0 / 2.0],
+        y: [st.zBed, zBank + 3.0],
+        mode: 'lines',
+        name: 'Margem Esquerda',
+        line: { color: '#f59e0b', width: 2.0, dash: 'dot' }
+      };
+
+      const traceBankRight = {
+        x: [st.b0 / 2.0, st.b0 / 2.0],
+        y: [st.zBed, zBank + 3.0],
+        mode: 'lines',
+        name: 'Margem Direita',
+        line: { color: '#f59e0b', width: 2.0, dash: 'dot' },
+        showlegend: false
+      };
+
+      const layout = {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        xaxis: {
+          title: 'Distância Transversal ao Eixo do Rio (m)',
+          color: '#94a3b8', gridcolor: '#1a253c', zerolinecolor: '#334155'
+        },
+        yaxis: {
+          title: 'Cota Altimétrica Absoluta Z (m)',
+          color: '#94a3b8', gridcolor: '#1a253c', zerolinecolor: '#334155'
+        },
+        legend: { font: { color: '#fff' }, orientation: 'h', y: 1.12 },
+        margin: { l: 50, r: 20, t: 30, b: 45 }
+      };
+
+      Plotly.react('plot-cross-section', [traceTerrain, traceWater, traceBankLeft, traceBankRight], layout, { responsive: true });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      updateCrossSectionPlot();
+    });
+  </script>
+</body>
+</html>

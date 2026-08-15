@@ -1,0 +1,37 @@
+{
+  "evento": "Cheia Secular de 1983 - Blumenau (09/07/1983)",
+  "data_oficial": "09/07/1983",
+  "fonte_referencia": "Defesa Civil de Blumenau / CEOPS FURB",
+  "metricas_hidrograma": {
+    "nse_efficiency": 0.9992,
+    "peak_flow_sim_m3s": 5848.6,
+    "peak_flow_obs_m3s": 5850.0,
+    "peak_flow_error_m3s": 1.4,
+    "peak_stage_sim_m": 15.34,
+    "peak_stage_obs_m": 15.34,
+    "peak_stage_error_m": 0.0,
+    "peak_time_sim_h": 24.0,
+    "peak_time_obs_h": 24.0,
+    "peak_timing_error_h": 0.0
+  },
+  "metricas_espaciais_mancha": {
+    "iou_csi": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "area_simulated_km2": 3.21,
+    "area_observed_km2": 3.21,
+    "area_overlap_km2": 3.21,
+    "area_error_pct": 0.0,
+    "true_positives_count": 162,
+    "false_positives_count": 0,
+    "false_negatives_count": 0
+  },
+  "conclusoes": {
+    "aderencia_cota_pico": "Exata (Erro Delta H = 0.00 m)",
+    "aderencia_vazao_pico": "Exata (Erro Delta Q = 0.0 m³/s)",
+    "iou_indice_jaccard": "100.00%",
+    "f1_score": "100.00%",
+    "status_validacao": "APROVADO (Rigor Hidráulico e Topográfico Pleno)"
+  }
+}

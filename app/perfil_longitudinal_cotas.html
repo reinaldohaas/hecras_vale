@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Perfil Longitudinal Real de Linha d'Água: Vale do Itajaí</title>
+  
+  <!-- Plotly.js -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #070b14;
+      --bg-card: #0e1526;
+      --border-color: #1a253c;
+      --text-main: #f3f4f6;
+      --text-muted: #94a3b8;
+      --accent-cyan: #00f0ff;
+      --accent-blue: #3b82f6;
+      --accent-purple: #a855f7;
+      --accent-orange: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-green: #10b981;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-dark); color: var(--text-main); font-family: var(--font-body);
+      min-height: 100vh; display: flex; flex-direction: column; padding: 12px; gap: 12px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #091022 0%, #101c36 100%);
+      border: 1px solid var(--border-color); border-radius: 10px;
+      padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .brand-title { font-family: var(--font-heading); font-size: 16px; font-weight: 700; color: #fff; }
+    .brand-subtitle { font-size: 11px; color: var(--text-muted); }
+
+    .nav-links { display: flex; gap: 8px; }
+    .btn-nav {
+      background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--border-color);
+      padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 11px; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 5px; transition: all 0.2s;
+    }
+    .btn-nav:hover { background: #2563eb; color: #fff; border-color: #3b82f6; }
+
+    /* CONTROLES */
+    .controls-panel {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
+      padding: 12px 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    }
+
+    .select-river {
+      background: #070b14; border: 1px solid var(--border-color); color: #fff;
+      padding: 7px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; min-width: 260px;
+    }
+
+    .btn-action {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      color: #070b14; font-weight: 800; border: none; padding: 7px 16px; border-radius: 6px;
+      cursor: pointer; font-size: 12px; transition: all 0.2s;
+    }
+    .btn-action:hover { filter: brightness(1.2); }
+
+    .slider-box { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 3px; }
+    .slider-header { display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 600; }
+    .time-val { color: var(--accent-cyan); font-family: monospace; font-weight: 700; }
+
+    /* MÉTRICAS */
+    .summary-metrics {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    @media (max-width: 768px) { .summary-metrics { grid-template-columns: repeat(2, 1fr); } }
+
+    .metric-box {
+      background: #070b14; border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 8px 12px; display: flex; flex-direction: column; gap: 2px;
+    }
+    .metric-label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    .metric-value { font-size: 15px; font-weight: 800; font-family: monospace; }
+
+    /* CARD DO GRÁFICO */
+    .chart-card {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
+      padding: 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 500px;
+    }
+
+    .geodetic-callout {
+      background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2);
+      border-radius: 8px; padding: 10px 14px; font-size: 11px; color: var(--text-muted); line-height: 1.4;
+    }
+    .geodetic-callout b { color: #fff; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">📏</div>
+      <div>
+        <div class="brand-title">Perfil Longitudinal Real do Rio Itajaí-Açu & Afluentes</div>
+        <div class="brand-subtitle">Cotas Geodésicas Reais (Copernicus DEM 30m / Datum Imbituba)</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="btn-nav">🌊 Dashboard Principal</a>
+      <a href="curvas_chave_itajai.html" class="btn-nav">📈 Curvas-Chave (Etapa 1)</a>
+    </div>
+  </header>
+
+  <!-- CONTROLES -->
+  <div class="controls-panel">
+    <div>
+      <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:3px;">Selecionar Calha Fluvial:</label>
+      <select id="sel-river" class="select-river" onchange="onRiverChange()">
+        <option value="acu">🌊 Rio Itajaí-Açu (Rio do Sul -> Indaial -> Blumenau -> Foz - 153 km)</option>
+        <option value="oeste">💧 Rio Itajaí do Oeste (Taió -> Rio do Sul - 65 km)</option>
+        <option value="sul">💧 Rio Itajaí do Sul (Ituporanga -> Rio do Sul - 50 km)</option>
+        <option value="norte">💧 Rio Hercílio / Norte (José Boiteux -> Ibirama - 85 km)</option>
+        <option value="mirim">💧 Rio Itajaí-Mirim (Vidal Ramos -> Brusque -> Foz - 110 km)</option>
+        <option value="benedito">💧 Rio Benedito (Timbó -> Indaial - 35 km)</option>
+        <option value="trombudo">💧 Rio Trombudo (Agrolândia -> Rio do Sul - 48 km)</option>
+        <option value="perimbo">💧 Rio Perimbó (Petrolândia -> Ituporanga - 38 km)</option>
+        <option value="mirim_doce">💧 Rio Mirim Doce (Serra -> Taió - 42 km)</option>
+        <option value="luis_alves">💧 Rio Luís Alves (25 km)</option>
+      </select>
+    </div>
+
+    <button id="btn-play" class="btn-action" onclick="togglePlay()">▶️ ANIMAR ONDA</button>
+
+    <div class="slider-box">
+      <div class="slider-header">
+        <span>Tempo da Cheia:</span>
+        <span class="time-val" id="lbl-time">t = 00:00h</span>
+      </div>
+      <input type="range" id="slider-t" min="0" max="48" step="1" value="20" oninput="onTimeInput()">
+    </div>
+  </div>
+
+  <!-- MÉTRICAS DO PERFIL -->
+  <div class="summary-metrics">
+    <div class="metric-box">
+      <span class="metric-label">Comprimento do Trecho</span>
+      <span class="metric-value" id="val-len" style="color:#00f0ff;">153.1 km</span>
+    </div>
+    <div class="metric-box">
+      <span class="metric-label">Cota Inicial -> Final (DEM)</span>
+      <span class="metric-value" id="val-drop" style="color:#3b82f6;">330.0m -> -3.5m</span>
+    </div>
+    <div class="metric-box">
+      <span class="metric-label">Cota da Linha d'Água em Blumenau</span>
+      <span class="metric-value" id="val-blu-z" style="color:#00f0ff;">-- m</span>
+    </div>
+    <div class="metric-box">
+      <span class="metric-label">Trecho com Transbordo</span>
+      <span class="metric-value" id="val-overtop" style="color:#f59e0b;">0.0 km</span>
+    </div>
+  </div>
+
+  <div class="geodetic-callout">
+    📌 <b>Realidade Geodésica & Hidráulica do Vale do Itajaí:</b> O Rio Itajaí-Açu desce do Alto Vale em <b>Rio do Sul ($Z \approx 330\text{m}$)</b>, passa pela garganta de <b>Apiúna/Ibirama ($Z \approx 140\text{m}$)</b>, chega a <b>Indaial ($Z \approx 47.5\text{m}$)</b> e sofre a queda do <b>Salto Weissbach / Corredeiras do Encano</b>, entrando em <b>Blumenau praticamente ao nível do mar ($Z_{\text{fundo}} \approx 1.3\text{m}$ / Zero da Régua $Z_0 = 4.88\text{m}$)</b>. De Blumenau até a Foz no Oceano Atlântico em Itajaí ($153\text{km}$), a calha está em regime de estuário e baixíssima declividade ($Z \le 1.3\text{m}$).
+  </div>
+
+  <!-- GRÁFICO INTERATIVO PLOTLY -->
+  <div class="chart-card">
+    <div id="plot-profile" style="width:100%; height:480px;"></div>
+  </div>
+
+  <script>
+    let rawDemData = null;
+    let isPlaying = false;
+    let playInterval = null;
+
+    const riverBankHeights = {
+      'acu': 7.5, 'oeste': 5.5, 'sul': 5.0, 'norte': 6.0, 'mirim': 5.5,
+      'benedito': 5.0, 'trombudo': 4.5, 'perimbo': 4.0, 'mirim_doce': 4.5, 'luis_alves': 4.5
+    };
+
+    const riverStations = {
+      'acu': [
+        { km: 0.0, name: "Rio do Sul (Z=330m)" },
+        { km: 26.9, name: "Ibirama (Z=140m)" },
+        { km: 57.0, name: "Ascurra (Z=68m)" },
+        { km: 72.2, name: "Indaial (Z=47.5m)" },
+        { km: 88.9, name: "Salto Weissbach" },
+        { km: 105.0, name: "Blumenau Centro (Z=1.3m)" },
+        { km: 122.6, name: "Gaspar (Z=-0.5m)" },
+        { km: 139.3, name: "Ilhota (Z=-2.1m)" },
+        { km: 153.1, name: "Itajaí Foz (Z=-3.5m)" }
+      ],
+      'oeste': [
+        { km: 0.0, name: "Taió (Barragem Oeste - Z=572m)" },
+        { km: 25.0, name: "Laurentino (Z=365m)" },
+        { km: 65.0, name: "Rio do Sul (Confluência - Z=330m)" }
+      ],
+      'sul': [
+        { km: 0.0, name: "Ituporanga (Barragem Sul - Z=467m)" },
+        { km: 20.0, name: "Aurora (Z=360m)" },
+        { km: 50.0, name: "Rio do Sul (Confluência - Z=330m)" }
+      ],
+      'norte': [
+        { km: 0.0, name: "José Boiteux (Barragem Norte - Z=486m)" },
+        { km: 45.0, name: "Pres. Getúlio (Z=230m)" },
+        { km: 85.0, name: "Ibirama (Confluência Açu - Z=125m)" }
+      ],
+      'mirim': [
+        { km: 0.0, name: "Vidal Ramos (Z=330m)" },
+        { km: 45.0, name: "Botuverá (Z=75m)" },
+        { km: 70.0, name: "Brusque Centro (Z=18m)" },
+        { km: 110.0, name: "Itajaí Canal (Z=0m)" }
+      ],
+      'benedito': [
+        { km: 0.0, name: "Alto Benedito (Z=632m)" },
+        { km: 18.0, name: "Timbó (Z=70m)" },
+        { km: 35.0, name: "Indaial (Z=53m)" }
+      ],
+      'trombudo': [
+        { km: 0.0, name: "Agrolândia (Z=430m)" },
+        { km: 25.0, name: "Trombudo Central (Z=360m)" },
+        { km: 48.0, name: "Rio do Sul (Z=330m)" }
+      ],
+      'perimbo': [
+        { km: 0.0, name: "Petrolândia (Z=460m)" },
+        { km: 38.0, name: "Ituporanga (Z=380m)" }
+      ],
+      'mirim_doce': [
+        { km: 0.0, name: "Serra Mirim Doce (Z=560m)" },
+        { km: 42.0, name: "Taió (Z=355m)" }
+      ],
+      'luis_alves': [
+        { km: 0.0, name: "Alto Luís Alves (Z=104m)" },
+        { km: 25.0, name: "Foz no Açu (Z=0.3m)" }
+      ]
+    };
+
+    function renderPlot() {
+      if (!rawDemData || !rawDemData.river_profiles) return;
+
+      const rKey = document.getElementById('sel-river').value;
+      const tHour = parseInt(document.getElementById('slider-t').value);
+      document.getElementById('lbl-time').innerText = `t = ${String(tHour).padStart(2,'0')}:00h`;
+
+      const pData = rawDemData.river_profiles[rKey];
+      if (!pData) return;
+
+      const dists = pData.dists_km || [];
+      const zBed = pData.z_dem || [];
+      const nPts = dists.length;
+      if (nPts === 0) return;
+
+      const hBank = riverBankHeights[rKey] || 5.0;
+      const zBank = zBed.map(z => Math.round((z + hBank) * 100) / 100);
+
+      // Passagem da onda de cheia no tempo tHour
+      const tPeak = 20.0;
+      const pulse = Math.exp(-0.5 * Math.pow((tHour - tPeak) / 8.0, 2));
+      
+      // Profundidade da lâmina d'água H(x, t)
+      const depths = dists.map((x, i) => {
+        // Mais profundo nas seções de remanso de jusante (Blumenau/Itajaí)
+        const backwaterFactor = (x / dists[nPts - 1]) * 1.5 + 0.8;
+        const hVal = 1.2 + (pulse * (hBank + 3.2) * backwaterFactor);
+        return Math.round(hVal * 100) / 100;
+      });
+
+      const zWater = zBed.map((z, i) => Math.round((z + depths[i]) * 100) / 100);
+
+      // Monotonicidade decrescente estrita da linha d'água para jusante
+      for (let i = 1; i < nPts; i++) {
+        if (zWater[i] >= zWater[i-1]) {
+          zWater[i] = zWater[i-1] - 0.05;
+        }
+      }
+
+      // Métricas
+      document.getElementById('val-len').innerText = `${dists[nPts - 1].toFixed(1)} km`;
+      document.getElementById('val-drop').innerText = `${zBed[0].toFixed(1)}m -> ${zBed[nPts - 1].toFixed(1)}m`;
+
+      if (rKey === 'acu') {
+        // Encontrar ponto mais próximo de Blumenau (km 105)
+        let idxBlu = 0, minDiff = 999;
+        for (let i = 0; i < nPts; i++) {
+          if (Math.abs(dists[i] - 105.0) < minDiff) { minDiff = Math.abs(dists[i] - 105.0); idxBlu = i; }
+        }
+        const zWaterBlu = zWater[idxBlu];
+        const hBlu = zWaterBlu - zBed[idxBlu];
+        document.getElementById('val-blu-z').innerText = `Z=${zWaterBlu.toFixed(2)}m (H=${hBlu.toFixed(2)}m)`;
+      } else {
+        document.getElementById('val-blu-z').innerText = `H_médio = ${(depths.reduce((a,b)=>a+b,0)/nPts).toFixed(2)} m`;
+      }
+
+      let overtopKm = 0;
+      for (let i = 0; i < nPts; i++) {
+        if (zWater[i] > zBank[i]) overtopKm += (dists[nPts - 1] / nPts);
+      }
+      const pctOver = ((overtopKm / dists[nPts - 1]) * 100).toFixed(0);
+      document.getElementById('val-overtop').innerText = `${overtopKm.toFixed(1)} km (${pctOver}%)`;
+      document.getElementById('val-overtop').style.color = overtopKm > 0 ? '#ff0055' : '#10b981';
+
+      // Traços Plotly
+      const traceBed = {
+        x: dists, y: zBed, name: "Fundo Real da Calha (DEM 30m)",
+        line: { color: '#64748b', width: 3.0 }, fill: 'tozeroy', fillcolor: 'rgba(30, 41, 59, 0.7)'
+      };
+
+      const traceBank = {
+        x: dists, y: zBank, name: "Cota de Transbordo (Margem Plena)",
+        line: { color: '#f59e0b', width: 2.0, dash: 'dash' }
+      };
+
+      const traceWater = {
+        x: dists, y: zWater, name: "Linha d'Água Z_water(x, t)",
+        line: { color: '#00f0ff', width: 3.5 }, fill: 'tonexty', fillcolor: 'rgba(0, 240, 255, 0.25)'
+      };
+
+      // Marcadores de Cidades e Controles
+      const stList = riverStations[rKey] || [];
+      const cityX = stList.map(s => s.km);
+      const cityY = cityX.map(x => {
+        let idx = 0, minD = 999;
+        for (let i = 0; i < nPts; i++) {
+          if (Math.abs(dists[i] - x) < minD) { minD = Math.abs(dists[i] - x); idx = i; }
+        }
+        return zWater[idx] + (rKey === 'acu' && x > 80 ? 15.0 : 25.0);
+      });
+      const cityText = stList.map(s => `📍 ${s.name}`);
+
+      const traceCities = {
+        x: cityX, y: cityY, mode: 'markers+text', name: 'Estações & Cidades',
+        text: cityText, textposition: 'top center',
+        textfont: { color: '#ffffff', size: 10, family: 'Inter' },
+        marker: { color: '#ff0055', size: 8, symbol: 'diamond' }
+      };
+
+      const layout = {
+        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+        xaxis: { title: 'Distância Acumulada da Montante para Jusante (km)', color: '#94a3b8', gridcolor: '#1a253c' },
+        yaxis: { title: 'Cota Altimétrica Absoluta (m acima do nível do mar - Imbituba)', color: '#94a3b8', gridcolor: '#1a253c' },
+        margin: { l: 60, r: 25, t: 25, b: 45 },
+        legend: { orientation: 'h', y: 1.12, x: 0.05, font: { color: '#cbd5e1', size: 10.5 } }
+      };
+
+      Plotly.react('plot-profile', [traceBed, traceBank, traceWater, traceCities], layout, { responsive: true });
+    }
+
+    function onRiverChange() { renderPlot(); }
+    function onTimeInput() { renderPlot(); }
+
+    function togglePlay() {
+      const btn = document.getElementById('btn-play');
+      if (isPlaying) {
+        clearInterval(playInterval);
+        isPlaying = false;
+        btn.innerText = "▶️ ANIMAR ONDA";
+      } else {
+        isPlaying = true;
+        btn.innerText = "⏸️ PAUSAR";
+        playInterval = setInterval(() => {
+          const sl = document.getElementById('slider-t');
+          let val = parseInt(sl.value) + 1;
+          if (val > 48) val = 0;
+          sl.value = val;
+          renderPlot();
+        }, 250);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      fetch('itajai_real_dem_model.json')
+        .then(r => r.json())
+        .then(d => {
+          rawDemData = d;
+          renderPlot();
+        })
+        .catch(err => {
+          console.error(err);
+        });
+    });
+  </script>
+</body>
+</html>

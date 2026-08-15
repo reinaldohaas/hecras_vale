@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Manchas 2D de Inundação em Alta Resolução & Topografia Real</title>
+  
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #070b14;
+      --bg-card: #0e1526;
+      --border-color: #1a253c;
+      --text-main: #f3f4f6;
+      --text-muted: #94a3b8;
+      --accent-cyan: #00f0ff;
+      --accent-blue: #3b82f6;
+      --accent-purple: #a855f7;
+      --accent-orange: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-green: #10b981;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-dark); color: var(--text-main); font-family: var(--font-body);
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    header {
+      background: linear-gradient(135deg, #091022 0%, #101c36 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+      z-index: 1000;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 34px; height: 34px; background: linear-gradient(135deg, #3b82f6, #00f0ff);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 17px;
+    }
+    .brand-title { font-family: var(--font-heading); font-size: 15px; font-weight: 700; color: #fff; }
+    .brand-subtitle { font-size: 10.5px; color: var(--text-muted); }
+
+    .nav-links { display: flex; gap: 8px; }
+    .btn-nav {
+      background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--border-color);
+      padding: 5px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .btn-nav:hover { background: #2563eb; color: #fff; }
+
+    /* LAYOUT PRINCIPAL */
+    .main-workspace {
+      display: grid; grid-template-columns: 340px 1fr; flex: 1; height: calc(100vh - 60px); overflow: hidden;
+    }
+    @media (max-width: 900px) {
+      .main-workspace { grid-template-columns: 1fr; grid-template-rows: 270px 1fr; }
+    }
+
+    /* PAINEL LATERAL */
+    .side-panel {
+      background: var(--bg-card); border-right: 1px solid var(--border-color);
+      padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
+    }
+
+    .panel-section {
+      background: #070b14; border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 9px 12px; display: flex; flex-direction: column; gap: 5px;
+    }
+    .panel-title { font-size: 11px; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; }
+
+    .select-input {
+      background: #0e1526; border: 1px solid var(--border-color); color: #fff;
+      padding: 6px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600; width: 100%;
+    }
+
+    .btn-action {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      color: #070b14; font-weight: 800; border: none; padding: 7px 14px; border-radius: 6px;
+      cursor: pointer; font-size: 11.5px; transition: all 0.2s;
+    }
+    .btn-action:hover { filter: brightness(1.2); }
+
+    /* MÉTRICAS */
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .m-box {
+      background: #0e1526; border: 1px solid var(--border-color); border-radius: 6px;
+      padding: 6px 8px; display: flex; flex-direction: column; gap: 1px;
+    }
+    .m-lbl { font-size: 9px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    .m-val { font-size: 13px; font-weight: 800; font-family: monospace; }
+
+    /* LEGENDA */
+    .legend-row { display: flex; align-items: center; gap: 8px; font-size: 10px; }
+    .leg-color { width: 14px; height: 14px; border-radius: 3px; }
+
+    /* MAPA */
+    #map-container { width: 100%; height: 100%; position: relative; }
+    #map { width: 100%; height: 100%; }
+
+    .canal-badge {
+      background: rgba(245, 158, 11, 0.2); border: 1px solid #f59e0b; color: #fbbf24;
+      padding: 3px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">🏔️</div>
+      <div>
+        <div class="brand-title">Manchas 2D de Inundação com Topografia Real & Canal Itajaí-Mirim</div>
+        <div class="brand-subtitle">Hidrografia ANA 1:5.000 + Batimetria Real ao Nível do Mar</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="btn-nav">🌊 Dashboard Principal</a>
+      <a href="secoes_transversais_vales.html" class="btn-nav" style="background:#2563eb; color:#fff;">📏 Seções Transversais (HEC-RAS)</a>
+      <a href="perfil_longitudinal_cotas.html" class="btn-nav">📐 Perfis Longitudinais</a>
+      <a href="curvas_chave_itajai.html" class="btn-nav">📈 Curvas-Chave</a>
+    </div>
+  </header>
+
+  <div class="main-workspace">
+    
+    <!-- PAINEL LATERAL -->
+    <div class="side-panel">
+      
+      <!-- Seletor de Mapa Base de Relevo / Satélite -->
+      <div class="panel-section">
+        <span class="panel-title">Mapa de Fundo (Relevo / Satélite):</span>
+        <select id="sel-basemap" class="select-input" onchange="onBasemapChange()">
+          <option value="opentopo">🏔️ Relevo Topográfico & Curvas de Nível (OpenTopoMap)</option>
+          <option value="esritopo" selected>🗺️ Relevo Sombreado & Vales (Esri World Topo)</option>
+          <option value="satellite">🛰️ Satélite Real de Alta Definição (Esri Imagery)</option>
+          <option value="dark">🌑 Modo Noturno com Relevo (CartoDB Dark)</option>
+        </select>
+      </div>
+
+      <!-- Seletor de Evento Histórico -->
+      <div class="panel-section">
+        <span class="panel-title">Evento de Inundação:</span>
+        <select id="sel-event" class="select-input" onchange="onEventChange()">
+          <option value="1983">🌊 Cheia Secular 1983 (15.34m Blu / 13.0m R. Sul / 185 km²)</option>
+          <option value="2008">🌧️ Desastre Nov/2008 (11.52m Blu / 8.5m Brusque / R. Sul seco)</option>
+          <option value="2011">🌊 Grande Cheia 2011 (12.60m Blu / 11.0m R. Sul / 155 km²)</option>
+          <option value="2023" selected>🔄 Cheia Multievento 2023 (10.76m Blu / 8.5m R. Sul / 115 km²)</option>
+        </select>
+      </div>
+
+      <!-- Controle de Animação Temporal -->
+      <div class="panel-section">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="panel-title">Passagem da Onda:</span>
+          <span id="lbl-time" style="color:var(--accent-cyan); font-family:monospace; font-weight:700; font-size:12px;">t = 20:00h</span>
+        </div>
+        <input type="range" id="slider-t" min="0" max="48" step="1" value="20" oninput="onTimeChange()">
+        <button id="btn-play" class="btn-action" onclick="togglePlay()" style="margin-top:4px;">▶️ ANIMAR MANCHA MEANDRADA</button>
+      </div>
+
+      <!-- Batimetria Real ao Nível do Mar -->
+      <div class="panel-section">
+        <span class="panel-title">Batimetria & Profundidade na Calha:</span>
+        <div style="font-size:9.5px; color:var(--text-muted); line-height:1.35;">
+          • <b>Blumenau:</b> Fundo em <b>Z = 1.30m</b> (Nível do Mar). Profundidade total da água na calha: <b id="val-blu-depth" style="color:#00f0ff;">16.64 m</b>.<br>
+          • <b>Itajaí (Foz):</b> Fundo em <b>Z = -3.50m</b> (Estuário/Canal Dragado). Profundidade: <b id="val-it-depth" style="color:#ef4444;">8.50 m</b>.<br>
+          • <b>Brusque / Mirim:</b> Fundo em <b>Z = 16.0m</b>. Profundidade: <b id="val-bq-depth" style="color:#f59e0b;">9.20 m</b>.
+        </div>
+      </div>
+
+      <!-- Obras Especiais: Canal do Itajaí-Mirim -->
+      <div class="panel-section">
+        <span class="panel-title">Canal do Itajaí-Mirim & Foz:</span>
+        <div style="display:flex; flex-direction:column; gap:4px; margin-top:2px;">
+          <div class="canal-badge">⚡ Canal Retificado do Itajaí-Mirim (Ativo)</div>
+          <div class="canal-badge" style="border-color:#38bdf8; color:#38bdf8; background:rgba(56,189,248,0.15);">💧 Braço Velho / Curso Natural (Itajaí)</div>
+        </div>
+      </div>
+
+      <!-- Métricas de Inundação Calculadas -->
+      <div class="panel-section">
+        <span class="panel-title">Área Inundada na Várzea Real:</span>
+        <div class="metric-grid">
+          <div class="m-box">
+            <span class="m-lbl">Área Total Inundada</span>
+            <span class="m-val" id="val-total-area" style="color:#00f0ff;">115.0 km²</span>
+          </div>
+          <div class="m-box">
+            <span class="m-lbl">Volume na Planície</span>
+            <span class="m-val" id="val-vol" style="color:#3b82f6;">245.0 hm³</span>
+          </div>
+          <div class="m-box">
+            <span class="m-lbl">Mancha Blumenau</span>
+            <span class="m-val" id="val-blu-area" style="color:#ff0055;">24.0 km²</span>
+          </div>
+          <div class="m-box">
+            <span class="m-lbl">Mancha Rio do Sul</span>
+            <span class="m-val" id="val-rs-area" style="color:#f59e0b;">18.5 km²</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Legenda de Lâmina d'Água -->
+      <div class="panel-section">
+        <span class="panel-title">Legenda de Lâmina d'Água (h):</span>
+        <div class="legend-row">
+          <div class="leg-color" style="background:#00f0ff;"></div>
+          <span>Lâmina Leve (0.05m a 0.80m) - Alagamento de Vias</span>
+        </div>
+        <div class="legend-row">
+          <div class="leg-color" style="background:#f59e0b;"></div>
+          <span>Lâmina Média (0.80m a 2.00m) - Invasão de Imóveis</span>
+        </div>
+        <div class="legend-row">
+          <div class="leg-color" style="background:#ff0055;"></div>
+          <span>Lâmina Severa / Crítica (> 2.00m) - Resgate / Telhados</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MAPA -->
+    <div id="map-container">
+      <div id="map"></div>
+    </div>
+
+  </div>
+
+  <script>
+    let map = null;
+    let baseLayers = {};
+    let highResRiverLayer = null;
+    let highResFloodLayer = null;
+    let floodGeojsonData = null;
+    let isPlaying = false;
+    let playInterval = null;
+
+    const eventParams = {
+      '1983': { hBlu: 15.34, hRs: 13.0, hBq: 7.6, factorBlu: 1.0, factorRs: 1.0, factorBq: 0.9, totalArea: 185.0, bluArea: 42.5, rsArea: 28.0, bluDepth: 18.92, itDepth: 10.5, bqDepth: 10.5 },
+      '2008': { hBlu: 11.52, hRs: 4.20, hBq: 8.5, factorBlu: 0.75, factorRs: 0.05, factorBq: 1.2, totalArea: 140.0, bluArea: 28.0, rsArea: 1.2, bluDepth: 15.10, itDepth: 9.8, bqDepth: 11.4 },
+      '2011': { hBlu: 12.60, hRs: 11.0, hBq: 6.2, factorBlu: 0.82, factorRs: 0.85, factorBq: 0.7, totalArea: 155.0, bluArea: 32.5, rsArea: 22.0, bluDepth: 16.18, itDepth: 8.8, bqDepth: 9.1 },
+      '2023': { hBlu: 10.76, hRs: 8.50, hBq: 6.0, factorBlu: 0.70, factorRs: 0.65, factorBq: 0.68, totalArea: 115.0, bluArea: 24.0, rsArea: 18.5, bluDepth: 14.34, itDepth: 8.0, bqDepth: 8.9 }
+    };
+
+    function initMap() {
+      map = L.map('map').setView([-27.05, -49.30], 9);
+
+      // Camadas de Relevo / Satélite
+      baseLayers.esritopo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri &mdash; Topografia e Relevo Sombreado'
+      }).addTo(map);
+
+      baseLayers.opentopo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenTopoMap (Curvas de Nível)'
+      });
+
+      baseLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri &mdash; Satélite Real HD'
+      });
+
+      baseLayers.dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; CARTO Dark'
+      });
+
+      // Cidades Principais
+      [
+        { name: "🏙️ Blumenau (15.34m em 1983 - Fundo Z=1.3m)", lat: -26.9180, lon: -49.0660 },
+        { name: "🏙️ Rio do Sul (13.00m em 1983 - Fundo Z=330m)", lat: -27.2150, lon: -49.6430 },
+        { name: "🏙️ Brusque (8.50m em 2008 - Fundo Z=16m)", lat: -27.0980, lon: -48.9120 },
+        { name: "🌊 Itajaí Foz (Fundo Z=-3.5m)", lat: -26.8950, lon: -48.6650 }
+      ].forEach(c => {
+        L.circleMarker([c.lat, c.lon], { radius: 6, fillColor: '#00f0ff', color: '#fff', weight: 2, fillOpacity: 0.95 }).addTo(map).bindPopup(`<b>${c.name}</b>`);
+      });
+
+      // Carregar Hidrografia Real em Alta Resolução (ANA 1:5.000)
+      fetch('itajai_ana_rios_alta_resolucao.geojson')
+        .then(r => r.json())
+        .then(data => {
+          highResRiverLayer = L.geoJSON(data, {
+            style: function(feat) {
+              const n = (feat.properties.NORIOCOMP || '').toLowerCase();
+              let color = '#3b82f6';
+              let weight = 2.0;
+              if (n.includes('açu')) { color = '#00f0ff'; weight = 3.5; }
+              else if (n.includes('mirim')) { color = '#f59e0b'; weight = 3.0; }
+              else if (n.includes('hercílio') || n.includes('norte')) { color = '#a855f7'; weight = 3.0; }
+              else if (n.includes('oeste')) { color = '#60a5fa'; weight = 2.5; }
+              else if (n.includes('sul')) { color = '#06b6d4'; weight = 2.5; }
+              return { color: color, weight: weight, opacity: 0.9 };
+            },
+            onEachFeature: function(feat, layer) {
+              const p = feat.properties;
+              layer.bindPopup(`<b>${p.NORIOCOMP || p.NOORIGINAL || 'Rio'}</b><br>Código Bacia: ${p.COBACIA}<br>Ordem Strahler: ${p.NUSTRAHLER || 1}`);
+            }
+          }).addTo(map);
+        })
+        .catch(err => console.error(err));
+
+      // Carregar Manchas 2D de Inundação HAND Espaço-Temporais Dinâmicas (Hora a Hora)
+      fetch('manchas_inundacao_hand_dinamico.geojson?v=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          floodGeojsonData = data;
+          renderHighResFloodLayer();
+        })
+        .catch(err => console.error(err));
+    }
+
+    function onBasemapChange() {
+      const bKey = document.getElementById('sel-basemap').value;
+      Object.values(baseLayers).forEach(layer => map.removeLayer(layer));
+      if (baseLayers[bKey]) {
+        baseLayers[bKey].addTo(map);
+      }
+    }
+
+    function renderHighResFloodLayer() {
+      if (!map) return;
+
+      if (highResFloodLayer) {
+        map.removeLayer(highResFloodLayer);
+        highResFloodLayer = null;
+      }
+      if (!floodGeojsonData) return;
+
+      const ev = document.getElementById('sel-event').value;
+      const tHour = parseInt(document.getElementById('slider-t').value);
+
+      document.getElementById('lbl-time').innerText = `t = ${String(tHour).padStart(2,'0')}:00h`;
+
+      // REGRA FÍSICA ESTRITA: Em regime normal (t <= 6h), água contida na calha profunda (Área = 0.0 km²)
+      if (tHour <= 6) {
+        document.getElementById('val-total-area').innerText = `0.0 km²`;
+        document.getElementById('val-blu-area').innerText = `0.0 km²`;
+        document.getElementById('val-rs-area').innerText = `0.0 km²`;
+        document.getElementById('val-vol').innerText = `0.0 hm³`;
+        document.getElementById('val-blu-depth').innerText = `0.00 m`;
+        document.getElementById('val-it-depth').innerText = `0.00 m`;
+        document.getElementById('val-bq-depth').innerText = `0.00 m`;
+        return;
+      }
+
+      // Encontrar o quadro temporal HAND mais próximo da hora atual t
+      const availableHours = [12, 18, 24, 30, 36, 48];
+      const targetT = availableHours.reduce((prev, curr) => Math.abs(curr - tHour) < Math.abs(prev - tHour) ? curr : prev);
+
+      // Filtrar e renderizar os polígonos HAND do evento e hora selecionados
+      highResFloodLayer = L.geoJSON(floodGeojsonData, {
+        filter: function(feat) {
+          const prop = feat.properties;
+          return (prop.event === ev && prop.time_hour === targetT);
+        },
+        style: function(feat) {
+          const prop = feat.properties;
+          return {
+            color: prop.fill_color || '#00f0ff',
+            weight: 1,
+            fillColor: prop.fill_color || '#00f0ff',
+            fillOpacity: prop.fill_opacity || 0.65
+          };
+        },
+        onEachFeature: function(feat, layer) {
+          const pProp = feat.properties;
+          layer.bindPopup(`<b>🌊 ${pProp.event} - t = ${pProp.time_hour}:00h</b><br>
+                           <b>Classe:</b> ${pProp.class_name || 'Lâmina de Água'}<br>
+                           <b>Área Inundada na Hora:</b> ${pProp.area_km2} km²<br>
+                           <b>Volume Acumulado:</b> ${pProp.volume_hm3} hm³<br>
+                           <b>Maré na Foz:</b> ${pProp.ocean_tide_m !== undefined ? pProp.ocean_tide_m + ' m' : '--'}<br>
+                           <i>Metodologia: Topographic HAND + Sincronização Hidrodinâmica + Marés</i>`);
+        }
+      }).addTo(map);
+    }
+
+    function onEventChange() { renderHighResFloodLayer(); }
+    function onTimeChange() { renderHighResFloodLayer(); }
+
+    function togglePlay() {
+      const btn = document.getElementById('btn-play');
+      if (isPlaying) {
+        clearInterval(playInterval);
+        isPlaying = false;
+        btn.innerText = "▶️ ANIMAR MANCHA MEANDRADA";
+      } else {
+        isPlaying = true;
+        btn.innerText = "⏸️ PAUSAR";
+        playInterval = setInterval(() => {
+          const sl = document.getElementById('slider-t');
+          let val = parseInt(sl.value) + 1;
+          if (val > 48) val = 0;
+          sl.value = val;
+          renderHighResFloodLayer();
+        }, 220);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+    });
+  </script>
+</body>
+</html>

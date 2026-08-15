@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sistema de Previsão Operacional de Cheias & Simulação: Vale do Itajaí</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Sistema de Previsão & Gestão de Cheias: Vale do Itajaí</title>
   
   <!-- Plotly.js -->
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
@@ -34,744 +34,581 @@
       --font-body: 'Inter', sans-serif;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background-color: var(--bg-dark); color: var(--text-main); font-family: var(--font-body); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background-color: var(--bg-dark); color: var(--text-main); font-family: var(--font-body);
+      min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden;
+      padding-bottom: env(safe-area-inset-bottom, 20px);
+    }
 
+    /* HEADER APP-BAR */
     header {
       background: linear-gradient(135deg, #091022 0%, #101c36 100%);
       border-bottom: 1px solid var(--border-color);
-      padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-      flex-shrink: 0;
+      padding: 10px 16px; display: flex; justify-content: space-between; align-items: center;
+      position: sticky; top: 0; z-index: 1000; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
 
-    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
     .brand-icon {
-      width: 38px; height: 38px; background: linear-gradient(135deg, var(--accent-magenta), var(--accent-orange));
-      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 0 12px rgba(255, 0, 85, 0.4);
+      width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent-magenta), var(--accent-orange));
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;
     }
-    .brand-title { font-family: var(--font-heading); font-size: 17px; font-weight: 700; color: #fff; }
-    .brand-subtitle { font-size: 11px; color: var(--text-muted); }
+    .brand-title { font-family: var(--font-heading); font-size: 15px; font-weight: 700; color: #fff; line-height: 1.2; }
+    .brand-subtitle { font-size: 10.5px; color: var(--text-muted); }
 
-    .mode-selector {
-      display: flex; gap: 6px; background: #070b14; padding: 4px; border-radius: 8px; border: 1px solid var(--border-color);
+    /* VIEW TABS / GERENCIADOR DE JANELAS (Estilo React Dashboard) */
+    .view-switcher-desktop {
+      display: flex; gap: 4px; background: #070b14; padding: 3px; border-radius: 8px; border: 1px solid var(--border-color);
     }
-    .btn-mode {
-      background: transparent; color: var(--text-muted); border: none; padding: 6px 14px; border-radius: 6px;
-      font-size: 11.5px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+    .tab-btn {
+      background: transparent; color: var(--text-muted); border: none; padding: 6px 12px; border-radius: 6px;
+      font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;
     }
-    .btn-mode.active {
+    .tab-btn.active {
       background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
     }
-    .btn-mode.active-forecast {
-      background: linear-gradient(135deg, #ff0055, #e11d48); color: #fff; box-shadow: 0 0 10px rgba(255, 0, 85, 0.5);
-    }
-    .btn-mode.active-history {
-      background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+
+    /* BARRA DE AVANÇO DA SIMULAÇÃO (RESPONSIVA) */
+    .control-bar {
+      background: #0b1222; border-bottom: 1px solid var(--border-color); padding: 8px 16px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
     }
 
-    /* Barra Superior de Animação */
-    .time-bar-container {
-      background: #0b1222;
-      border-bottom: 1px solid var(--border-color);
-      padding: 8px 20px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      flex-shrink: 0;
-    }
-
-    .btn-play {
+    .btn-action {
       background: linear-gradient(135deg, var(--accent-magenta), #e11d48);
-      color: #fff; font-weight: 800; border: none; padding: 8px 16px; border-radius: 6px;
-      cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;
-      transition: all 0.2s; box-shadow: 0 0 12px rgba(255, 0, 85, 0.4);
+      color: #fff; font-weight: 800; border: none; padding: 7px 14px; border-radius: 6px;
+      cursor: pointer; font-size: 11.5px; display: flex; align-items: center; gap: 6px; transition: all 0.2s;
     }
-    .btn-play:hover { filter: brightness(1.2); }
-
-    .btn-reset {
-      background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border-color);
-      padding: 8px 12px; border-radius: 6px; font-weight: 600; font-size: 11.5px; cursor: pointer;
+    .btn-action:hover { filter: brightness(1.2); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--border-color);
+      padding: 7px 12px; border-radius: 6px; font-weight: 600; font-size: 11px; cursor: pointer;
     }
 
-    .time-slider-wrapper { flex: 1; display: flex; flex-direction: column; gap: 3px; }
-    .time-slider-header { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; }
-    .time-badge { color: var(--accent-cyan); font-family: monospace; font-size: 13.5px; font-weight: 700; }
+    .slider-container { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 2px; }
+    .slider-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; }
+    .time-badge { color: var(--accent-cyan); font-family: monospace; font-size: 12.5px; font-weight: 700; }
 
-    /* Layout Geral */
-    .app-body {
+    /* MODO OPERACIONAL (SIMULAÇÃO / PREVISÃO / REPLAY) */
+    .mode-pills-row {
+      display: flex; gap: 6px; padding: 6px 16px; background: #080d1a; border-bottom: 1px solid var(--border-color); overflow-x: auto;
+    }
+    .pill-btn {
+      background: transparent; color: var(--text-muted); border: 1px solid var(--border-color);
+      padding: 4px 10px; border-radius: 16px; font-size: 10.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    }
+    .pill-btn.active-sim { background: rgba(59, 130, 246, 0.25); border-color: var(--accent-blue); color: #60a5fa; }
+    .pill-btn.active-fore { background: rgba(255, 0, 85, 0.25); border-color: var(--accent-magenta); color: #ff0055; }
+    .pill-btn.active-rep { background: rgba(245, 158, 11, 0.25); border-color: var(--accent-orange); color: #fbbf24; }
+
+    /* CONTAINER PRINCIPAL DAS JANELAS */
+    .workspace-container {
       padding: 12px; display: flex; flex-direction: column; gap: 14px; flex: 1;
     }
 
-    /* SEÇÃO SUPERIOR: PAINEL ESQUERDO + MAPA AMPLO */
-    .top-section-grid {
-      display: grid;
-      grid-template-columns: 290px 1fr;
-      gap: 12px;
-      height: 420px;
+    /* SEÇÕES DE JANELAS */
+    .view-section { display: flex; flex-direction: column; gap: 12px; }
+
+    /* JANELA 1: MAPA & BARRAGENS */
+    .map-barragens-grid {
+      display: grid; grid-template-columns: 290px 1fr; gap: 12px; height: 420px;
+    }
+    @media (max-width: 900px) {
+      .map-barragens-grid { grid-template-columns: 1fr; height: auto; }
+      .map-container { height: 350px !important; }
     }
 
-    .sidebar-card {
+    .window-card {
       background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
-      padding: 10px; display: flex; flex-direction: column; gap: 7px; overflow-y: auto;
+      padding: 12px; display: flex; flex-direction: column; gap: 8px; position: relative;
+    }
+    .window-header {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--border-color); padding-bottom: 6px;
+    }
+    .window-title {
+      font-family: var(--font-heading); font-size: 12px; font-weight: 700;
+      color: var(--accent-cyan); display: flex; align-items: center; gap: 6px;
+    }
+    .window-tools { display: flex; gap: 4px; }
+    .tool-btn {
+      background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border-color);
+      border-radius: 4px; padding: 2px 6px; font-size: 9.5px; cursor: pointer;
     }
 
-    .section-title {
-      font-family: var(--font-heading); font-size: 11.5px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.6px; color: var(--accent-cyan); display: flex; align-items: center; justify-content: space-between;
-      border-bottom: 1px solid var(--border-color); padding-bottom: 4px;
+    .map-container {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
+      height: 100%; position: relative; overflow: hidden;
     }
+    #map { width: 100%; height: 100%; }
 
-    .quick-actions-row { display: flex; gap: 5px; }
-    .btn-quick {
-      flex: 1; padding: 4px; border-radius: 4px; font-size: 9.5px; font-weight: 700; cursor: pointer;
-      border: 1px solid var(--border-color); transition: all 0.2s;
-    }
-    .btn-quick-close { background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: var(--accent-red); }
-    .btn-quick-open { background: rgba(16, 185, 129, 0.2); color: #34d399; border-color: var(--accent-green); }
-
-    .dam-card {
+    /* CONTROLES DE BARRAGEM */
+    .dam-box {
       background: #090e1a; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 8px;
       display: flex; flex-direction: column; gap: 3px; font-size: 10px;
     }
-    .dam-title { font-weight: 700; color: #fff; display: flex; justify-content: space-between; }
     .gates-row { display: flex; gap: 3px; flex-wrap: wrap; }
     .gate-btn {
       background: #172238; color: #94a3b8; border: 1px solid var(--border-color);
-      padding: 2px 5px; border-radius: 4px; font-size: 9px; font-weight: 700; cursor: pointer;
+      padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; cursor: pointer;
     }
     .gate-btn.open { background: rgba(16, 185, 129, 0.25); border-color: var(--accent-green); color: #34d399; }
     .gate-btn.closed { background: rgba(239, 68, 68, 0.25); border-color: var(--accent-red); color: #f87171; }
 
-    /* Painel do Mapa (Centro Ampliado) */
-    .map-container {
-      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
-      position: relative; overflow: hidden; height: 100%;
-    }
-    #map { width: 100%; height: 100%; }
-
-    /* SEÇÃO INTERMEDIÁRIA: 4 GRÁFICOS DEDICADOS DE MONITORAMENTO */
+    /* SEÇÃO 2: 4 GRÁFICOS DEDICADOS (GRID RESPONSIVO) */
     .four-hydrographs-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
     }
+    @media (max-width: 1100px) { .four-hydrographs-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px) { .four-hydrographs-grid { grid-template-columns: 1fr; } }
 
     .hydro-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      position: relative;
-      overflow: hidden;
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
+      padding: 10px; display: flex; flex-direction: column; gap: 5px; position: relative;
     }
-    .hydro-card::before {
-      content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px;
-    }
+    .hydro-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px; }
     .hydro-card.card-riosul::before { background: #3b82f6; }
     .hydro-card.card-blumenau::before { background: #00f0ff; }
     .hydro-card.card-brusque::before { background: #f59e0b; }
     .hydro-card.card-itajai::before { background: #ef4444; }
 
-    .hydro-card-header {
-      display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;
-    }
-    .hydro-city-name { font-family: var(--font-heading); font-size: 12px; font-weight: 700; color: #fff; }
-    .hydro-peak-badge { font-family: monospace; font-size: 10.5px; color: var(--accent-cyan); font-weight: 700; }
-    .hydro-current-flow { font-family: monospace; font-size: 11px; color: #fff; font-weight: 600; display: flex; justify-content: space-between; }
+    .hydro-plot-box { height: 180px; width: 100%; }
 
-    .hydro-plot-box { height: 185px; width: 100%; }
-
-    /* SEÇÃO INFERIOR: 10 JANELAS DE STATUS DOS TOPOS DOS HIDROGRAMAS POR RIO */
-    .bottom-status-section {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      background: #090e1a;
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 14px 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    }
-
-    .bottom-status-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 8px;
-    }
-    .bottom-status-title {
-      font-family: var(--font-heading);
-      font-size: 13.5px;
-      font-weight: 700;
-      color: var(--accent-cyan);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    /* Grid das 10 Janelas de Status dos Rios (5 por linha) */
+    /* SEÇÃO 3: 10 JANELAS DE STATUS DOS RIOS (GRID RESPONSIVO 5x2 / 2x5 / 1x10) */
     .status-windows-grid-10 {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 10px;
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
     }
+    @media (max-width: 1200px) { .status-windows-grid-10 { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 800px) { .status-windows-grid-10 { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 500px) { .status-windows-grid-10 { grid-template-columns: 1fr; } }
 
-    .topo-window-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 10px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-size: 10.5px;
-      border-left: 4.5px solid #3b82f6;
-      transition: all 0.2s ease-in-out;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    .topo-card {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
+      padding: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 10px;
+      border-left: 4.5px solid #3b82f6; transition: all 0.2s;
     }
-    .topo-window-card:hover {
-      background: var(--bg-card-hover);
-      border-color: rgba(0, 240, 255, 0.4);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 14px rgba(0, 240, 255, 0.15);
-    }
-
-    .topo-window-card.w-acu { border-left-color: #ff0055; }
-    .topo-window-card.w-oeste { border-left-color: #3b82f6; }
-    .topo-window-card.w-mirim-doce { border-left-color: #0ea5e9; }
-    .topo-window-card.w-sul { border-left-color: #00f0ff; }
-    .topo-window-card.w-perimbo { border-left-color: #06b6d4; }
-    .topo-window-card.w-trombudo { border-left-color: #14b8a6; }
-    .topo-window-card.w-norte { border-left-color: #a855f7; }
-    .topo-window-card.w-benedito { border-left-color: #10b981; }
-    .topo-window-card.w-mirim { border-left-color: #f59e0b; }
-    .topo-window-card.w-luis { border-left-color: #ec4899; }
-
-    .win-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-family: var(--font-heading);
-      font-weight: 700;
-      color: #fff;
-      font-size: 11.5px;
-    }
+    .topo-card:hover { transform: translateY(-2px); border-color: rgba(0, 240, 255, 0.4); }
 
     .topo-badge {
-      font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.3px;
+      font-size: 8.5px; font-weight: 800; padding: 2px 6px; border-radius: 12px; text-transform: uppercase;
     }
     .badge-subida { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.4); }
-    .badge-topo { background: rgba(255, 0, 85, 0.25); color: #ff0055; border: 1px solid #ff0055; animation: pulseGlow 1.2s infinite; }
+    .badge-topo { background: rgba(255, 0, 85, 0.25); color: #ff0055; border: 1px solid #ff0055; }
     .badge-recessao { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4); }
     .badge-escoou { background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); }
 
-    .win-loc-box {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      background: rgba(0, 240, 255, 0.04);
-      border: 1px solid rgba(0, 240, 255, 0.12);
-      border-radius: 6px;
-      padding: 5px 7px;
+    /* BOTTOM NAVIGATION BAR PARA DISPOSITIVOS MÓVEIS (CELULAR) */
+    .mobile-bottom-nav {
+      display: none; position: fixed; bottom: 0; left: 0; width: 100%;
+      background: #091022; border-top: 1px solid var(--border-color);
+      padding: 6px 4px; z-index: 2000; justify-content: space-around;
+      box-shadow: 0 -4px 15px rgba(0,0,0,0.6);
     }
-    .win-loc-label {
-      font-size: 8.5px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      font-weight: 600;
-    }
-    .win-loc {
-      color: #00f0ff;
-      font-weight: 700;
-      font-size: 10.5px;
-      line-height: 1.25;
+    @media (max-width: 768px) {
+      .mobile-bottom-nav { display: flex; }
+      .view-switcher-desktop { display: none; }
+      body { padding-bottom: 65px; }
     }
 
-    .win-flow-box {
-      background: #070b14;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 5px 7px;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      font-size: 9.5px;
+    .nav-item {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      background: transparent; border: none; color: var(--text-muted); font-size: 9.5px; font-weight: 600;
+      cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: all 0.2s;
     }
-    .win-flow-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .win-flow-val {
-      font-family: monospace;
-      font-size: 11.5px;
-      font-weight: 700;
-    }
+    .nav-item.active { color: var(--accent-cyan); font-weight: 800; }
+    .nav-icon { font-size: 16px; }
 
-    @keyframes pulseGlow {
-      0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.9); }
-      70% { transform: scale(1.6); opacity: 0.3; box-shadow: 0 0 0 14px rgba(255, 0, 85, 0); }
-      100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(255, 0, 85, 0); }
+    /* FILTROS E BUSCA DE RIOS */
+    .filter-bar {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 4px;
     }
-    .pulsing-peak-icon {
-      background: #ff0055; width: 14px; height: 14px; border-radius: 50%;
-      border: 2px solid #ffffff; animation: pulseGlow 1.2s infinite;
+    .search-input {
+      background: #070b14; border: 1px solid var(--border-color); border-radius: 6px;
+      color: #fff; padding: 5px 10px; font-size: 11px; flex: 1; max-width: 300px;
     }
-
-    .select-event-box {
-      background: #090e1a; border: 1px solid var(--border-color); color: #fff; padding: 4px 6px;
-      border-radius: 4px; font-size: 10.5px; font-weight: 600; width: 100%;
+    .btn-filter-tag {
+      background: #111a2e; color: var(--text-muted); border: 1px solid var(--border-color);
+      border-radius: 6px; padding: 4px 8px; font-size: 10px; font-weight: 700; cursor: pointer;
     }
+    .btn-filter-tag.active { background: #2563eb; color: #fff; border-color: #3b82f6; }
   </style>
 </head>
 <body>
 
+  <!-- HEADER COM IDENTIFICAÇÃO E TROCA DE JANELA -->
   <header>
     <div class="brand">
       <div class="brand-icon">🌊</div>
       <div>
-        <div class="brand-title">Sistema de Previsão Operacional de Cheias & Simulação: Vale do Itajaí</div>
-        <div class="brand-subtitle">Previsão Contínua com Chuva Real • Replay Histórico 1983-2023 • Topologia Fluvial com Perimbó, Trombudo e Mirim Doce</div>
+        <div class="brand-title">Sistema Vale do Itajaí</div>
+        <div class="brand-subtitle">Previsão Operacional & Hidrodinâmica</div>
       </div>
     </div>
 
-    <!-- Seletor de Modo Operacional -->
-    <div class="mode-selector">
-      <button id="btn-mode-sim" class="btn-mode active" onclick="switchMode('sim')">🎮 Modo Simulação</button>
-      <button id="btn-mode-forecast" class="btn-mode" onclick="switchMode('forecast')">📡 Previsão Operacional</button>
-      <button id="btn-mode-replay" class="btn-mode" onclick="switchMode('replay')">📜 Replay Histórico</button>
+    <!-- Seletor de Janelas Desktop & Links Rápidos -->
+    <div class="view-switcher-desktop">
+      <button class="tab-btn active" id="dtab-all" onclick="setMainView('all')">🔲 Painel Completo</button>
+      <button class="tab-btn" id="dtab-map" onclick="setMainView('map')">🗺️ Mapa</button>
+      <button class="tab-btn" id="dtab-plots" onclick="setMainView('plots')">📈 Hidrogramas</button>
+      <button class="tab-btn" id="dtab-status" onclick="setMainView('status')">📍 10 Rios</button>
+      <button class="tab-btn" id="dtab-dams" onclick="setMainView('dams')">🏰 Barragens</button>
+      <a href="secoes_transversais_vales.html" class="tab-btn" style="text-decoration:none; background:#2563eb; color:#fff;">📏 Seções Transversais</a>
+      <a href="mancha_inundacao_2d.html" class="tab-btn" style="text-decoration:none; background:#0891b2; color:#fff;">🗺️ Manchas 2D</a>
     </div>
   </header>
 
-  <!-- Barra Superior de Controle e Avanço da Simulação -->
-  <div class="time-bar-container">
-    <button id="btn-play" class="btn-play" onclick="togglePlay()">▶️ ANIMAR CHEIA</button>
-    <button class="btn-reset" onclick="resetTime()">⏪ RESETAR (0h)</button>
+  <!-- BARRA DE CONTROLE TEMPORAL DA ENCHENTE -->
+  <div class="control-bar">
+    <button id="btn-play" class="btn-action" onclick="togglePlay()">▶️ ANIMAR</button>
+    <button class="btn-secondary" onclick="resetTime()">⏪ RESET (0h)</button>
     
-    <div class="time-slider-wrapper">
-      <div class="time-slider-header">
-        <span id="lbl-time-desc">Avanço Temporal da Onda de Cheia em Toda a Bacia:</span>
-        <span class="time-badge" id="lbl-current-hour">Hora: 00:00h (t = 0 hrs)</span>
+    <div class="slider-container">
+      <div class="slider-header">
+        <span>Avanço Temporal da Cheia:</span>
+        <span class="time-badge" id="lbl-current-hour">00:00h (t = 0 hrs)</span>
       </div>
       <input type="range" id="slider-time" min="0" max="48" step="1" value="0" oninput="onTimeChange()">
     </div>
   </div>
 
-  <div class="app-body">
+  <!-- SELETOR DE MODO OPERACIONAL -->
+  <div class="mode-pills-row">
+    <button id="pill-sim" class="pill-btn active-sim" onclick="switchMode('sim')">🎮 Modo Simulação</button>
+    <button id="pill-fore" class="pill-btn" onclick="switchMode('forecast')">📡 Previsão Operacional</button>
+    <button id="pill-rep" class="pill-btn" onclick="switchMode('replay')">📜 Replay Histórico (1983-2023)</button>
+  </div>
+
+  <!-- WORKSPACE DE JANELAS -->
+  <div class="workspace-container">
     
-    <!-- SEÇÃO SUPERIOR: PAINEL ESQUERDO (BARRAGENS/CONTROLES) + MAPA AMPLO AO CENTRO -->
-    <div class="top-section-grid">
-      
-      <!-- 1. PAINEL ESQUERDO DINÂMICO CONFORME O MODO -->
-      <div class="sidebar-card" id="left-sidebar">
+    <!-- SEÇÃO 1: MAPA & PAINEL DE CONTROLE DE BARRAGENS -->
+    <div class="view-section" id="section-map">
+      <div class="map-barragens-grid">
         
-        <!-- Conteúdo do Modo Simulação: Barragens -->
-        <div id="panel-sim-content">
-          <div class="section-title">
-            <span>🏰 Barragens</span>
-            <span style="font-size:9px; color:var(--accent-cyan);">Clique nas Comportas</span>
-          </div>
-
-          <div class="quick-actions-row">
-            <button class="btn-quick btn-quick-close" onclick="setAllDams(false)">🔴 FECHAR</button>
-            <button class="btn-quick btn-quick-open" onclick="setAllDams(true)">🟢 ABRIR</button>
-          </div>
-
-          <!-- Barragem Oeste -->
-          <div class="dam-card">
-            <div class="dam-title">
-              <span>1. Oeste (Taió - 83 hm³)</span>
-              <span id="txt-oeste" style="color:var(--accent-green);">7 Aberta</span>
-            </div>
-            <div class="gates-row" id="gates-oeste"></div>
-            <div style="font-size:8.5px; color:var(--text-muted); display:flex; justify-content:space-between;">
-              <span>Montante de: <b>Rio do Sul</b></span>
-              <span id="fill-oeste" style="color:var(--accent-cyan);">0%</span>
+        <!-- Painel Lateral Esquerdo: Barragens ou Cenários -->
+        <div class="window-card" id="window-sidebar">
+          <div class="window-header">
+            <span class="window-title" id="sidebar-title">🏰 Barragens de Contenção</span>
+            <div class="window-tools">
+              <button class="tool-btn" onclick="setAllDams(true)">Abrir Todas</button>
+              <button class="tool-btn" onclick="setAllDams(false)">Fechar</button>
             </div>
           </div>
 
-          <!-- Barragem Sul -->
-          <div class="dam-card">
-            <div class="dam-title">
-              <span>2. Sul (Ituporanga - 93.5 hm³)</span>
-              <span id="txt-sul" style="color:var(--accent-green);">5 Aberta</span>
+          <!-- Modo Simulação: Comportas -->
+          <div id="panel-sim-content" style="display:flex; flex-direction:column; gap:6px;">
+            <!-- Barragem Oeste -->
+            <div class="dam-box">
+              <div style="font-weight:700; color:#fff; display:flex; justify-content:space-between;">
+                <span>1. Oeste (Taió - 83 hm³)</span>
+                <span id="txt-oeste" style="color:var(--accent-green);">7 Aberta</span>
+              </div>
+              <div class="gates-row" id="gates-oeste"></div>
+              <div style="font-size:8.5px; color:var(--text-muted); display:flex; justify-content:space-between;">
+                <span>Montante de: <b>Rio do Sul</b></span>
+                <span id="fill-oeste" style="color:var(--accent-cyan);">0%</span>
+              </div>
             </div>
-            <div class="gates-row" id="gates-sul"></div>
-            <div style="font-size:8.5px; color:var(--text-muted); display:flex; justify-content:space-between;">
-              <span>Montante de: <b>Rio do Sul</b></span>
-              <span id="fill-sul" style="color:var(--accent-cyan);">0%</span>
+
+            <!-- Barragem Sul -->
+            <div class="dam-box">
+              <div style="font-weight:700; color:#fff; display:flex; justify-content:space-between;">
+                <span>2. Sul (Ituporanga - 93.5 hm³)</span>
+                <span id="txt-sul" style="color:var(--accent-green);">5 Aberta</span>
+              </div>
+              <div class="gates-row" id="gates-sul"></div>
+              <div style="font-size:8.5px; color:var(--text-muted); display:flex; justify-content:space-between;">
+                <span>Montante de: <b>Rio do Sul</b></span>
+                <span id="fill-sul" style="color:var(--accent-cyan);">0%</span>
+              </div>
+            </div>
+
+            <!-- Barragem Norte -->
+            <div class="dam-box">
+              <div style="font-weight:700; color:#fff; display:flex; justify-content:space-between;">
+                <span>3. Norte (Boiteux - 357 hm³)</span>
+                <span id="txt-norte" style="color:var(--accent-green);">2 Aberta</span>
+              </div>
+              <div class="gates-row" id="gates-norte"></div>
+              <div style="font-size:8.5px; color:var(--text-muted); display:flex; justify-content:space-between;">
+                <span>Jusante de R. Sul: <b>Blumenau</b></span>
+                <span id="fill-norte" style="color:var(--accent-cyan);">0%</span>
+              </div>
             </div>
           </div>
 
-          <!-- Barragem Norte -->
-          <div class="dam-card">
-            <div class="dam-title">
-              <span>3. Norte (Boiteux - 357 hm³)</span>
-              <span id="txt-norte" style="color:var(--accent-green);">2 Aberta</span>
+          <!-- Modo Previsão -->
+          <div id="panel-forecast-content" style="display:none; flex-direction:column; gap:6px; font-size:9.5px;">
+            <div style="background:#090e1a; padding:6px; border-radius:6px; border:1px solid var(--border-color);">
+              <b style="color:#fff;">🌧️ Chuva Observada (0 a 24h):</b>
+              <div style="color:var(--accent-cyan); margin-top:2px;">Alto Vale: 110 mm | Médio: 125 mm | Mirim: 95 mm</div>
             </div>
-            <div class="gates-row" id="gates-norte"></div>
-            <div style="font-size:8.5px; color:var(--text-muted); display:flex; justify-content:space-between;">
-              <span>Jusante de R. Sul: <b>Blumenau</b></span>
-              <span id="fill-norte" style="color:var(--accent-cyan);">0%</span>
+            <div style="background:#090e1a; padding:6px; border-radius:6px; border:1px solid var(--border-color);">
+              <b style="color:#fff;">🔮 Previsão Futura (+24h):</b>
+              <div style="color:#ff0055; margin-top:2px;">Cenário Médio: 45 mm (Faixa: 25 a 70 mm)</div>
+            </div>
+          </div>
+
+          <!-- Modo Replay -->
+          <div id="panel-replay-content" style="display:none; flex-direction:column; gap:6px;">
+            <select id="sel-historical-event" style="background:#090e1a; border:1px solid var(--border-color); color:#fff; padding:6px; border-radius:4px; font-size:11px;" onchange="onSelectHistoricalEvent()">
+              <option value="1983">🌊 Cheia Secular de 1983 (15.34m Blumenau)</option>
+              <option value="2008">🌧️ Desastre de Novembro de 2008 (Baixo Vale)</option>
+              <option value="2011">🌊 Grande Cheia de Setembro de 2011</option>
+              <option value="2023" selected>🔄 Cheia Multievento de Outubro/2023</option>
+            </select>
+            <div id="event-description-box" style="background:#090e1a; padding:6px; border-radius:6px; font-size:9px; color:var(--text-muted); line-height:1.35; border:1px solid var(--border-color);">
+              Cheia multievento com controle coordenado das 3 barragens.
             </div>
           </div>
         </div>
 
-        <!-- Conteúdo do Modo Previsão Operacional -->
-        <div id="panel-forecast-content" style="display:none; flex-direction:column; gap:6px;">
-          <div class="section-title">
-            <span>📡 Previsão Operacional</span>
-            <span style="color:var(--accent-magenta); font-weight:800;">AGORA: 24h</span>
-          </div>
-
-          <div style="background:#090e1a; border:1px solid var(--border-color); border-radius:6px; padding:6px; font-size:9.5px;">
-            <b style="color:#fff;">🌧️ Chuva Observada (0 a 24h):</b>
-            <div style="color:var(--accent-cyan); margin-top:2px;">Alto Vale: 110 mm | Médio: 125 mm | Mirim: 95 mm</div>
-            <div style="margin-top:4px; font-size:8.5px; color:var(--text-muted);">Condição de Solo: <b style="color:#fbbf24;">AMC II (Normal)</b></div>
-          </div>
-
-          <div style="background:#090e1a; border:1px solid var(--border-color); border-radius:6px; padding:6px; font-size:9.5px;">
-            <b style="color:#fff;">🔮 Previsão Futura (+24h):</b>
-            <div style="color:#ff0055; margin-top:2px;">Cenário Médio: 45 mm (Faixa: 25 a 70 mm)</div>
-            <div style="margin-top:4px; font-size:8.5px; color:var(--text-muted);">Horizonte de Previsão: <b>+24 Horas</b></div>
-          </div>
-
-          <div class="section-title" style="margin-top:2px;">
-            <span>🛡️ Assimilação Telemétrica</span>
-          </div>
-          <div style="font-size:8.5px; color:var(--text-muted); line-height:1.4;">
-            Comparação contínua com postos ANA (83700000 Blumenau e 83800000 Brusque). Ajuste em tempo real no ponto [AGORA].
-          </div>
+        <!-- Janela do Mapa Georreferenciado dos 10 Rios -->
+        <div class="map-container">
+          <div id="map"></div>
         </div>
 
-        <!-- Conteúdo do Modo Replay Histórico -->
-        <div id="panel-replay-content" style="display:none; flex-direction:column; gap:6px;">
-          <div class="section-title">
-            <span>📜 Selecionar Evento</span>
-          </div>
-          
-          <select id="sel-historical-event" class="select-event-box" onchange="onSelectHistoricalEvent()">
-            <option value="1983">🌊 Cheia Secular de 1983 (15.34m Blumenau)</option>
-            <option value="2008">🌧️ Desastre de Novembro de 2008 (Baixo Vale)</option>
-            <option value="2011">🌊 Grande Cheia de Setembro de 2011</option>
-            <option value="2023" selected>🔄 Cheia Multievento de Outubro/2023</option>
-          </select>
-
-          <div id="event-description-box" style="background:#090e1a; border:1px solid var(--border-color); border-radius:6px; padding:6px; font-size:9px; color:var(--text-muted); line-height:1.35;">
-            Cheia de múltiplos pulsos com operação estratégica simultânea das 3 barragens de contenção.
-          </div>
-        </div>
-
-        <div class="section-title" style="margin-top:auto;">
-          <span>🎨 Cores na Calha</span>
-        </div>
-        <div style="font-size:8.5px; color:var(--text-muted); line-height:1.4;">
-          🔵 &lt; 100 m³/s | 🔷 100-400 m³/s<br>
-          🟡 400-1200 m³/s | 🔴 1200-2500 m³/s<br>
-          🟣 &gt; 2500 m³/s (Emergência)
-        </div>
       </div>
-
-      <!-- 2. PAINEL CENTRAL: MAPA INTERATIVO DOS RIOS (AMPLIADO) -->
-      <div class="map-container">
-        <div id="map"></div>
-      </div>
-
     </div>
 
-    <!-- SEÇÃO INTERMEDIÁRIA: OS 4 GRÁFICOS DEDICADOS DE MONITORAMENTO -->
-    <div class="four-hydrographs-grid">
-      
-      <!-- Ponto 1: Confluência de Rio do Sul -->
-      <div class="hydro-card card-riosul">
-        <div class="hydro-card-header">
-          <span class="hydro-city-name" id="name-plot-1">1. Confluência de Rio do Sul (Alto Vale)</span>
-          <span class="hydro-peak-badge" id="peak-badge-riosul">Pico: --</span>
-        </div>
-        <div class="hydro-current-flow">
-          <span style="color:var(--text-muted);" id="lbl-flow-1">Vazão Atual:</span>
-          <span id="flow-riosul" style="color:#3b82f6;">30.0 m³/s</span>
-        </div>
-        <div id="plot-riosul" class="hydro-plot-box"></div>
+    <!-- SEÇÃO 2: 4 HIDROGRAMAS DEDICADOS -->
+    <div class="view-section" id="section-plots">
+      <div class="window-header">
+        <span class="window-title">📈 Monitoramento Fluviométrico (Vazão & Cota de Régua)</span>
       </div>
 
-      <!-- Ponto 2: Blumenau -->
-      <div class="hydro-card card-blumenau">
-        <div class="hydro-card-header">
-          <span class="hydro-city-name" id="name-plot-2">2. Blumenau (Médio Vale)</span>
-          <span class="hydro-peak-badge" id="peak-badge-blumenau">Pico: --</span>
+      <div class="four-hydrographs-grid">
+        <!-- 1. Rio do Sul -->
+        <div class="hydro-card card-riosul">
+          <div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700;">
+            <span>1. Rio do Sul (Alto Vale)</span>
+            <span id="peak-badge-riosul" style="color:var(--accent-cyan); font-family:monospace;">Pico: --</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:10.5px; color:#fff; font-family:monospace;">
+            <span>Vazão: <b id="flow-riosul" style="color:#3b82f6;">30.0 m³/s</b></span>
+            <span>Cota: <b id="stage-riosul" style="color:#60a5fa;">1.50 m</b></span>
+          </div>
+          <div id="plot-riosul" class="hydro-plot-box"></div>
         </div>
-        <div class="hydro-current-flow">
-          <span style="color:var(--text-muted);" id="lbl-flow-2">Vazão Atual:</span>
-          <span id="flow-blumenau" style="color:#00f0ff;">60.0 m³/s</span>
-        </div>
-        <div id="plot-blumenau" class="hydro-plot-box"></div>
-      </div>
 
-      <!-- Ponto 3: Brusque -->
-      <div class="hydro-card card-brusque">
-        <div class="hydro-card-header">
-          <span class="hydro-city-name" id="name-plot-3">3. Brusque (Itajaí-Mirim)</span>
-          <span class="hydro-peak-badge" id="peak-badge-brusque">Pico: --</span>
+        <!-- 2. Blumenau -->
+        <div class="hydro-card card-blumenau">
+          <div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700;">
+            <span>2. Blumenau (Médio Vale)</span>
+            <span id="peak-badge-blumenau" style="color:var(--accent-cyan); font-family:monospace;">Pico: --</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:10.5px; color:#fff; font-family:monospace;">
+            <span>Vazão: <b id="flow-blumenau" style="color:#00f0ff;">60.0 m³/s</b></span>
+            <span>Cota: <b id="stage-blumenau" style="color:#38bdf8;">1.20 m</b></span>
+          </div>
+          <div id="plot-blumenau" class="hydro-plot-box"></div>
         </div>
-        <div class="hydro-current-flow">
-          <span style="color:var(--text-muted);" id="lbl-flow-3">Vazão Atual:</span>
-          <span id="flow-brusque" style="color:#f59e0b;">18.0 m³/s</span>
-        </div>
-        <div id="plot-brusque" class="hydro-plot-box"></div>
-      </div>
 
-      <!-- Ponto 4: Itajaí -->
-      <div class="hydro-card card-itajai">
-        <div class="hydro-card-header">
-          <span class="hydro-city-name" id="name-plot-4">4. Itajaí (Foz & Canal Oficial)</span>
-          <span class="hydro-peak-badge" id="peak-badge-itajai">Pico: --</span>
+        <!-- 3. Brusque -->
+        <div class="hydro-card card-brusque">
+          <div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700;">
+            <span>3. Brusque (Itajaí-Mirim)</span>
+            <span id="peak-badge-brusque" style="color:var(--accent-cyan); font-family:monospace;">Pico: --</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:10.5px; color:#fff; font-family:monospace;">
+            <span>Vazão: <b id="flow-brusque" style="color:#f59e0b;">18.0 m³/s</b></span>
+            <span>Cota: <b id="stage-brusque" style="color:#fbbf24;">1.00 m</b></span>
+          </div>
+          <div id="plot-brusque" class="hydro-plot-box"></div>
         </div>
-        <div class="hydro-current-flow">
-          <span style="color:var(--text-muted);" id="lbl-flow-4">Vazão Atual:</span>
-          <span id="flow-itajai" style="color:#ef4444;">105.0 m³/s</span>
-        </div>
-        <div id="plot-itajai" class="hydro-plot-box"></div>
-      </div>
 
+        <!-- 4. Itajaí -->
+        <div class="hydro-card card-itajai">
+          <div style="display:flex; justify-content:space-between; font-size:11.5px; font-weight:700;">
+            <span>4. Itajaí (Foz & Canal)</span>
+            <span id="peak-badge-itajai" style="color:var(--accent-cyan); font-family:monospace;">Pico: --</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:10.5px; color:#fff; font-family:monospace;">
+            <span>Vazão: <b id="flow-itajai" style="color:#ef4444;">105.0 m³/s</b></span>
+            <span>Cota: <b id="stage-itajai" style="color:#f87171;">0.80 m</b></span>
+          </div>
+          <div id="plot-itajai" class="hydro-plot-box"></div>
+        </div>
+      </div>
     </div>
 
-    <!-- SEÇÃO INFERIOR: 10 JANELAS DE STATUS DOS TOPOS DOS HIDROGRAMAS POR RIO -->
-    <div class="bottom-status-section">
-      <div class="bottom-status-header">
-        <div class="bottom-status-title">
-          <span>📍 Status em Tempo Real: Onde Estão os Topos dos Hidrogramas em Todos os 10 Rios da Bacia</span>
-        </div>
-        <div style="font-family:monospace; font-size:12px; color:var(--accent-cyan); font-weight:700;" id="txt-status-time">
-          t = 00:00h
-        </div>
+    <!-- SEÇÃO 3: 10 JANELAS DE STATUS DOS RIOS -->
+    <div class="view-section" id="section-status">
+      <div class="window-header">
+        <span class="window-title">📍 Status dos Topos dos Hidrogramas em Todos os 10 Rios</span>
+        <div style="font-family:monospace; font-size:11px; color:var(--accent-cyan);" id="txt-status-time">t = 00:00h</div>
       </div>
 
-      <!-- Grid 5x2 Amplo e Organizado para os 10 Rios -->
-      <div class="status-windows-grid-10">
+      <!-- Filtros Rápidos de Sub-bacia -->
+      <div class="filter-bar">
+        <input type="text" class="search-input" id="search-river" placeholder="🔍 Filtrar rio ou cidade..." oninput="filterRiverCards()">
+        <button class="btn-filter-tag active" onclick="setRiverFilter('all', this)">Todos (10)</button>
+        <button class="btn-filter-tag" onclick="setRiverFilter('alto', this)">Alto Vale</button>
+        <button class="btn-filter-tag" onclick="setRiverFilter('medio', this)">Médio Vale</button>
+        <button class="btn-filter-tag" onclick="setRiverFilter('baixo', this)">Baixo Vale / Foz</button>
+      </div>
+
+      <!-- Grid das 10 Janelas -->
+      <div class="status-windows-grid-10" id="grid-10-rivers">
         
-        <!-- Janela 1: Rio Itajaí-Açu -->
-        <div class="topo-window-card w-acu">
-          <div class="win-header">
+        <!-- 1. Açú -->
+        <div class="topo-card" data-region="medio" style="border-left-color:#ff0055;">
+          <div style="display:flex; justify-content:space-between; font-weight:700; color:#fff;">
             <span>🌊 1. Itajaí-Açu (Tronco)</span>
             <span class="topo-badge" id="badge-acu">SUBIDA</span>
           </div>
-          <div class="win-loc-box">
-            <span class="win-loc-label">Crista / Topo:</span>
-            <span class="win-loc" id="loc-acu">📍 Em formação no Alto Vale</span>
+          <div style="background:rgba(0,240,255,0.04); padding:4px 6px; border-radius:4px;">
+            <div style="font-size:8px; color:var(--text-muted);">CRISTA / TOPO:</div>
+            <div id="loc-acu" style="color:#00f0ff; font-weight:700;">📍 Confluência Rio do Sul</div>
           </div>
-          <div class="win-flow-box">
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Vazão no Topo:</span>
-              <span class="win-flow-val" id="q-topo-acu" style="color:#ff0055;">--</span>
-            </div>
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Extensão:</span>
-              <span id="km-acu" style="color:#fff; font-family:monospace;">km 0 / 153 km</span>
-            </div>
+          <div style="display:flex; justify-content:space-between; font-family:monospace;">
+            <span>Pico: <b id="q-topo-acu" style="color:#ff0055;">--</b></span>
+            <span id="km-acu" style="color:#fff;">km 0 / 153</span>
           </div>
         </div>
 
-        <!-- Janela 2: Rio Itajaí do Oeste -->
-        <div class="topo-window-card w-oeste">
-          <div class="win-header">
+        <!-- 2. Oeste -->
+        <div class="topo-card" data-region="alto" style="border-left-color:#3b82f6;">
+          <div style="display:flex; justify-content:space-between; font-weight:700; color:#fff;">
             <span>💧 2. Itajaí do Oeste</span>
             <span class="topo-badge" id="badge-oeste">SUBIDA</span>
           </div>
-          <div class="win-loc-box">
-            <span class="win-loc-label">Crista / Topo:</span>
-            <span class="win-loc" id="loc-oeste">📍 Barragem Oeste (Taió)</span>
+          <div style="background:rgba(0,240,255,0.04); padding:4px 6px; border-radius:4px;">
+            <div style="font-size:8px; color:var(--text-muted);">CRISTA / TOPO:</div>
+            <div id="loc-oeste" style="color:#00f0ff; font-weight:700;">📍 Taió</div>
           </div>
-          <div class="win-flow-box">
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Vazão no Topo:</span>
-              <span class="win-flow-val" id="q-topo-oeste" style="color:#3b82f6;">--</span>
-            </div>
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Extensão:</span>
-              <span id="km-oeste" style="color:#fff; font-family:monospace;">km 0 / 65 km</span>
-            </div>
+          <div style="display:flex; justify-content:space-between; font-family:monospace;">
+            <span>Pico: <b id="q-topo-oeste" style="color:#3b82f6;">--</b></span>
+            <span id="km-oeste" style="color:#fff;">km 0 / 65</span>
           </div>
         </div>
 
-        <!-- Janela 3: Rio Mirim Doce -->
-        <div class="topo-window-card w-mirim-doce">
-          <div class="win-header">
+        <!-- 3. Mirim Doce -->
+        <div class="topo-card" data-region="alto" style="border-left-color:#0ea5e9;">
+          <div style="display:flex; justify-content:space-between; font-weight:700; color:#fff;">
             <span>💧 3. Mirim Doce</span>
             <span class="topo-badge" id="badge-mirim-doce">SUBIDA</span>
           </div>
-          <div class="win-loc-box">
-            <span class="win-loc-label">Crista / Topo:</span>
-            <span class="win-loc" id="loc-mirim-doce">📍 Mirim Doce / Taió</span>
+          <div style="background:rgba(0,240,255,0.04); padding:4px 6px; border-radius:4px;">
+            <div style="font-size:8px; color:var(--text-muted);">CRISTA / TOPO:</div>
+            <div id="loc-mirim-doce" style="color:#00f0ff; font-weight:700;">📍 Mirim Doce</div>
           </div>
-          <div class="win-flow-box">
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Vazão no Topo:</span>
-              <span class="win-flow-val" id="q-topo-mirim-doce" style="color:#0ea5e9;">--</span>
-            </div>
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Deságue:</span>
-              <span id="km-mirim-doce" style="color:#fff; font-family:monospace;">km 0 / 42 (no Oeste)</span>
-            </div>
+          <div style="display:flex; justify-content:space-between; font-family:monospace;">
+            <span>Pico: <b id="q-topo-mirim-doce" style="color:#0ea5e9;">--</b></span>
+            <span id="km-mirim-doce" style="color:#fff;">km 0 / 42 (Oest)</span>
           </div>
         </div>
 
-        <!-- Janela 4: Rio Itajaí do Sul -->
-        <div class="topo-window-card w-sul">
-          <div class="win-header">
+        <!-- 4. Sul -->
+        <div class="topo-card" data-region="alto" style="border-left-color:#00f0ff;">
+          <div style="display:flex; justify-content:space-between; font-weight:700; color:#fff;">
             <span>💧 4. Itajaí do Sul</span>
             <span class="topo-badge" id="badge-sul">SUBIDA</span>
           </div>
-          <div class="win-loc-box">
-            <span class="win-loc-label">Crista / Topo:</span>
-            <span class="win-loc" id="loc-sul">📍 Barragem Sul (Ituporanga)</span>
+          <div style="background:rgba(0,240,255,0.04); padding:4px 6px; border-radius:4px;">
+            <div style="font-size:8px; color:var(--text-muted);">CRISTA / TOPO:</div>
+            <div id="loc-sul" style="color:#00f0ff; font-weight:700;">📍 Ituporanga</div>
           </div>
-          <div class="win-flow-box">
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Vazão no Topo:</span>
-              <span class="win-flow-val" id="q-topo-sul" style="color:#00f0ff;">--</span>
-            </div>
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Extensão:</span>
-              <span id="km-sul" style="color:#fff; font-family:monospace;">km 0 / 50 km</span>
-            </div>
+          <div style="display:flex; justify-content:space-between; font-family:monospace;">
+            <span>Pico: <b id="q-topo-sul" style="color:#00f0ff;">--</b></span>
+            <span id="km-sul" style="color:#fff;">km 0 / 50</span>
           </div>
         </div>
 
-        <!-- Janela 5: Rio Perimbó -->
-        <div class="topo-window-card w-perimbo">
-          <div class="win-header">
+        <!-- 5. Perimbó -->
+        <div class="topo-card" data-region="alto" style="border-left-color:#06b6d4;">
+          <div style="display:flex; justify-content:space-between; font-weight:700; color:#fff;">
             <span>💧 5. Rio Perimbó</span>
             <span class="topo-badge" id="badge-perimbo">SUBIDA</span>
           </div>
-          <div class="win-loc-box">
-            <span class="win-loc-label">Crista / Topo:</span>
-            <span class="win-loc" id="loc-perimbo">📍 Petrolândia / Ituporanga</span>
+          <div style="background:rgba(0,240,255,0.04); padding:4px 6px; border-radius:4px;">
+            <div style="font-size:8px; color:var(--text-muted);">CRISTA / TOPO:</div>
+            <div id="loc-perimbo" style="color:#00f0ff; font-weight:700;">📍 Petrolândia</div>
           </div>
-          <div class="win-flow-box">
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Vazão no Topo:</span>
-              <span class="win-flow-val" id="q-topo-perimbo" style="color:#06b6d4;">--</span>
-            </div>
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Deságue:</span>
-              <span id="km-perimbo" style="color:#fff; font-family:monospace;">km 0 / 38 (no Sul)</span>
-            </div>
+          <div style="display:flex; justify-content:space-between; font-family:monospace;">
+            <span>Pico: <b id="q-topo-perimbo" style="color:#06b6d4;">--</b></span>
+            <span id="km-perimbo" style="color:#fff;">km 0 / 38 (Sul)</span>
           </div>
         </div>
 
-        <!-- Janela 6: Rio Trombudo -->
-        <div class="topo-window-card w-trombudo">
-          <div class="win-header">
+        <!-- 6. Trombudo -->
+        <div class="topo-card" data-region="alto" style="border-left-color:#14b8a6;">
+          <div style="display:flex; justify-content:space-between; font-weight:700; color:#fff;">
             <span>💧 6. Rio Trombudo</span>
             <span class="topo-badge" id="badge-trombudo">SUBIDA</span>
           </div>
-          <div class="win-loc-box">
-            <span class="win-loc-label">Crista / Topo:</span>
-            <span class="win-loc" id="loc-trombudo">📍 Trombudo Central / Agronômica</span>
+          <div style="background:rgba(0,240,255,0.04); padding:4px 6px; border-radius:4px;">
+            <div style="font-size:8px; color:var(--text-muted);">CRISTA / TOPO:</div>
+            <div id="loc-trombudo" style="color:#00f0ff; font-weight:700;">📍 Trombudo Central</div>
           </div>
-          <div class="win-flow-box">
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Vazão no Topo:</span>
-              <span class="win-flow-val" id="q-topo-trombudo" style="color:#14b8a6;">--</span>
-            </div>
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Deságue:</span>
-              <span id="km-trombudo" style="color:#fff; font-family:monospace;">km 0 / 48 (no Sul)</span>
-            </div>
+          <div style="display:flex; justify-content:space-between; font-family:monospace;">
+            <span>Pico: <b id="q-topo-trombudo" style="color:#14b8a6;">--</b></span>
+            <span id="km-trombudo" style="color:#fff;">km 0 / 48 (Sul)</span>
           </div>
         </div>
 
-        <!-- Janela 7: Rio Hercílio / Norte -->
-        <div class="topo-window-card w-norte">
-          <div class="win-header">
+        <!-- 7. Hercílio -->
+        <div class="topo-card" data-region="medio" style="border-left-color:#a855f7;">
+          <div style="display:flex; justify-content:space-between; font-weight:700; color:#fff;">
             <span>💧 7. Rio Hercílio</span>
             <span class="topo-badge" id="badge-norte">SUBIDA</span>
           </div>
-          <div class="win-loc-box">
-            <span class="win-loc-label">Crista / Topo:</span>
-            <span class="win-loc" id="loc-norte">📍 Barragem Norte (Boiteux)</span>
+          <div style="background:rgba(0,240,255,0.04); padding:4px 6px; border-radius:4px;">
+            <div style="font-size:8px; color:var(--text-muted);">CRISTA / TOPO:</div>
+            <div id="loc-norte" style="color:#00f0ff; font-weight:700;">📍 Boiteux / Ibirama</div>
           </div>
-          <div class="win-flow-box">
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Vazão no Topo:</span>
-              <span class="win-flow-val" id="q-topo-norte" style="color:#a855f7;">--</span>
-            </div>
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Extensão:</span>
-              <span id="km-norte" style="color:#fff; font-family:monospace;">km 0 / 85 km</span>
-            </div>
+          <div style="display:flex; justify-content:space-between; font-family:monospace;">
+            <span>Pico: <b id="q-topo-norte" style="color:#a855f7;">--</b></span>
+            <span id="km-norte" style="color:#fff;">km 0 / 85</span>
           </div>
         </div>
 
-        <!-- Janela 8: Rio Benedito -->
-        <div class="topo-window-card w-benedito">
-          <div class="win-header">
+        <!-- 8. Benedito -->
+        <div class="topo-card" data-region="medio" style="border-left-color:#10b981;">
+          <div style="display:flex; justify-content:space-between; font-weight:700; color:#fff;">
             <span>💧 8. Rio Benedito</span>
             <span class="topo-badge" id="badge-benedito">SUBIDA</span>
           </div>
-          <div class="win-loc-box">
-            <span class="win-loc-label">Crista / Topo:</span>
-            <span class="win-loc" id="loc-benedito">📍 Alto Benedito / Timbó</span>
+          <div style="background:rgba(0,240,255,0.04); padding:4px 6px; border-radius:4px;">
+            <div style="font-size:8px; color:var(--text-muted);">CRISTA / TOPO:</div>
+            <div id="loc-benedito" style="color:#00f0ff; font-weight:700;">📍 Timbó</div>
           </div>
-          <div class="win-flow-box">
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Vazão no Topo:</span>
-              <span class="win-flow-val" id="q-topo-benedito" style="color:#10b981;">--</span>
-            </div>
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Extensão:</span>
-              <span id="km-benedito" style="color:#fff; font-family:monospace;">km 0 / 35 km</span>
-            </div>
+          <div style="display:flex; justify-content:space-between; font-family:monospace;">
+            <span>Pico: <b id="q-topo-benedito" style="color:#10b981;">--</b></span>
+            <span id="km-benedito" style="color:#fff;">km 0 / 35</span>
           </div>
         </div>
 
-        <!-- Janela 9: Rio Itajaí-Mirim -->
-        <div class="topo-window-card w-mirim">
-          <div class="win-header">
+        <!-- 9. Mirim -->
+        <div class="topo-card" data-region="baixo" style="border-left-color:#f59e0b;">
+          <div style="display:flex; justify-content:space-between; font-weight:700; color:#fff;">
             <span>💧 9. Itajaí-Mirim</span>
             <span class="topo-badge" id="badge-mirim">SUBIDA</span>
           </div>
-          <div class="win-loc-box">
-            <span class="win-loc-label">Crista / Topo:</span>
-            <span class="win-loc" id="loc-mirim">📍 Vidal Ramos / Brusque</span>
+          <div style="background:rgba(0,240,255,0.04); padding:4px 6px; border-radius:4px;">
+            <div style="font-size:8px; color:var(--text-muted);">CRISTA / TOPO:</div>
+            <div id="loc-mirim" style="color:#00f0ff; font-weight:700;">📍 Brusque</div>
           </div>
-          <div class="win-flow-box">
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Vazão no Topo:</span>
-              <span class="win-flow-val" id="q-topo-mirim" style="color:#f59e0b;">--</span>
-            </div>
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Extensão:</span>
-              <span id="km-mirim" style="color:#fff; font-family:monospace;">km 0 / 110 km</span>
-            </div>
+          <div style="display:flex; justify-content:space-between; font-family:monospace;">
+            <span>Pico: <b id="q-topo-mirim" style="color:#f59e0b;">--</b></span>
+            <span id="km-mirim" style="color:#fff;">km 0 / 110</span>
           </div>
         </div>
 
-        <!-- Janela 10: Rio Luís Alves -->
-        <div class="topo-window-card w-luis">
-          <div class="win-header">
+        <!-- 10. Luís Alves -->
+        <div class="topo-card" data-region="baixo" style="border-left-color:#ec4899;">
+          <div style="display:flex; justify-content:space-between; font-weight:700; color:#fff;">
             <span>💧 10. Luís Alves</span>
             <span class="topo-badge" id="badge-luis">SUBIDA</span>
           </div>
-          <div class="win-loc-box">
-            <span class="win-loc-label">Crista / Topo:</span>
-            <span class="win-loc" id="loc-luis">📍 Montante Luís Alves</span>
+          <div style="background:rgba(0,240,255,0.04); padding:4px 6px; border-radius:4px;">
+            <div style="font-size:8px; color:var(--text-muted);">CRISTA / TOPO:</div>
+            <div id="loc-luis" style="color:#00f0ff; font-weight:700;">📍 Luís Alves</div>
           </div>
-          <div class="win-flow-box">
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Vazão no Topo:</span>
-              <span class="win-flow-val" id="q-topo-luis" style="color:#ec4899;">--</span>
-            </div>
-            <div class="win-flow-row">
-              <span style="color:var(--text-muted);">Extensão:</span>
-              <span id="km-luis" style="color:#fff; font-family:monospace;">km 0 / 25 km</span>
-            </div>
+          <div style="display:flex; justify-content:space-between; font-family:monospace;">
+            <span>Pico: <b id="q-topo-luis" style="color:#ec4899;">--</b></span>
+            <span id="km-luis" style="color:#fff;">km 0 / 25</span>
           </div>
         </div>
 
@@ -780,14 +617,38 @@
 
   </div>
 
+  <!-- BARRA INFERIOR MOBILE DE NAVEGAÇÃO (CELULAR) -->
+  <nav class="mobile-bottom-nav">
+    <button class="nav-item active" id="mnav-all" onclick="setMainView('all')">
+      <span class="nav-icon">🔲</span>
+      <span>Tudo</span>
+    </button>
+    <button class="nav-item" id="mnav-map" onclick="setMainView('map')">
+      <span class="nav-icon">🗺️</span>
+      <span>Mapa</span>
+    </button>
+    <button class="nav-item" id="mnav-plots" onclick="setMainView('plots')">
+      <span class="nav-icon">📈</span>
+      <span>Gráficos</span>
+    </button>
+    <button class="nav-item" id="mnav-status" onclick="setMainView('status')">
+      <span class="nav-icon">📍</span>
+      <span>10 Rios</span>
+    </button>
+    <button class="nav-item" id="mnav-dams" onclick="setMainView('dams')">
+      <span class="nav-icon">🏰</span>
+      <span>Represas</span>
+    </button>
+  </nav>
+
   <script>
-    let currentMode = 'sim'; // 'sim' | 'forecast' | 'replay'
+    let currentMode = 'sim';
+    let currentMainView = 'all';
     let realData = null;
     let map = null;
     let isPlaying = false;
     let playInterval = null;
 
-    // Estado das Comportas
     const gatesState = {
       oeste: [true, true, true, true, true, true, true],
       sul: [true, true, true, true, true],
@@ -796,7 +657,6 @@
 
     let riverSegments = {};
     let riverSpatialQ = {};
-
     let markerPeakAcu = null;
     let markerPeakMirim = null;
 
@@ -809,23 +669,91 @@
       obs_rio_sul: [], obs_blumenau: [], obs_brusque: [], obs_itajai: []
     };
 
+    function setMainView(viewKey) {
+      currentMainView = viewKey;
+
+      // Atualizar botões Desktop
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      const dBtn = document.getElementById(`dtab-${viewKey}`);
+      if (dBtn) dBtn.classList.add('active');
+
+      // Atualizar botões Mobile
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      const mBtn = document.getElementById(`mnav-${viewKey}`);
+      if (mBtn) mBtn.classList.add('active');
+
+      const sMap = document.getElementById('section-map');
+      const sPlots = document.getElementById('section-plots');
+      const sStatus = document.getElementById('section-status');
+      const wSide = document.getElementById('window-sidebar');
+
+      if (viewKey === 'all') {
+        sMap.style.display = 'flex';
+        sPlots.style.display = 'flex';
+        sStatus.style.display = 'flex';
+        wSide.style.display = 'flex';
+      } else if (viewKey === 'map') {
+        sMap.style.display = 'flex';
+        sPlots.style.display = 'none';
+        sStatus.style.display = 'none';
+        wSide.style.display = 'none';
+      } else if (viewKey === 'plots') {
+        sMap.style.display = 'none';
+        sPlots.style.display = 'flex';
+        sStatus.style.display = 'none';
+      } else if (viewKey === 'status') {
+        sMap.style.display = 'none';
+        sPlots.style.display = 'none';
+        sStatus.style.display = 'flex';
+      } else if (viewKey === 'dams') {
+        sMap.style.display = 'flex';
+        sPlots.style.display = 'none';
+        sStatus.style.display = 'none';
+        wSide.style.display = 'flex';
+      }
+
+      setTimeout(() => {
+        if (map) map.invalidateSize();
+        const t = parseInt(document.getElementById('slider-time').value || 0);
+        renderFourHydrographPlots(t);
+      }, 100);
+    }
+
+    function setRiverFilter(region, btnElem) {
+      document.querySelectorAll('.btn-filter-tag').forEach(b => b.classList.remove('active'));
+      if (btnElem) btnElem.classList.add('active');
+
+      const cards = document.querySelectorAll('#grid-10-rivers .topo-card');
+      cards.forEach(c => {
+        if (region === 'all' || c.getAttribute('data-region') === region) {
+          c.style.display = 'flex';
+        } else {
+          c.style.display = 'none';
+        }
+      });
+    }
+
+    function filterRiverCards() {
+      const q = document.getElementById('search-river').value.toLowerCase();
+      const cards = document.querySelectorAll('#grid-10-rivers .topo-card');
+      cards.forEach(c => {
+        const text = c.innerText.toLowerCase();
+        c.style.display = text.includes(q) ? 'flex' : 'none';
+      });
+    }
+
     function switchMode(newMode) {
       currentMode = newMode;
-      
-      document.getElementById('btn-mode-sim').className = 'btn-mode' + (newMode === 'sim' ? ' active' : '');
-      document.getElementById('btn-mode-forecast').className = 'btn-mode' + (newMode === 'forecast' ? ' active-forecast' : '');
-      document.getElementById('btn-mode-replay').className = 'btn-mode' + (newMode === 'replay' ? ' active-history' : '');
+      document.getElementById('pill-sim').className = 'pill-btn' + (newMode === 'sim' ? ' active-sim' : '');
+      document.getElementById('pill-fore').className = 'pill-btn' + (newMode === 'forecast' ? ' active-fore' : '');
+      document.getElementById('pill-rep').className = 'pill-btn' + (newMode === 'replay' ? ' active-rep' : '');
 
       document.getElementById('panel-sim-content').style.display = newMode === 'sim' ? 'flex' : 'none';
       document.getElementById('panel-forecast-content').style.display = newMode === 'forecast' ? 'flex' : 'none';
       document.getElementById('panel-replay-content').style.display = newMode === 'replay' ? 'flex' : 'none';
 
       const slider = document.getElementById('slider-time');
-      if (newMode === 'forecast') {
-        slider.value = 24; // Posição [ AGORA ]
-      } else {
-        slider.value = 0;
-      }
+      slider.value = (newMode === 'forecast') ? 24 : 0;
 
       computeAllBasinSpatialMatrices();
       updateTimeDisplay();
@@ -852,7 +780,6 @@
         const btn = document.createElement('button');
         btn.className = `gate-btn ${isOpen ? 'open' : 'closed'}`;
         btn.innerText = `C${idx+1}`;
-        btn.title = `Comporta ${idx+1}: ${isOpen ? 'Aberta' : 'Fechada'}`;
         btn.onclick = () => toggleGate('oeste', idx);
         cO.appendChild(btn);
       });
@@ -863,7 +790,6 @@
         const btn = document.createElement('button');
         btn.className = `gate-btn ${isOpen ? 'open' : 'closed'}`;
         btn.innerText = `C${idx+1}`;
-        btn.title = `Comporta ${idx+1}: ${isOpen ? 'Aberta' : 'Fechada'}`;
         btn.onclick = () => toggleGate('sul', idx);
         cS.appendChild(btn);
       });
@@ -874,7 +800,6 @@
         const btn = document.createElement('button');
         btn.className = `gate-btn ${isOpen ? 'open' : 'closed'}`;
         btn.innerText = `Setor ${idx+1}`;
-        btn.title = `Comporta Setor ${idx+1}: ${isOpen ? 'Aberta' : 'Fechada'}`;
         btn.onclick = () => toggleGate('norte', idx);
         cN.appendChild(btn);
       });
@@ -894,13 +819,13 @@
       const sOpen = gatesState.sul.filter(v => v).length;
       const nOpen = gatesState.norte.filter(v => v).length;
 
-      document.getElementById('txt-oeste').innerText = `${oOpen} Aberta / ${7-oOpen} Fec`;
-      document.getElementById('txt-sul').innerText = `${sOpen} Aberta / ${5-sOpen} Fec`;
-      document.getElementById('txt-norte').innerText = `${nOpen} Aberta / ${2-nOpen} Fec`;
+      document.getElementById('txt-oeste').innerText = `${oOpen} Ab / ${7-oOpen} Fec`;
+      document.getElementById('txt-sul').innerText = `${sOpen} Ab / ${5-sOpen} Fec`;
+      document.getElementById('txt-norte').innerText = `${nOpen} Ab / ${2-nOpen} Fec`;
 
-      document.getElementById('fill-oeste').innerText = `Retenção: ${Math.round(((7-oOpen)/7)*100)}%`;
-      document.getElementById('fill-sul').innerText = `Retenção: ${Math.round(((5-sOpen)/5)*100)}%`;
-      document.getElementById('fill-norte').innerText = `Retenção: ${Math.round(((2-nOpen)/2)*100)}%`;
+      document.getElementById('fill-oeste').innerText = `Ret: ${Math.round(((7-oOpen)/7)*100)}%`;
+      document.getElementById('fill-sul').innerText = `Ret: ${Math.round(((5-sOpen)/5)*100)}%`;
+      document.getElementById('fill-norte').innerText = `Ret: ${Math.round(((2-nOpen)/2)*100)}%`;
     }
 
     function routeMuskStable(inflow, k, x, dt = 1.0) {
@@ -930,75 +855,56 @@
       const sVal = (25400.0 / cn) - 254.0;
       const iaVal = 0.2 * sVal;
       
-      const pAcum = new Array(25).fill(0);
-      for (let h = 1; h <= 24; h++) {
-        const frac = h <= 12 ? 0.5 * Math.pow(h/12.0, 2) : 1.0 - 0.5 * Math.pow((24.0 - h)/12.0, 2);
-        pAcum[h] = pTotalMm * frac;
-      }
-      const peAcum = pAcum.map(p => p > iaVal ? Math.pow(p - iaVal, 2) / (p - iaVal + sVal) : 0.0);
-      const peInc = [];
-      for (let i = 1; i <= 24; i++) peInc.push(Math.max(0, peAcum[i] - peAcum[i-1]));
-
-      const tp = Math.max(1.0, 0.5 * 1.0 + 0.6 * tcHours);
-      const qp = (2.08 * areaKm2 * 1.0) / tp;
-
-      const tDim = [0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.4, 2.8, 3.2, 4.0, 5.0];
-      const qDim = [0, 0.1, 0.31, 0.66, 0.93, 1.0, 0.93, 0.78, 0.56, 0.39, 0.28, 0.147, 0.077, 0.04, 0.015, 0];
-
-      function interp1d(xTarget) {
-        if (xTarget <= 0) return 0;
-        if (xTarget >= 5.0) return 0;
-        for (let k = 0; k < tDim.length - 1; k++) {
-          if (xTarget >= tDim[k] && xTarget <= tDim[k+1]) {
-            const frac = (xTarget - tDim[k]) / (tDim[k+1] - tDim[k]);
-            return qDim[k] + frac * (qDim[k+1] - qDim[k]);
-          }
-        }
-        return 0;
-      }
-
-      const u = [];
-      for (let h = 0; h <= 48; h++) {
-        u.push(interp1d(h / tp) * qp);
-      }
+      const pEff = pTotalMm > iaVal ? Math.pow(pTotalMm - iaVal, 2) / (pTotalMm - iaVal + sVal) : 0.0;
+      const cEff = 0.50; // Coeficiente de escoamento real com atenuação de várzea
       
-      const volTeorico = areaKm2 * 1e6 * 0.001;
-      const volCalc = u.reduce((a, b) => a + b, 0) * 3600.0;
-      if (volCalc > 0) {
-        const factor = volTeorico / volCalc;
-        for (let i = 0; i < u.length; i++) u[i] *= factor;
+      const tp = 0.75 * tcHours + 11.0;
+      const u = [];
+      for (let t = 0; t <= 48; t++) {
+        const val = Math.pow(t / tp, 2.8) * Math.exp(-t / (tp * 0.44));
+        u.push(val);
       }
-
-      const qOut = new Array(49).fill(baseQ);
-      for (let t = 0; t < 49; t++) {
-        for (let k = 0; k <= t && k < peInc.length; k++) {
-          if ((t - k) < u.length) {
-            qOut[t] += peInc[k] * u[t - k];
-          }
-        }
-        qOut[t] = Math.round(qOut[t] * 10) / 10;
+      const sumU = u.reduce((a, b) => a + b, 0);
+      const volDirectM3 = (pEff * cEff) * 0.001 * (areaKm2 * 1e6);
+      
+      const qOut = [];
+      for (let t = 0; t <= 48; t++) {
+        const qVal = baseQ + ((u[t] / sumU) * volDirectM3) / 3600.0;
+        qOut.push(Math.round(qVal * 10) / 10);
       }
       return qOut;
     }
 
-    function applyDamHydraulic(qIn, totalGates, openGates, capHm3, baseQ = 15.0) {
+    function applyDamHydraulic(qIn, totalGates, openGates, capHm3, baseQ = 15.0, crestFraction = 0.82) {
       if (openGates === totalGates) return qIn.slice();
-      
-      const factor = openGates / parseFloat(totalGates);
-      const maxCapM3 = capHm3 * 1e6;
+      const nT = qIn.length;
       const dtSec = 3600.0;
-      
+      const maxCapM3 = capHm3 * 1e6;
+      const crestCapM3 = maxCapM3 * crestFraction;
+      const gateRatio = openGates / parseFloat(totalGates);
+
       const qOut = [];
       let storage = 0.0;
-      
-      for (let t = 0; t < qIn.length; t++) {
-        if (storage < maxCapM3) {
-          const qAllowed = baseQ + factor * Math.max(0.0, qIn[t] - baseQ);
-          qOut.push(Math.round(qAllowed * 10) / 10);
-          storage += Math.max(0.0, qIn[t] - qAllowed) * dtSec;
-        } else {
-          qOut.push(qIn[t]);
+
+      for (let t = 0; t < nT; t++) {
+        const inflow = qIn[t];
+
+        // 1. Vazão de fundo pelas comportas (controlada)
+        const qBottom = baseQ + gateRatio * Math.max(0.0, inflow - baseQ);
+
+        // 2. Vazão pelo vertedouro (quando ultrapassa soleira)
+        let qSpill = 0.0;
+        if (storage > crestCapM3) {
+          const excessVol = storage - crestCapM3;
+          const fillRatio = Math.min(1.0, excessVol / (maxCapM3 - crestCapM3 + 1.0));
+          qSpill = Math.min(inflow, Math.pow(fillRatio, 1.4) * inflow);
         }
+
+        let outflow = qBottom + qSpill;
+        outflow = Math.min(inflow * 1.02, Math.max(baseQ, outflow));
+
+        storage = Math.max(0.0, Math.min(maxCapM3 * 1.15, storage + (inflow - outflow) * dtSec));
+        qOut.push(Math.round(outflow * 10) / 10);
       }
       return qOut;
     }
@@ -1008,42 +914,66 @@
       const sOpen = gatesState.sul.filter(v => v).length;
       const nOpen = gatesState.norte.filter(v => v).length;
 
-      let pScale = 1.0;
-      let amcCN = 0;
+      let pSub = {
+        oeste: 120, mirim_doce: 120, sul: 130, perimbo: 125, trombudo: 125,
+        norte: 140, benedito: 110, mirim: 115, luis_alves: 105
+      };
+      let amcCN = {
+        oeste: 0, mirim_doce: 0, sul: 0, perimbo: 0, trombudo: 0,
+        norte: 0, benedito: 0, mirim: 0, luis_alves: 0
+      };
+
+      // Calibração dos Eventos Históricos (Defesa Civil Blumenau & CEOPS)
       if (currentMode === 'replay') {
         const ev = document.getElementById('sel-historical-event').value;
-        if (ev === '1983') { pScale = 1.60; amcCN = 5; }
-        else if (ev === '2008') { pScale = 1.30; amcCN = 6; }
-        else if (ev === '2011') { pScale = 1.15; amcCN = 2; }
-        else { pScale = 1.05; amcCN = 3; }
+        const descBox = document.getElementById('event-description-box');
+        if (ev === '1983') {
+          // Cheia Secular de 1983: 15.34m Blumenau / 13.0m Rio do Sul
+          pSub = { oeste: 230, mirim_doce: 220, sul: 225, perimbo: 215, trombudo: 220, norte: 245, benedito: 195, mirim: 180, luis_alves: 150 };
+          amcCN = { oeste: 2, mirim_doce: 2, sul: 2, perimbo: 2, trombudo: 2, norte: 2, benedito: 2, mirim: 1, luis_alves: 1 };
+          if (descBox) descBox.innerHTML = "<b style='color:#ff0055;'>🌊 Cheia Secular de 1983 (09/07/1983):</b> Cota oficial Defesa Civil: <b>15.34m (5.850 m³/s)</b> em Blumenau e <b>13.00m (3.900 m³/s)</b> em Rio do Sul. Chuva generalizada em toda a bacia.";
+        } else if (ev === '2008') {
+          // Desastre de 2008: 11.52m Blumenau / 8.50m Brusque / 4.20m Rio do Sul (sem enchente)
+          pSub = { oeste: 45, mirim_doce: 40, sul: 50, perimbo: 45, trombudo: 45, norte: 140, benedito: 270, mirim: 320, luis_alves: 420 };
+          amcCN = { oeste: -8, mirim_doce: -8, sul: -8, perimbo: -8, trombudo: -8, norte: 2, benedito: 5, mirim: 7, luis_alves: 8 };
+          if (descBox) descBox.innerHTML = "<b style='color:#fbbf24;'>🌧️ Desastre de Nov/2008 (24/11/2008):</b> Cota oficial Defesa Civil: <b>11.52m (3.970 m³/s)</b> em Blumenau e recorde em Brusque de <b>8.50m (1.650 m³/s)</b>. <b>O Alto Vale (Rio do Sul) teve cota normal de 4.20m e não inundou.</b>";
+        } else if (ev === '2011') {
+          // Grande Cheia de 2011: 12.60m Blumenau / 11.0m Rio do Sul
+          pSub = { oeste: 195, mirim_doce: 185, sul: 180, perimbo: 175, trombudo: 180, norte: 210, benedito: 160, mirim: 145, luis_alves: 130 };
+          amcCN = { oeste: 0, mirim_doce: 0, sul: 0, perimbo: 0, trombudo: 0, norte: 0, benedito: 0, mirim: 0, luis_alves: 0 };
+          if (descBox) descBox.innerHTML = "<b style='color:#00f0ff;'>🌊 Grande Cheia de 2011 (09/09/2011):</b> Cota oficial Defesa Civil: <b>12.60m (4.480 m³/s)</b> em Blumenau e <b>11.00m (2.800 m³/s)</b> em Rio do Sul.";
+        } else {
+          // Cheia Multievento de 2023: 10.76m Blumenau / 8.50m Rio do Sul
+          pSub = { oeste: 165, mirim_doce: 160, sul: 155, perimbo: 150, trombudo: 155, norte: 175, benedito: 140, mirim: 150, luis_alves: 130 };
+          amcCN = { oeste: -1, mirim_doce: -1, sul: -1, perimbo: -1, trombudo: -1, norte: -1, benedito: -1, mirim: -1, luis_alves: -1 };
+          if (descBox) descBox.innerHTML = "<b style='color:#10b981;'>🔄 Cheia de Out/2023 (12/10/2023):</b> Cota oficial Defesa Civil: <b>10.76m (3.616 m³/s)</b> em Blumenau e <b>8.50m (1.950 m³/s)</b> em Rio do Sul com controle de barragens.";
+        }
       }
 
-      // 1. Geração de Vazão Bruta por Sub-bacia (incluindo Perimbó, Trombudo e Mirim Doce)
-      const qOesteRaw = genSCSHydro(2480, 14.2, 120 * pScale, Math.min(95, 76 + amcCN), 12);
-      const qMirimDoceRaw = genSCSHydro(640, 7.8, 120 * pScale, Math.min(95, 77 + amcCN), 7);
-      const qSulRaw = genSCSHydro(1250, 12.8, 130 * pScale, Math.min(95, 78 + amcCN), 7);
-      const qPerimboRaw = genSCSHydro(510, 6.8, 125 * pScale, Math.min(95, 78 + amcCN), 5);
-      const qTrombudoRaw = genSCSHydro(720, 8.5, 125 * pScale, Math.min(95, 78 + amcCN), 8);
-      const qNorteRaw = genSCSHydro(3450, 16.5, 140 * pScale, Math.min(95, 75 + amcCN), 20);
-      const qBeneditoRaw = genSCSHydro(1540, 10.4, 110 * pScale, Math.min(95, 77 + amcCN), 10);
-      const qMirimRaw = genSCSHydro(1680, 11.8, 115 * pScale, Math.min(95, 79 + amcCN), 18);
-      const qLuisAlvesRaw = genSCSHydro(580, 7.2, 105 * pScale, Math.min(95, 78 + amcCN), 8);
+      // 1. Geração de Vazão Bruta
+      const qOesteRaw = genSCSHydro(2480, 15.0, pSub.oeste, Math.min(92, Math.max(50, 74 + amcCN.oeste)), 12);
+      const qMirimDoceRaw = genSCSHydro(640, 8.5, pSub.mirim_doce, Math.min(92, Math.max(50, 75 + amcCN.mirim_doce)), 7);
+      const qSulRaw = genSCSHydro(1250, 13.5, pSub.sul, Math.min(92, Math.max(50, 75 + amcCN.sul)), 7);
+      const qPerimboRaw = genSCSHydro(510, 7.5, pSub.perimbo, Math.min(92, Math.max(50, 75 + amcCN.perimbo)), 5);
+      const qTrombudoRaw = genSCSHydro(720, 9.2, pSub.trombudo, Math.min(92, Math.max(50, 75 + amcCN.trombudo)), 8);
+      const qNorteRaw = genSCSHydro(3450, 17.5, pSub.norte, Math.min(92, Math.max(50, 73 + amcCN.norte)), 20);
+      const qBeneditoRaw = genSCSHydro(1540, 11.2, pSub.benedito, Math.min(92, Math.max(50, 74 + amcCN.benedito)), 10);
+      const qMirimRaw = genSCSHydro(1680, 12.5, pSub.mirim, Math.min(92, Math.max(50, 76 + amcCN.mirim)), 18);
+      const qLuisAlvesRaw = genSCSHydro(580, 7.8, pSub.luis_alves, Math.min(92, Math.max(50, 75 + amcCN.luis_alves)), 8);
 
       // 2. Controle de Represas
       const qOesteIn = applyDamHydraulic(qOesteRaw, 7, oOpen, 83.0, 12.0);
       const qSulIn = applyDamHydraulic(qSulRaw, 5, sOpen, 93.5, 7.0);
       const qNorteIn = applyDamHydraulic(qNorteRaw, 2, nOpen, 357.0, 20.0);
 
-      // 3. Propagação dos Tributários Independentes (Muskingum com tempos físicos reais)
+      // 3. Propagação dos Tributários
       const qOesteBarragemJus = routeMuskStable(qOesteIn, 8.0, 0.20);
       const qMirimDoceJus = routeMuskStable(qMirimDoceRaw, 4.0, 0.20);
-      // Mirim Doce deságua no Oeste a jusante de Taió (km 25):
       const qOesteJus = qOesteBarragemJus.map((v, t) => Math.round((v + qMirimDoceJus[t]) * 10) / 10);
 
       const qSulBarragemJus = routeMuskStable(qSulIn, 6.0, 0.20);
       const qPerimboJus = routeMuskStable(qPerimboRaw, 3.5, 0.20);
       const qTrombudoJus = routeMuskStable(qTrombudoRaw, 5.0, 0.20);
-      // Perimbó e Trombudo deságuam no Rio do Sul:
       const qSulJus = qSulBarragemJus.map((v, t) => Math.round((v + qPerimboJus[t] + qTrombudoJus[t]) * 10) / 10);
 
       const qNorteJus = routeMuskStable(qNorteIn, 10.0, 0.20);
@@ -1051,11 +981,11 @@
       const qMirimJus = routeMuskStable(qMirimRaw, 10.0, 0.25);
       const qLuisAlvesJus = routeMuskStable(qLuisAlvesRaw, 3.0, 0.20);
 
-      // 4. Confluência de Rio do Sul (Oeste + Mirim Doce + Sul + Perimbó + Trombudo)
+      // 4. Confluência de Rio do Sul
       const qRioSul = qOesteJus.map((v, t) => Math.round((v + qSulJus[t]) * 10) / 10);
       basinData.q_rio_sul = qRioSul;
 
-      // 5. Ibirama e Blumenau (Médio Vale)
+      // 5. Ibirama, Indaial e Blumenau
       const qAltoValeEmIbirama = routeMuskStable(qRioSul, 4.0, 0.20);
       const qIbirama = qAltoValeEmIbirama.map((v, t) => Math.round((v + qNorteJus[t]) * 10) / 10);
 
@@ -1065,7 +995,7 @@
       const qIndaialEmBlumenau = routeMuskStable(qIndaial, 3.0, 0.25);
       basinData.q_blumenau = qIndaialEmBlumenau;
 
-      // 6. Brusque (Itajaí-Mirim)
+      // 6. Brusque
       basinData.q_brusque = qMirimJus.slice();
 
       // 7. Itajaí Foz
@@ -1074,7 +1004,7 @@
       const qItajai = qAcuEmItajai.map((v, t) => Math.round((v + qMirimEmItajai[t] + qLuisAlvesJus[t] * 0.7) * 10) / 10);
       basinData.q_itajai = qItajai;
 
-      // Incertezas para o Modo Previsão (Low e High)
+      // Incertezas Previsão
       basinData.low_rio_sul = qRioSul.map((v, t) => t <= 24 ? v : Math.round(v * 0.75));
       basinData.high_rio_sul = qRioSul.map((v, t) => t <= 24 ? v : Math.round(v * 1.30));
       basinData.low_blumenau = basinData.q_blumenau.map((v, t) => t <= 24 ? v : Math.round(v * 0.72));
@@ -1084,21 +1014,33 @@
       basinData.low_itajai = qItajai.map((v, t) => t <= 24 ? v : Math.round(v * 0.75));
       basinData.high_itajai = qItajai.map((v, t) => t <= 24 ? v : Math.round(v * 1.28));
 
-      // Observados para Replay
-      basinData.obs_rio_sul = qRioSul.map(v => Math.round(v * 0.95 + 40));
-      basinData.obs_blumenau = basinData.q_blumenau.map(v => Math.round(v * 0.92 + 80));
-      basinData.obs_brusque = basinData.q_brusque.map(v => Math.round(v * 0.96 + 25));
-      basinData.obs_itajai = qItajai.map(v => Math.round(v * 0.94 + 110));
+      // Observados
+      if (currentMode === 'replay') {
+        const ev = document.getElementById('sel-historical-event').value;
+        if (ev === '2008') {
+          basinData.obs_rio_sul = qRioSul.map(v => Math.round(v * 0.98 + 20));
+          basinData.obs_blumenau = basinData.q_blumenau.map(v => Math.round(v * 0.95 + 80));
+          basinData.obs_brusque = basinData.q_brusque.map(v => Math.round(v * 0.98 + 30));
+          basinData.obs_itajai = qItajai.map(v => Math.round(v * 0.95 + 90));
+        } else {
+          basinData.obs_rio_sul = qRioSul.map(v => Math.round(v * 0.95 + 40));
+          basinData.obs_blumenau = basinData.q_blumenau.map(v => Math.round(v * 0.92 + 80));
+          basinData.obs_brusque = basinData.q_brusque.map(v => Math.round(v * 0.96 + 25));
+          basinData.obs_itajai = qItajai.map(v => Math.round(v * 0.94 + 110));
+        }
+      } else {
+        basinData.obs_rio_sul = qRioSul.map(v => Math.round(v * 0.95 + 40));
+        basinData.obs_blumenau = basinData.q_blumenau.map(v => Math.round(v * 0.92 + 80));
+        basinData.obs_brusque = basinData.q_brusque.map(v => Math.round(v * 0.96 + 25));
+        basinData.obs_itajai = qItajai.map(v => Math.round(v * 0.94 + 110));
+      }
 
-      // Matrizes Espaciais Fluviais Conectadas de Montante a Jusante
       function buildSpatialMatrix(qStart, qEnd, nSteps = 80) {
         const mat = [];
         for (let i = 0; i < nSteps; i++) {
           const frac = i / (nSteps - 1);
           const row = [];
-          for (let t = 0; t < 49; t++) {
-            row.push((1.0 - frac) * qStart[t] + frac * qEnd[t]);
-          }
+          for (let t = 0; t < 49; t++) row.push((1.0 - frac) * qStart[t] + frac * qEnd[t]);
           mat.push(row);
         }
         return mat;
@@ -1115,15 +1057,12 @@
       riverSpatialQ['luis_alves'] = buildSpatialMatrix(qLuisAlvesRaw, qLuisAlvesJus);
       riverSpatialQ['acu'] = buildSpatialMatrix(qRioSul, qItajai);
 
-      // Referência Natural
       if (basinData.nat_rio_sul.length === 0) {
         const qOesteNat = routeMuskStable(qOesteRaw, 8.0, 0.20);
         const qSulNat = routeMuskStable(qSulRaw, 6.0, 0.20);
         const qNorteNat = routeMuskStable(qNorteRaw, 10.0, 0.20);
-
         const qOesteTotalNat = qOesteNat.map((v, t) => v + qMirimDoceJus[t]);
         const qSulTotalNat = qSulNat.map((v, t) => v + qPerimboJus[t] + qTrombudoJus[t]);
-
         basinData.nat_rio_sul = qOesteTotalNat.map((v, t) => Math.round((v + qSulTotalNat[t]) * 10) / 10);
         const qAltoValeNatBlu = routeMuskStable(basinData.nat_rio_sul, 14.0, 0.25);
         basinData.nat_blumenau = qAltoValeNatBlu.map((v, t) => Math.round((v + qNorteNat[t] + qBeneditoJus[t]) * 10) / 10);
@@ -1131,6 +1070,29 @@
         const qAcuNatItajai = routeMuskStable(basinData.nat_blumenau, 8.0, 0.30);
         basinData.nat_itajai = qAcuNatItajai.map((v, t) => Math.round((v + qMirimEmItajai[t] + qLuisAlvesJus[t] * 0.7) * 10) / 10);
       }
+    }
+
+    // Conversões Q -> H (Curva-Chave)
+    function flowToStageBlumenau(q) {
+      if (q <= 0) return 0.5;
+      if (q < 800) return Math.pow(q / 45.0, 1.0 / 1.62);
+      if (q < 2400) return 0.15 + Math.pow(q / 75.0, 1.0 / 1.50);
+      return 0.50 + Math.pow(q / 172.87, 1.0 / 1.306);
+    }
+    function flowToStageRioSul(q) {
+      if (q <= 0) return 0.5;
+      if (q < 350) return 0.20 + Math.pow(q / 22.0, 1.0 / 1.65);
+      if (q < 1200) return 0.30 + Math.pow(q / 45.0, 1.0 / 1.55);
+      return 0.40 + Math.pow(q / 63.56, 1.0 / 1.625);
+    }
+    function flowToStageBrusque(q) {
+      if (q <= 0) return 0.4;
+      if (q < 250) return 0.10 + Math.pow(q / 18.0, 1.0 / 1.60);
+      if (q < 650) return 0.20 + Math.pow(q / 35.0, 1.0 / 1.50);
+      return 0.35 + Math.pow(q / 50.69, 1.0 / 1.660);
+    }
+    function flowToStageItajai(q) {
+      return 0.30 + Math.pow(q / 120.0, 0.45);
     }
 
     function getSegmentColorAndWeight(q) {
@@ -1145,35 +1107,41 @@
       const t = parseInt(document.getElementById('slider-time').value || 0);
       
       if (currentMode === 'forecast') {
-        const tag = t === 24 ? " [ AGORA ]" : (t < 24 ? ` (Passado: -${24-t}h)` : ` (Futuro: +${t-24}h)`);
-        document.getElementById('lbl-current-hour').innerText = `Hora: ${String(t).padStart(2,'0')}:00h (t = ${t}h)${tag}`;
+        const tag = t === 24 ? " [ AGORA ]" : (t < 24 ? ` (-${24-t}h)` : ` (+${t-24}h)`);
+        document.getElementById('lbl-current-hour').innerText = `${String(t).padStart(2,'0')}:00h${tag}`;
         document.getElementById('txt-status-time').innerText = `t = ${String(t).padStart(2,'0')}:00h ${t === 24 ? '[AGORA]' : ''}`;
       } else {
-        document.getElementById('lbl-current-hour').innerText = `Hora: ${String(t).padStart(2,'0')}:00h (t = ${t} hrs)`;
+        document.getElementById('lbl-current-hour').innerText = `${String(t).padStart(2,'0')}:00h (t = ${t}h)`;
         document.getElementById('txt-status-time').innerText = `t = ${String(t).padStart(2,'0')}:00h`;
       }
 
-      // Atualizar Texto de Vazão Atual nos 4 Cards
-      document.getElementById('flow-riosul').innerText = `${basinData.q_rio_sul[t].toFixed(1)} m³/s`;
-      document.getElementById('flow-blumenau').innerText = `${basinData.q_blumenau[t].toFixed(1)} m³/s`;
-      document.getElementById('flow-brusque').innerText = `${basinData.q_brusque[t].toFixed(1)} m³/s`;
-      document.getElementById('flow-itajai').innerText = `${basinData.q_itajai[t].toFixed(1)} m³/s`;
+      const qRS = basinData.q_rio_sul[t];
+      const qBL = basinData.q_blumenau[t];
+      const qBQ = basinData.q_brusque[t];
+      const qIT = basinData.q_itajai[t];
 
-      // Atualizar Badges de Pico Máximo
-      const maxRS = Math.max(...basinData.q_rio_sul);
-      const maxBL = Math.max(...basinData.q_blumenau);
-      const maxBQ = Math.max(...basinData.q_brusque);
-      const maxIT = Math.max(...basinData.q_itajai);
+      document.getElementById('flow-riosul').innerText = `${qRS.toFixed(1)} m³/s`;
+      document.getElementById('stage-riosul').innerText = `${flowToStageRioSul(qRS).toFixed(2)} m`;
 
-      document.getElementById('peak-badge-riosul').innerText = `Pico: ${maxRS.toFixed(0)} m³/s`;
-      document.getElementById('peak-badge-blumenau').innerText = `Pico: ${maxBL.toFixed(0)} m³/s`;
-      document.getElementById('peak-badge-brusque').innerText = `Pico: ${maxBQ.toFixed(0)} m³/s`;
-      document.getElementById('peak-badge-itajai').innerText = `Pico: ${maxIT.toFixed(0)} m³/s`;
+      document.getElementById('flow-blumenau').innerText = `${qBL.toFixed(1)} m³/s`;
+      document.getElementById('stage-blumenau').innerText = `${flowToStageBlumenau(qBL).toFixed(2)} m`;
+
+      document.getElementById('flow-brusque').innerText = `${qBQ.toFixed(1)} m³/s`;
+      document.getElementById('stage-brusque').innerText = `${flowToStageBrusque(qBQ).toFixed(2)} m`;
+
+      document.getElementById('flow-itajai').innerText = `${qIT.toFixed(1)} m³/s`;
+      document.getElementById('stage-itajai').innerText = `${flowToStageItajai(qIT).toFixed(2)} m`;
+
+      document.getElementById('peak-badge-riosul').innerText = `Pico: ${Math.max(...basinData.q_rio_sul).toFixed(0)} m³/s`;
+      document.getElementById('peak-badge-blumenau').innerText = `Pico: ${Math.max(...basinData.q_blumenau).toFixed(0)} m³/s`;
+      document.getElementById('peak-badge-brusque').innerText = `Pico: ${Math.max(...basinData.q_brusque).toFixed(0)} m³/s`;
+      document.getElementById('peak-badge-itajai').innerText = `Pico: ${Math.max(...basinData.q_itajai).toFixed(0)} m³/s`;
 
       updateToposWindows(t);
       updateMapSegmentStyles(t);
       updatePeakMarkers(t);
       renderFourHydrographPlots(t);
+      update2DFloodPlainLayer();
     }
 
     function updateToposWindows(t) {
@@ -1187,158 +1155,40 @@
         }
 
         const distKm = Math.round((maxIdx / 79.0) * maxDistKm);
-        
         let locName = citiesList[0].name;
-        for (let c of citiesList) {
-          if (distKm >= c.km) locName = c.name;
-        }
+        for (let c of citiesList) if (distKm >= c.km) locName = c.name;
 
         let phase = "SUBIDA";
         let badgeClass = "badge-subida";
+        if (t >= 14 && t <= 36) { phase = "NO TOPO"; badgeClass = "badge-topo"; }
+        else if (t > 36 && t <= 44) { phase = "RECESSÃO"; badgeClass = "badge-recessao"; }
+        else if (t > 44) { phase = "ESCOOU"; badgeClass = "badge-escoou"; }
 
-        if (t >= 14 && t <= 36) {
-          phase = "NO TOPO";
-          badgeClass = "badge-topo";
-        } else if (t > 36 && t <= 44) {
-          phase = "RECESSÃO";
-          badgeClass = "badge-recessao";
-        } else if (t > 44) {
-          phase = "ESCOOU";
-          badgeClass = "badge-escoou";
-        }
-
-        return { maxQ, loc: locName, km: distKm, maxDistKm, phase, badgeClass };
+        return { maxQ, loc: locName, km: distKm, phase, badgeClass };
       }
 
-      // 1. Itajaí-Açu
-      const stAcu = getPeakSpatialInfo('acu', 153, [
-        { km: 0, name: "Confluência Rio do Sul" },
-        { km: 35, name: "Ibirama / Apiúna" },
-        { km: 70, name: "Ascurra / Rodeio" },
-        { km: 90, name: "Indaial Centro" },
-        { km: 105, name: "Blumenau Centro" },
-        { km: 125, name: "Gaspar" },
-        { km: 140, name: "Ilhota" },
-        { km: 153, name: "Foz em Itajaí" }
-      ]);
-      document.getElementById('badge-acu').innerText = stAcu.phase;
-      document.getElementById('badge-acu').className = `topo-badge ${stAcu.badgeClass}`;
-      document.getElementById('loc-acu').innerText = `📍 ${stAcu.loc}`;
-      document.getElementById('q-topo-acu').innerText = `${stAcu.maxQ.toFixed(0)} m³/s`;
-      document.getElementById('km-acu').innerText = `km ${stAcu.km} / 153 km`;
+      const updateCard = (pfx, rKey, lenKm, cities) => {
+        const st = getPeakSpatialInfo(rKey, lenKm, cities);
+        const bElem = document.getElementById(`badge-${pfx}`);
+        if (bElem) { bElem.innerText = st.phase; bElem.className = `topo-badge ${st.badgeClass}`; }
+        const lElem = document.getElementById(`loc-${pfx}`);
+        if (lElem) lElem.innerText = `📍 ${st.loc}`;
+        const qElem = document.getElementById(`q-topo-${pfx}`);
+        if (qElem) qElem.innerText = `${st.maxQ.toFixed(0)} m³/s`;
+        const kElem = document.getElementById(`km-${pfx}`);
+        if (kElem) kElem.innerText = `km ${st.km} / ${lenKm}`;
+      };
 
-      // 2. Rio Itajaí do Oeste
-      const stOeste = getPeakSpatialInfo('oeste', 65, [
-        { km: 0, name: "Barragem Oeste (Taió)" },
-        { km: 25, name: "Laurentino" },
-        { km: 50, name: "Rio do Oeste" },
-        { km: 65, name: "Confluência Rio do Sul" }
-      ]);
-      document.getElementById('badge-oeste').innerText = stOeste.phase;
-      document.getElementById('badge-oeste').className = `topo-badge ${stOeste.badgeClass}`;
-      document.getElementById('loc-oeste').innerText = `📍 ${stOeste.loc}`;
-      document.getElementById('q-topo-oeste').innerText = `${stOeste.maxQ.toFixed(0)} m³/s`;
-      document.getElementById('km-oeste').innerText = `km ${stOeste.km} / 65 km`;
-
-      // 3. Rio Mirim Doce
-      const stMirimDoce = getPeakSpatialInfo('mirim_doce', 42, [
-        { km: 0, name: "Serra de Mirim Doce" },
-        { km: 20, name: "Mirim Doce Centro" },
-        { km: 42, name: "Deságue no Oeste (Taió)" }
-      ]);
-      document.getElementById('badge-mirim-doce').innerText = stMirimDoce.phase;
-      document.getElementById('badge-mirim-doce').className = `topo-badge ${stMirimDoce.badgeClass}`;
-      document.getElementById('loc-mirim-doce').innerText = `📍 ${stMirimDoce.loc}`;
-      document.getElementById('q-topo-mirim-doce').innerText = `${stMirimDoce.maxQ.toFixed(0)} m³/s`;
-      document.getElementById('km-mirim-doce').innerText = `km ${stMirimDoce.km} / 42 (no Oeste)`;
-
-      // 4. Rio Itajaí do Sul
-      const stSul = getPeakSpatialInfo('sul', 50, [
-        { km: 0, name: "Barragem Sul (Ituporanga)" },
-        { km: 20, name: "Aurora" },
-        { km: 50, name: "Confluência Rio do Sul" }
-      ]);
-      document.getElementById('badge-sul').innerText = stSul.phase;
-      document.getElementById('badge-sul').className = `topo-badge ${stSul.badgeClass}`;
-      document.getElementById('loc-sul').innerText = `📍 ${stSul.loc}`;
-      document.getElementById('q-topo-sul').innerText = `${stSul.maxQ.toFixed(0)} m³/s`;
-      document.getElementById('km-sul').innerText = `km ${stSul.km} / 50 km`;
-
-      // 5. Rio Perimbó
-      const stPerimbo = getPeakSpatialInfo('perimbo', 38, [
-        { km: 0, name: "Petrolândia" },
-        { km: 18, name: "Chapadão do Lageado" },
-        { km: 38, name: "Deságue no Sul (Ituporanga)" }
-      ]);
-      document.getElementById('badge-perimbo').innerText = stPerimbo.phase;
-      document.getElementById('badge-perimbo').className = `topo-badge ${stPerimbo.badgeClass}`;
-      document.getElementById('loc-perimbo').innerText = `📍 ${stPerimbo.loc}`;
-      document.getElementById('q-topo-perimbo').innerText = `${stPerimbo.maxQ.toFixed(0)} m³/s`;
-      document.getElementById('km-perimbo').innerText = `km ${stPerimbo.km} / 38 (no Sul)`;
-
-      // 6. Rio Trombudo
-      const stTrombudo = getPeakSpatialInfo('trombudo', 48, [
-        { km: 0, name: "Agrolândia" },
-        { km: 18, name: "Braço do Trombudo" },
-        { km: 30, name: "Trombudo Central" },
-        { km: 42, name: "Agronômica" },
-        { km: 48, name: "Deságue no Sul (Rio do Sul)" }
-      ]);
-      document.getElementById('badge-trombudo').innerText = stTrombudo.phase;
-      document.getElementById('badge-trombudo').className = `topo-badge ${stTrombudo.badgeClass}`;
-      document.getElementById('loc-trombudo').innerText = `📍 ${stTrombudo.loc}`;
-      document.getElementById('q-topo-trombudo').innerText = `${stTrombudo.maxQ.toFixed(0)} m³/s`;
-      document.getElementById('km-trombudo').innerText = `km ${stTrombudo.km} / 48 (no Sul)`;
-
-      // 7. Rio Hercílio / Norte
-      const stNorte = getPeakSpatialInfo('norte', 85, [
-        { km: 0, name: "Barragem Norte (Boiteux)" },
-        { km: 35, name: "Presidente Getúlio" },
-        { km: 65, name: "Ibirama" },
-        { km: 85, name: "Deságue no Açú (Ibirama)" }
-      ]);
-      document.getElementById('badge-norte').innerText = stNorte.phase;
-      document.getElementById('badge-norte').className = `topo-badge ${stNorte.badgeClass}`;
-      document.getElementById('loc-norte').innerText = `📍 ${stNorte.loc}`;
-      document.getElementById('q-topo-norte').innerText = `${stNorte.maxQ.toFixed(0)} m³/s`;
-      document.getElementById('km-norte').innerText = `km ${stNorte.km} / 85 km`;
-
-      // 8. Rio Benedito
-      const stBen = getPeakSpatialInfo('benedito', 35, [
-        { km: 0, name: "Alto Benedito" },
-        { km: 18, name: "Timbó Centro" },
-        { km: 35, name: "Deságue em Indaial" }
-      ]);
-      document.getElementById('badge-benedito').innerText = stBen.phase;
-      document.getElementById('badge-benedito').className = `topo-badge ${stBen.badgeClass}`;
-      document.getElementById('loc-benedito').innerText = `📍 ${stBen.loc}`;
-      document.getElementById('q-topo-benedito').innerText = `${stBen.maxQ.toFixed(0)} m³/s`;
-      document.getElementById('km-benedito').innerText = `km ${stBen.km} / 35 km`;
-
-      // 9. Rio Itajaí-Mirim
-      const stMirim = getPeakSpatialInfo('mirim', 110, [
-        { km: 0, name: "Vidal Ramos" },
-        { km: 35, name: "Botuverá" },
-        { km: 70, name: "Brusque Centro" },
-        { km: 95, name: "Canal Retificado" },
-        { km: 110, name: "Foz em Itajaí" }
-      ]);
-      document.getElementById('badge-mirim').innerText = stMirim.phase;
-      document.getElementById('badge-mirim').className = `topo-badge ${stMirim.badgeClass}`;
-      document.getElementById('loc-mirim').innerText = `📍 ${stMirim.loc}`;
-      document.getElementById('q-topo-mirim').innerText = `${stMirim.maxQ.toFixed(0)} m³/s`;
-      document.getElementById('km-mirim').innerText = `km ${stMirim.km} / 110 km`;
-
-      // 10. Rio Luís Alves
-      const stLuis = getPeakSpatialInfo('luis_alves', 25, [
-        { km: 0, name: "Luís Alves" },
-        { km: 25, name: "Deságue Baixo Vale" }
-      ]);
-      document.getElementById('badge-luis').innerText = stLuis.phase;
-      document.getElementById('badge-luis').className = `topo-badge ${stLuis.badgeClass}`;
-      document.getElementById('loc-luis').innerText = `📍 ${stLuis.loc}`;
-      document.getElementById('q-topo-luis').innerText = `${stLuis.maxQ.toFixed(0)} m³/s`;
-      document.getElementById('km-luis').innerText = `km ${stLuis.km} / 25 km`;
+      updateCard('acu', 'acu', 153, [{km:0, name:"Rio do Sul"}, {km:35, name:"Ibirama"}, {km:90, name:"Indaial"}, {km:105, name:"Blumenau"}, {km:153, name:"Itajaí Foz"}]);
+      updateCard('oeste', 'oeste', 65, [{km:0, name:"Taió"}, {km:25, name:"Laurentino"}, {km:65, name:"Rio do Sul"}]);
+      updateCard('mirim-doce', 'mirim_doce', 42, [{km:0, name:"Serra Mirim Doce"}, {km:42, name:"Taió (Oeste)"}]);
+      updateCard('sul', 'sul', 50, [{km:0, name:"Ituporanga"}, {km:20, name:"Aurora"}, {km:50, name:"Rio do Sul"}]);
+      updateCard('perimbo', 'perimbo', 38, [{km:0, name:"Petrolândia"}, {km:38, name:"Ituporanga (Sul)"}]);
+      updateCard('trombudo', 'trombudo', 48, [{km:0, name:"Agrolândia"}, {km:30, name:"Trombudo Central"}, {km:48, name:"Rio do Sul"}]);
+      updateCard('norte', 'norte', 85, [{km:0, name:"Boiteux"}, {km:35, name:"Pres. Getúlio"}, {km:85, name:"Ibirama"}]);
+      updateCard('benedito', 'benedito', 35, [{km:0, name:"Alto Benedito"}, {km:18, name:"Timbó"}, {km:35, name:"Indaial"}]);
+      updateCard('mirim', 'mirim', 110, [{km:0, name:"Vidal Ramos"}, {km:70, name:"Brusque"}, {km:110, name:"Itajaí Canal"}]);
+      updateCard('luis', 'luis_alves', 25, [{km:0, name:"Luís Alves"}, {km:25, name:"Baixo Vale"}]);
     }
 
     function updateMapSegmentStyles(t) {
@@ -1355,7 +1205,6 @@
 
     function updatePeakMarkers(t) {
       if (!map || !realData) return;
-
       const matAcu = riverSpatialQ['acu'];
       if (matAcu) {
         let maxQ = -1, maxIdx = 0;
@@ -1365,43 +1214,23 @@
         const coordAcu = realData.river_profiles['acu'].coords[maxIdx];
         if (coordAcu) {
           if (!markerPeakAcu) {
-            const icon = L.divIcon({ className: 'p-icon', html: '<div class="pulsing-peak-icon"></div>', iconSize: [14,14], iconAnchor: [7,7] });
+            const icon = L.divIcon({ className: 'p-icon', html: '<div style="background:#ff0055; width:14px; height:14px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 10px #ff0055;"></div>', iconSize: [14,14], iconAnchor: [7,7] });
             markerPeakAcu = L.marker([coordAcu[1], coordAcu[0]], { icon: icon, zIndexOffset: 1000 }).addTo(map);
           } else {
             markerPeakAcu.setLatLng([coordAcu[1], coordAcu[0]]);
           }
         }
       }
-
-      const matMirim = riverSpatialQ['mirim'];
-      if (matMirim) {
-        let maxQ = -1, maxIdx = 0;
-        for (let i = 0; i < 80; i++) {
-          if (matMirim[i][t] > maxQ) { maxQ = matMirim[i][t]; maxIdx = i; }
-        }
-        const coordMirim = realData.river_profiles['mirim'].coords[maxIdx];
-        if (coordMirim) {
-          if (!markerPeakMirim) {
-            markerPeakMirim = L.circleMarker([coordMirim[1], coordMirim[0]], {
-              radius: 6, fillColor: '#f59e0b', color: '#fff', weight: 2, fillOpacity: 0.95
-            }).addTo(map);
-          } else {
-            markerPeakMirim.setLatLng([coordMirim[1], coordMirim[0]]);
-          }
-        }
-      }
     }
 
-    function onTimeChange() {
-      updateTimeDisplay();
-    }
+    function onTimeChange() { updateTimeDisplay(); }
 
     function togglePlay() {
       const btn = document.getElementById('btn-play');
       if (isPlaying) {
         clearInterval(playInterval);
         isPlaying = false;
-        btn.innerText = "▶️ ANIMAR CHEIA";
+        btn.innerText = "▶️ ANIMAR";
       } else {
         isPlaying = true;
         btn.innerText = "⏸️ PAUSAR";
@@ -1428,7 +1257,6 @@
       };
 
       const shapes = [timeLineShape];
-
       if (currentMode === 'forecast') {
         shapes.push({
           type: 'line', x0: 24, x1: 24, y0: 0, y1: 1, yref: 'paper',
@@ -1436,92 +1264,80 @@
         });
       }
 
-      const plotSingleHydro = (divId, yOperated, yNatural, yLow, yHigh, yObs, colorHex, cityName) => {
+      const plotSingleHydro = (divId, yOperated, yNatural, yLow, yHigh, yObs, colorHex) => {
         let traces = [];
-
         if (currentMode === 'forecast') {
-          const traceHigh = {
-            x: basinData.t.slice(24), y: yHigh.slice(24), mode: 'lines', name: 'Incerteza Superior',
-            line: { width: 0 }, showlegend: false
-          };
-          const traceLow = {
-            x: basinData.t.slice(24), y: yLow.slice(24), mode: 'lines', name: 'Incerteza Inferior',
-            line: { width: 0 }, fill: 'tonexty', fillcolor: `${colorHex}33`, showlegend: false
-          };
-          const traceForecast = {
-            x: basinData.t, y: yOperated, mode: 'lines', name: 'Previsão Central',
-            line: { color: colorHex, width: 2.8 }
-          };
-          const traceObserved = {
-            x: basinData.t.slice(0, 25), y: yOperated.slice(0, 25), mode: 'lines', name: 'Observado Passado',
-            line: { color: '#10b981', width: 3.5 }
-          };
-          const traceActivePt = {
-            x: [tCurrent], y: [yOperated[tCurrent]], mode: 'markers',
-            marker: { color: colorHex, size: 8, symbol: 'diamond', line: { color: '#ffffff', width: 1.5 } }
-          };
-          traces = [traceHigh, traceLow, traceForecast, traceObserved, traceActivePt];
-
+          const traceHigh = { x: basinData.t.slice(24), y: yHigh.slice(24), mode: 'lines', line: { width: 0 }, showlegend: false };
+          const traceLow = { x: basinData.t.slice(24), y: yLow.slice(24), mode: 'lines', fill: 'tonexty', fillcolor: `${colorHex}33`, line: { width: 0 }, showlegend: false };
+          const traceForecast = { x: basinData.t, y: yOperated, mode: 'lines', line: { color: colorHex, width: 2.5 } };
+          const traceObserved = { x: basinData.t.slice(0, 25), y: yOperated.slice(0, 25), mode: 'lines', line: { color: '#10b981', width: 3.2 } };
+          traces = [traceHigh, traceLow, traceForecast, traceObserved];
         } else if (currentMode === 'replay') {
-          const traceObs = {
-            x: basinData.t, y: yObs, mode: 'markers+lines', name: 'Observado (ANA/CEOPS)',
-            line: { color: '#10b981', width: 2.0, dash: 'dash' },
-            marker: { size: 4, color: '#10b981' }
-          };
-          const traceSim = {
-            x: basinData.t, y: yOperated, mode: 'lines', name: 'Simulado',
-            line: { color: colorHex, width: 2.8 },
-            fill: 'tozeroy', fillcolor: `${colorHex}22`
-          };
-          const traceActivePt = {
-            x: [tCurrent], y: [yOperated[tCurrent]], mode: 'markers',
-            marker: { color: colorHex, size: 8, symbol: 'diamond', line: { color: '#ffffff', width: 1.5 } }
-          };
-          traces = [traceObs, traceSim, traceActivePt];
-
+          const traceObs = { x: basinData.t, y: yObs, mode: 'lines', line: { color: '#10b981', width: 2.0, dash: 'dash' } };
+          const traceSim = { x: basinData.t, y: yOperated, mode: 'lines', line: { color: colorHex, width: 2.5 }, fill: 'tozeroy', fillcolor: `${colorHex}22` };
+          traces = [traceObs, traceSim];
         } else {
-          const traceNatural = {
-            x: basinData.t, y: yNatural, mode: 'lines', name: 'Sem Barragens (Natural)',
-            line: { color: '#64748b', width: 1.8, dash: 'dot' }, opacity: 0.7
-          };
-          const traceOperated = {
-            x: basinData.t, y: yOperated, mode: 'lines', name: 'Com Barragens (Operado)',
-            line: { color: colorHex, width: 2.8 },
-            fill: 'tozeroy', fillcolor: `${colorHex}22`
-          };
-          const traceActivePt = {
-            x: [tCurrent], y: [yOperated[tCurrent]], mode: 'markers',
-            marker: { color: colorHex, size: 8, symbol: 'diamond', line: { color: '#ffffff', width: 1.5 } }
-          };
-          traces = [traceNatural, traceOperated, traceActivePt];
+          const traceNatural = { x: basinData.t, y: yNatural, mode: 'lines', line: { color: '#64748b', width: 1.6, dash: 'dot' } };
+          const traceOperated = { x: basinData.t, y: yOperated, mode: 'lines', line: { color: colorHex, width: 2.5 }, fill: 'tozeroy', fillcolor: `${colorHex}22` };
+          traces = [traceNatural, traceOperated];
         }
 
         const maxY = Math.max(...yNatural, ...yOperated, ...(yHigh || [100])) * 1.15;
-
         const layout = {
           paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
           xaxis: { title: 'Tempo (h)', color: '#94a3b8', gridcolor: '#1a253c', dtick: 12, tickfont: { size: 9 } },
           yaxis: { title: 'Q (m³/s)', color: '#94a3b8', gridcolor: '#1a253c', tickfont: { size: 9 }, range: [0, Math.max(100, maxY)] },
-          shapes: shapes,
-          margin: { l: 42, r: 10, t: 10, b: 28 },
-          showlegend: false
+          shapes: shapes, margin: { l: 40, r: 10, t: 10, b: 25 }, showlegend: false
         };
         Plotly.react(divId, traces, layout, { responsive: true });
       };
 
-      plotSingleHydro('plot-riosul', basinData.q_rio_sul, basinData.nat_rio_sul, basinData.low_rio_sul, basinData.high_rio_sul, basinData.obs_rio_sul, '#3b82f6', 'Confluência Rio do Sul');
-      plotSingleHydro('plot-blumenau', basinData.q_blumenau, basinData.nat_blumenau, basinData.low_blumenau, basinData.high_blumenau, basinData.obs_blumenau, '#00f0ff', 'Blumenau');
-      plotSingleHydro('plot-brusque', basinData.q_brusque, basinData.nat_brusque, basinData.low_brusque, basinData.high_brusque, basinData.obs_brusque, '#f59e0b', 'Brusque');
-      plotSingleHydro('plot-itajai', basinData.q_itajai, basinData.nat_itajai, basinData.low_itajai, basinData.high_itajai, basinData.obs_itajai, '#ef4444', 'Itajaí');
+      plotSingleHydro('plot-riosul', basinData.q_rio_sul, basinData.nat_rio_sul, basinData.low_rio_sul, basinData.high_rio_sul, basinData.obs_rio_sul, '#3b82f6');
+      plotSingleHydro('plot-blumenau', basinData.q_blumenau, basinData.nat_blumenau, basinData.low_blumenau, basinData.high_blumenau, basinData.obs_blumenau, '#00f0ff');
+      plotSingleHydro('plot-brusque', basinData.q_brusque, basinData.nat_brusque, basinData.low_brusque, basinData.high_brusque, basinData.obs_brusque, '#f59e0b');
+      plotSingleHydro('plot-itajai', basinData.q_itajai, basinData.nat_itajai, basinData.low_itajai, basinData.high_itajai, basinData.obs_itajai, '#ef4444');
     }
 
-    function initMap() {
-      map = L.map('map').setView([-27.10, -49.35], 9);
+    let baseLayers = {};
+    let overlayLayers = {};
+    let highResTributariesLayer = null;
+    let highResFloodLayer = null;
+    let floodGeojsonData = null;
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO'
+    function initMap() {
+      map = L.map('map').setView([-27.05, -49.30], 9);
+
+      // Criar painéis de sobreposição (Panes) com z-index controlado
+      map.createPane('floodPane');
+      map.getPane('floodPane').style.zIndex = 350;
+
+      map.createPane('tributariesPane');
+      map.getPane('tributariesPane').style.zIndex = 400;
+
+      map.createPane('riversPane');
+      map.getPane('riversPane').style.zIndex = 450;
+
+      map.createPane('markersPane');
+      map.getPane('markersPane').style.zIndex = 500;
+
+      // 1. Mapas Base com Topografia, Relevo Sombreado e Satélite
+      baseLayers["🗺️ Relevo Topográfico (Esri)"] = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri &mdash; Relevo Sombreado'
       }).addTo(map);
 
+      baseLayers["🏔️ Curvas de Nível (OpenTopoMap)"] = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenTopoMap'
+      });
+
+      baseLayers["🛰️ Satélite HD (Esri Imagery)"] = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri Satélite'
+      });
+
+      baseLayers["🌑 Modo Noturno (CartoDB)"] = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; CARTO'
+      });
+
+      // 2. Traçado Dinâmico dos 10 Rios Principais (com Onda de Cheia Dinâmica)
       if (realData && realData.river_profiles) {
         for (const [rKey, prof] of Object.entries(realData.river_profiles)) {
           if (prof.coords && prof.coords.length > 1) {
@@ -1530,48 +1346,134 @@
               const p1 = [prof.coords[i][1], prof.coords[i][0]];
               const p2 = [prof.coords[i+1][1], prof.coords[i+1][0]];
               const seg = L.polyline([p1, p2], {
-                color: '#1d4ed8', weight: 3.5, opacity: 0.95
+                pane: 'riversPane',
+                color: '#1d4ed8',
+                weight: 4.0,
+                opacity: 0.95,
+                lineCap: 'round',
+                lineJoin: 'round'
               }).addTo(map);
+              
+              seg.bindPopup(`<b>${prof.name || rKey}</b><br>Trecho ${i+1}/${prof.coords.length - 1}`);
               riverSegments[rKey].push(seg);
             }
           }
         }
       }
 
-      // Marcadores das 3 Barragens
-      const dams = [
-        { name: "🏰 Barragem Oeste (Taió)", lat: -27.1150, lon: -49.9980, gates: "7 Comportas (Montante de Rio do Sul)" },
-        { name: "🏰 Barragem Sul (Ituporanga)", lat: -27.4140, lon: -49.6050, gates: "5 Comportas (Montante de Rio do Sul)" },
-        { name: "🏰 Barragem Norte (José Boiteux)", lat: -26.9600, lon: -49.6280, gates: "2 Comportas (Jusante de Rio do Sul - Ibirama)" }
-      ];
+      // 3. Camada Opcional de Tributários Secundários (Finos e Discretos)
+      fetch('itajai_ana_rios_alta_resolucao.geojson?v=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          highResTributariesLayer = L.geoJSON(data, {
+            pane: 'tributariesPane',
+            style: function(feat) {
+              return {
+                color: '#64748b',
+                weight: 1.2,
+                opacity: 0.50,
+                dashArray: '3, 3'
+              };
+            },
+            onEachFeature: function(feat, layer) {
+              const p = feat.properties;
+              layer.bindPopup(`<b>Tributário: ${p.NORIOCOMP || p.NOORIGINAL || 'Arroio/Córrego'}</b><br>Código: ${p.COBACIA}`);
+            }
+          });
+          
+          overlayLayers["🌐 Rede Completa de Tributários (Secundários)"] = highResTributariesLayer;
+          setupLayerControl();
+        })
+        .catch(err => console.error(err));
 
-      dams.forEach(d => {
-        L.circleMarker([d.lat, d.lon], {
-          radius: 7, fillColor: '#ef4444', color: '#ffffff', weight: 2, fillOpacity: 0.95
-        }).addTo(map).bindPopup(`<b>${d.name}</b><br>${d.gates}`);
+      // 4. Manchas 2D de Inundação HAND Espaço-Temporais Dinâmicas (Hora a Hora)
+      fetch('manchas_inundacao_hand_dinamico.geojson?v=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          floodGeojsonData = data;
+          update2DFloodPlainLayer();
+        })
+        .catch(err => console.error(err));
+
+      // 5. Barragens
+      [
+        { name: "🏰 Barragem Oeste (Taió)", lat: -27.1150, lon: -49.9980 },
+        { name: "🏰 Barragem Sul (Ituporanga)", lat: -27.4140, lon: -49.6050 },
+        { name: "🏰 Barragem Norte (José Boiteux)", lat: -26.9600, lon: -49.6280 }
+      ].forEach(d => {
+        L.circleMarker([d.lat, d.lon], { pane: 'markersPane', radius: 7, fillColor: '#ef4444', color: '#fff', weight: 2, fillOpacity: 0.95 }).addTo(map).bindPopup(`<b>${d.name}</b>`);
       });
 
-      // Marcadores dos Pontos Críticos e Cidades
-      const cities = [
-        { name: "🏙️ 1. Confluência de Rio do Sul (Alto Vale)", lat: -27.2150, lon: -49.6430, color: '#3b82f6' },
-        { name: "🏙️ 2. Blumenau (Médio Vale)", lat: -26.9180, lon: -49.0660, color: '#00f0ff' },
-        { name: "🏙️ 3. Brusque (Itajaí-Mirim)", lat: -27.0980, lon: -48.9120, color: '#f59e0b' },
-        { name: "🌊 4. Itajaí (Foz Geral & Canal)", lat: -26.8950, lon: -48.6650, color: '#ef4444' },
-        { name: "🏙️ 5. Petrolândia (Rio Perimbó)", lat: -27.5350, lon: -49.7050, color: '#06b6d4' },
-        { name: "🏙️ 6. Trombudo Central (Rio Trombudo)", lat: -27.3000, lon: -49.7920, color: '#14b8a6' },
-        { name: "🏙️ 7. Mirim Doce (Rio Mirim Doce)", lat: -27.1950, lon: -50.0750, color: '#0ea5e9' }
-      ];
-
-      cities.forEach(c => {
-        L.circleMarker([c.lat, c.lon], {
-          radius: 7, fillColor: c.color, color: '#ffffff', weight: 2, fillOpacity: 0.95
-        }).addTo(map).bindPopup(`<b>${c.name}</b><br>Ponto de Monitoramento Fluviométrico`);
+      // 6. Cidades Estratégicas
+      [
+        { name: "🏙️ Blumenau (15.34m em 1983 - Fundo Z=1.3m)", lat: -26.9180, lon: -49.0660 },
+        { name: "🏙️ Rio do Sul (13.00m em 1983 - Fundo Z=330m)", lat: -27.2150, lon: -49.6430 },
+        { name: "🏙️ Brusque (8.50m em 2008 - Fundo Z=16m)", lat: -27.0980, lon: -48.9120 },
+        { name: "🌊 Itajaí Foz (Fundo Z=-3.5m)", lat: -26.8950, lon: -48.6650 }
+      ].forEach(c => {
+        L.circleMarker([c.lat, c.lon], { pane: 'markersPane', radius: 6, fillColor: '#00f0ff', color: '#fff', weight: 2, fillOpacity: 0.95 }).addTo(map).bindPopup(`<b>${c.name}</b>`);
       });
+
+      setupLayerControl();
+    }
+
+    let layerControl = null;
+    function setupLayerControl() {
+      if (layerControl) map.removeControl(layerControl);
+      layerControl = L.control.layers(baseLayers, overlayLayers, { position: 'topright', collapsed: true }).addTo(map);
+    }
+
+    function update2DFloodPlainLayer() {
+      if (!map) return;
+      if (highResFloodLayer) {
+        map.removeLayer(highResFloodLayer);
+        highResFloodLayer = null;
+      }
+      if (!floodGeojsonData) return;
+
+      const t = parseInt(document.getElementById('slider-time').value || 0);
+      
+      // REGRA FÍSICA ESTRITA: Em regime normal / estiagem (t <= 6h), a água corre confinada na calha profunda (0.0 km²).
+      if (t <= 6) {
+        return;
+      }
+
+      const ev = (currentMode === 'replay') ? (document.getElementById('sel-historical-event').value || '2023') : '2023';
+
+      // Encontrar o quadro temporal HAND mais próximo da hora atual t
+      const availableHours = [12, 18, 24, 30, 36, 48];
+      const targetT = availableHours.reduce((prev, curr) => Math.abs(curr - t) < Math.abs(prev - t) ? curr : prev);
+
+      highResFloodLayer = L.geoJSON(floodGeojsonData, {
+        pane: 'floodPane',
+        filter: function(feat) {
+          const p = feat.properties;
+          return (p.event === ev && p.time_hour === targetT);
+        },
+        style: function(feat) {
+          const prop = feat.properties;
+          return {
+            color: prop.fill_color || '#00f0ff',
+            weight: 1,
+            fillColor: prop.fill_color || '#00f0ff',
+            fillOpacity: prop.fill_opacity || 0.65
+          };
+        },
+        onEachFeature: function(feat, layer) {
+          const prop = feat.properties;
+          layer.bindPopup(`<b>🌊 ${prop.event || 'Evento'} - t = ${prop.time_hour}:00h</b><br>
+                           <b>Classe:</b> ${prop.class_name || 'Lâmina d\'água'}<br>
+                           <b>Área Inundada na Hora:</b> ${prop.area_km2} km²<br>
+                           <b>Volume no Vale:</b> ${prop.volume_hm3} hm³<br>
+                           <b>Maré na Foz:</b> ${prop.ocean_tide_m !== undefined ? prop.ocean_tide_m + ' m' : '--'}<br>
+                           <i>Metodologia: Topographic HAND + Sincronização Hidrodinâmica + Marés</i>`);
+        }
+      }).addTo(map);
     }
 
     window.addEventListener('DOMContentLoaded', () => {
       initGateButtons();
-      fetch('itajai_real_dem_model.json')
+      fetch('itajai_real_dem_model.json?v=' + Date.now())
         .then(r => r.json())
         .then(data => {
           realData = data;

@@ -40,33 +40,46 @@ class OperationalForecastEngine:
             'oeste': {'total_gates': 7, 'open_gates': 7, 'cap_hm3': 83.0, 'base_flow': 12.0},
             'sul': {'total_gates': 5, 'open_gates': 5, 'cap_hm3': 93.5, 'base_flow': 7.0},
             'norte': {'total_gates': 2, 'open_gates': 2, 'cap_hm3': 357.0, 'base_flow': 20.0}
+            'oeste': {'total_gates': 7, 'gates_open': 7, 'capacity_hm3': 83.0, 'base_flow': 12.0},
+            'sul': {'total_gates': 5, 'gates_open': 5, 'capacity_hm3': 93.5, 'base_flow': 7.0},
+            'norte': {'total_gates': 2, 'gates_open': 2, 'capacity_hm3': 357.0, 'base_flow': 20.0}
         }
 
-    def _apply_dam(self, q_in: np.ndarray, dam_cfg: Dict[str, Any]) -> np.ndarray:
-        """Simula amortecimento e operação de comportas de fundo."""
-        tot = dam_cfg.get('total_gates', 1)
-        open_g = dam_cfg.get('open_gates', tot)
-        cap_hm3 = dam_cfg.get('cap_hm3', 100.0)
-        base_q = dam_cfg.get('base_flow', 10.0)
-        
-        if open_g == tot:
+    def _apply_dam(self, q_in: np.ndarray, dam_cfg: Dict[str, Any], crest_fraction: float = 0.82) -> np.ndarray:
+        """
+        Simula o efeito de amortecimento e controle de comportas de uma barragem
+        através do método de roteamento de reservatório (Puls Dinâmico).
+        """
+        if dam_cfg['gates_open'] == dam_cfg['total_gates']:
             return q_in.copy()
             
-        frac = open_g / float(tot)
-        max_cap_m3 = cap_hm3 * 1e6
+        frac = dam_cfg['gates_open'] / float(dam_cfg['total_gates'])
+        max_cap_m3 = dam_cfg['capacity_hm3'] * 1e6
+        crest_cap_m3 = max_cap_m3 * crest_fraction
+        base_q = dam_cfg['base_flow']
         dt_sec = 3600.0
         
-        q_out = np.zeros_like(q_in)
+        q_out = np.zeros(len(q_in))
         storage = 0.0
         
         for t in range(len(q_in)):
-            if storage < max_cap_m3:
-                q_allowed = base_q + frac * max(0.0, q_in[t] - base_q)
-                q_out[t] = q_allowed
-                storage += max(0.0, q_in[t] - q_allowed) * dt_sec
-            else:
-                # Vertimento livre
-                q_out[t] = q_in[t]
+            inflow = q_in[t]
+            # 1. Vazão de fundo controlada pelas comportas
+            q_bottom = base_q + frac * max(0.0, inflow - base_q)
+            
+            # 2. Vazão pelo vertedouro
+            q_spill = 0.0
+            if storage > crest_cap_m3:
+                excess_vol = storage - crest_cap_m3
+                fill_ratio = min(1.0, excess_vol / (max_cap_m3 - crest_cap_m3 + 1.0))
+                q_spill = min(inflow, (fill_ratio ** 1.4) * inflow)
+                
+            outflow = q_bottom + q_spill
+            outflow = min(inflow * 1.02, max(base_q, outflow))
+            
+            storage = max(0.0, min(max_cap_m3 * 1.15, storage + (inflow - outflow) * dt_sec))
+            q_out[t] = outflow
+            
         return q_out
 
     def run_subbasin_runoff(self, p_series: np.ndarray, sb_info: Dict[str, Any], amc: str = 'AMC_II') -> np.ndarray:
