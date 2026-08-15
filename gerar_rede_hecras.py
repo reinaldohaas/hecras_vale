@@ -366,11 +366,16 @@ def cavar_canal(sta, z, area_km2):
     return z - h * frac
 
 
-def margens(sta, z):
-    """Margens topograficas: do talvegue ate BANK_H m de cada lado.
+def margens(sta, z, h_canal=0.0, altura_margem=BANK_H):
+    """Margens topograficas: do talvegue ate o TOPO DA CALHA + BANK_H.
+
+    Com a calha escavada, medir BANK_H acima do talvegue coloca a margem
+    DENTRO do canal -- o modelo passa a achar que tudo extravasa. A margem
+    real e o topo da calha (o terreno original, h_canal acima do fundo
+    escavado); BANK_H e a folga a partir dali.
     O valor DEVE coincidir com um sta da tabela, na mesma precisao (.2f)."""
     i = int(np.nanargmin(z))
-    lim = z[i] + BANK_H
+    lim = z[i] + h_canal + altura_margem
     li = i
     while li > 0 and z[li] < lim:
         li -= 1
@@ -523,7 +528,8 @@ def escrever(trechos, juncoes):
             par = [v for p in zip(sta, z) for v in p]
             g += [ "".join(f8(v) for v in par[i:i + 10])
                    for i in range(0, len(par), 10) ]
-            lb, rb = margens(sta, z)
+            h_c, _ = canal_geometria(d.get('area_km2', 1000.0))
+            lb, rb = margens(sta, z, h_c)
             n_ch = d.get("n", N_CANAL_PADRAO)
             n_fp = round(n_ch * RAZAO_PLANICIE, 3)
             g.append("#Mann= 3 ,-1,0")
