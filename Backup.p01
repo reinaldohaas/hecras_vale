@@ -1,7 +1,7 @@
-Plan Title=Simulacao_Bacia_Completa
+Plan Title=Plano_Simulacao_Inundacao
 Program Version=7.01
-Short Identifier=BaciaFull                                                       
-Simulation Date=01SEP2008,0000,03SEP2008,0000
+Short Identifier=01                                                              
+Simulation Date=01AUG2026, 0000, 03AUG2026, 0100
 Geom File=g01
 Flow File=u01
 Subcritical Flow
@@ -138,7 +138,7 @@ Write IC File at Sim End=0
 Echo Input=False
 Echo Parameters=False
 Echo Output=False
-Write Detailed= 0 
+Write Detailed= 1 
 HDF Write Warmup=0
 HDF Write Time Slices=0
 HDF Flush=0

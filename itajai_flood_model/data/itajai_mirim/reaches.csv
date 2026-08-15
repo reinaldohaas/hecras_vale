@@ -1,0 +1,6 @@
+reach_id,name,upstream_node,downstream_node,length_km,slope_m_km,K_hours,X_param,roughness_manning,initial_flow_m3s,status
+1,Alto Itajai-Mirim (Vidal Ramos a Botuvera),Vidal Ramos,Botuvera,32.0,2.8,7.5,0.20,0.045,15.0,REAL_GEOM_PLACEHOLDER_ROUTING
+2,Medio Itajai-Mirim (Botuvera a Brusque Montante),Botuvera,Brusque Montante,28.0,1.9,6.0,0.22,0.040,18.0,REAL_GEOM_PLACEHOLDER_ROUTING
+3,Brusque Urbano (Montante a Centro),Brusque Montante,Brusque Centro,18.0,1.2,4.0,0.25,0.035,20.0,REAL_GEOM_PLACEHOLDER_ROUTING
+4,Baixo Itajai-Mirim (Brusque a Bifurcacao Itajai),Brusque Centro,Bifurcacao Itajai,20.0,0.8,4.5,0.25,0.035,22.0,REAL_GEOM_PLACEHOLDER_ROUTING
+5,Canal Retificado Oficial (Bifurcacao a Foz Itajai-Acu),Bifurcacao Itajai,Foz Itajai-Acu,10.5,0.3,2.0,0.30,0.028,25.0,REAL_OFFICIAL_CANAL

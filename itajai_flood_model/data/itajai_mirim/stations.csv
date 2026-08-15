@@ -1,0 +1,6 @@
+station_id,name,location_type,latitude,longitude,reach_id,river_km,status
+ST01,Vidal Ramos (Nascente/Montante),Entrada Montante,-27.3850,-49.3620,1,108.5,REAL_COORDS
+ST02,Botuvera Fluvial,Posto Intermediario,-27.1980,-49.1550,2,76.5,REAL_COORDS
+ST03,Brusque Centro (ANA 83800000),Estacao Fluviometrica Principal,-27.0980,-48.9120,3,30.5,REAL_ANA_STATION
+ST04,Bifurcacao Canal / Braco Antigo,Ponto de Divisao,-26.9320,-48.7050,4,10.5,REAL_COORDS
+ST05,Foz Itajai (Confluencia Itajai-Acu),Exutorio / Foz,-26.8950,-48.6650,5,0.0,REAL_COORDS

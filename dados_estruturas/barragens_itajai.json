@@ -1,0 +1,68 @@
+{
+  "bacia": "Itajaí",
+  "descricao": "Estruturas hidráulicas e sistema de contenção de cheias da Bacia do Rio Itajaí (SC)",
+  "barragens": [
+    {
+      "id": "barragem_sul",
+      "nome": "Barragem Sul (Ituporanga)",
+      "municipio": "Ituporanga",
+      "rio": "Rio Itajaí do Sul",
+      "coordenadas": [-27.4128, -49.6056],
+      "capacidade_acumulacao_m3": 110000000.0,
+      "altura_barragem_m": 43.0,
+      "largura_crista_m": 210.0,
+      "numero_comportas": 5,
+      "tipo_comporta": "Comportas de Fundo / Tulipa",
+      "vazao_maxima_extravasor_m3s": 1200.0,
+      "impacto_jusante": "Retém os picos de cheia do Rio Itajaí do Sul antes da junção em Rio do Sul"
+    },
+    {
+      "id": "barragem_oeste",
+      "nome": "Barragem Oeste (Taió)",
+      "municipio": "Taió",
+      "rio": "Rio Itajaí do Oeste",
+      "coordenadas": [-27.1111, -50.0078],
+      "capacidade_acumulacao_m3": 110000000.0,
+      "altura_barragem_m": 25.0,
+      "largura_crista_m": 380.0,
+      "numero_comportas": 7,
+      "tipo_comporta": "Comportas de Segmento / Fundo",
+      "vazao_maxima_extravasor_m3s": 1500.0,
+      "impacto_jusante": "Retém os picos de cheia do Alto Vale vindos de Taió e Rio do Oeste"
+    },
+    {
+      "id": "barragem_norte",
+      "nome": "Barragem Norte (José Boiteux)",
+      "municipio": "José Boiteux",
+      "rio": "Rio Hercílio / Itajaí do Norte",
+      "coordenadas": [-26.9536, -49.6381],
+      "capacidade_acumulacao_m3": 357000000.0,
+      "altura_barragem_m": 60.0,
+      "largura_crista_m": 350.0,
+      "numero_comportas": 2,
+      "tipo_comporta": "Comportas de Fundo de Alta Vazão",
+      "vazao_maxima_extravasor_m3s": 3000.0,
+      "impacto_jusante": "Maior reservatório de contenção do estado de SC; protege Ibirama, Apiúna, Indaial e Blumenau"
+    }
+  ],
+  "pontos_criticos_inundacao": [
+    {
+      "nome": "Rio do Sul",
+      "localizacao": "Confluência dos Rios Itajaí do Sul, Oeste e Norte",
+      "cota_alerta_m": 6.5,
+      "cota_emergencia_m": 8.0
+    },
+    {
+      "nome": "Blumenau",
+      "localizacao": "Médio Vale do Itajaí-Açu (Seção do CEOPS/FURB)",
+      "cota_alerta_m": 8.0,
+      "cota_emergencia_m": 10.0
+    },
+    {
+      "nome": "Itajaí",
+      "localizacao": "Estuário / Foz no Oceano Atlântico com influência de maré",
+      "cota_alerta_m": 2.0,
+      "cota_emergencia_m": 3.0
+    }
+  ]
+}

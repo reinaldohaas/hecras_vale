@@ -1,0 +1,26 @@
+hour,rainfall_incremental_mm,rainfall_cumulative_mm,subbasin,event_type
+0,0.0,0.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+1,1.5,1.5,Alto Itajai-Mirim,DESIGN_STORM_24H
+2,2.8,4.3,Alto Itajai-Mirim,DESIGN_STORM_24H
+3,4.5,8.8,Alto Itajai-Mirim,DESIGN_STORM_24H
+4,7.2,16.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+5,11.0,27.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+6,16.5,43.5,Alto Itajai-Mirim,DESIGN_STORM_24H
+7,22.0,65.5,Alto Itajai-Mirim,DESIGN_STORM_24H
+8,18.0,83.5,Alto Itajai-Mirim,DESIGN_STORM_24H
+9,12.5,96.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+10,8.0,104.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+11,5.5,109.5,Alto Itajai-Mirim,DESIGN_STORM_24H
+12,3.5,113.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+13,2.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+14,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+15,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+16,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+17,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+18,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+19,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+20,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+21,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+22,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+23,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H
+24,0.0,115.0,Alto Itajai-Mirim,DESIGN_STORM_24H

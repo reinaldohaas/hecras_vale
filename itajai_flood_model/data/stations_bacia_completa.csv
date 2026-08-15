@@ -1,0 +1,10 @@
+station_id,name,river,latitude,longitude,role,status
+ST01,Barragem Oeste (Taio),Rio Itajai do Oeste,-27.1150,-49.9980,Controle Represa (7 Comportas),REAL_DAM
+ST02,Barragem Sul (Ituporanga),Rio Itajai do Sul,-27.4140,-49.6050,Controle Represa (5 Comportas),REAL_DAM
+ST03,Barragem Norte (Jose Boiteux),Rio Itajai do Norte,-26.9600,-49.6280,Controle Represa (2 Comportas Setor),REAL_DAM
+ST04,Rio do Sul (Confluencia Oeste + Sul),Rio Itajai-Acu,-27.2150,-49.6430,Estacao Fluviometrica Principal,REAL_ANA_STATION
+ST05,Ibirama (Confluencia Hercilio),Rio Itajai-Acu,-27.0550,-49.5200,Confluencia Medio Vale,REAL_COORDS
+ST06,Indaial / Timbo (Confluencia Benedito),Rio Itajai-Acu,-26.8980,-49.2320,Confluencia Medio Vale,REAL_COORDS
+ST07,Blumenau Centro (ANA 83700000),Rio Itajai-Acu,-26.9180,-49.0660,Estacao Fluviometrica Critica,REAL_ANA_STATION
+ST08,Brusque Centro (ANA 83800000),Rio Itajai-Mirim,-27.0980,-48.9120,Estacao Fluviometrica Mirim,REAL_ANA_STATION
+ST09,Itajai Foz (Canal Retificado Oficial),Rio Itajai-Acu / Mirim,-26.8950,-48.6650,Exutorio Geral da Bacia,REAL_COORDS

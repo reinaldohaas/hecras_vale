@@ -1,0 +1,56 @@
+{
+  "description": "Limiares hidrológicos de referência para alerta e emergência nas cidades do Vale do Itajaí",
+  "units": "m3/s (vazão) e metros (cota de régua)",
+  "stations": {
+    "rio_do_sul": {
+      "name": "Rio do Sul (Confluência)",
+      "river": "Rio Itajaí-Açu / Alto Vale",
+      "stage_alert_m": 6.5,
+      "stage_emergency_m": 8.0,
+      "flow_atencao_m3s": 600.0,
+      "flow_alerta_m3s": 1200.0,
+      "flow_emergencia_m3s": 2200.0
+    },
+    "ibirama": {
+      "name": "Ibirama (Confluência Hercílio)",
+      "river": "Rio Itajaí-Açu",
+      "flow_atencao_m3s": 800.0,
+      "flow_alerta_m3s": 1600.0,
+      "flow_emergencia_m3s": 2800.0
+    },
+    "indaial": {
+      "name": "Indaial / Timbó",
+      "river": "Rio Itajaí-Açu",
+      "flow_atencao_m3s": 1000.0,
+      "flow_alerta_m3s": 2000.0,
+      "flow_emergencia_m3s": 3500.0
+    },
+    "blumenau": {
+      "name": "Blumenau Centro (CEOPS/FURB)",
+      "river": "Rio Itajaí-Açu / Médio Vale",
+      "stage_alert_m": 8.0,
+      "stage_emergency_m": 10.0,
+      "flow_atencao_m3s": 1200.0,
+      "flow_alerta_m3s": 2400.0,
+      "flow_emergencia_m3s": 4200.0
+    },
+    "brusque": {
+      "name": "Brusque Centro",
+      "river": "Rio Itajaí-Mirim",
+      "stage_alert_m": 5.0,
+      "stage_emergency_m": 6.5,
+      "flow_atencao_m3s": 300.0,
+      "flow_alerta_m3s": 650.0,
+      "flow_emergencia_m3s": 1100.0
+    },
+    "itajai_foz": {
+      "name": "Itajaí (Foz Geral & Canal)",
+      "river": "Rio Itajaí-Açu / Foz Oceano",
+      "stage_alert_m": 2.0,
+      "stage_emergency_m": 3.0,
+      "flow_atencao_m3s": 1500.0,
+      "flow_alerta_m3s": 3000.0,
+      "flow_emergencia_m3s": 5000.0
+    }
+  }
+}
