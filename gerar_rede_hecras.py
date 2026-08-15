@@ -88,6 +88,11 @@ LATERAIS = ["norte", "benedito"]
 # (0 falhas, erro de volume 0,02-0,18%) mas 2 ou mais divergem -- inclusive
 # combinando afluentes que funcionam isolados. A vazao lateral entrega a
 # agua no ponto certo sem adicionar juncao.
+INCREMENTAL = True             # distribui a area de drenagem do PROPRIO Acu
+                               # (a que nao pertence a nenhum afluente nomeado)
+                               # como Uniform Lateral Inflow ao longo da calha.
+                               # Sem isso faltam ~3.300 km2 de contribuicao e a
+                               # vazao em Blumenau sai ~25% baixa.
 AREA_CABECEIRA_ACU = 5033.0    # Sul + Oeste (km2), que formam o Acu
                                # na confluencia de Rio do Sul
 # nomes das juncoes por ordem de km ao longo do Acu
@@ -401,7 +406,7 @@ def escrever(trechos, juncoes):
     print(f"  [OK] {PROJECT}.g01  ({len(trechos)} trechos, {len(juncoes)} juncoes, {n_xs} secoes)")
 
 
-def escrever_fluxo(trechos, cabeceiras, saida, laterais=()):
+def escrever_fluxo(trechos, cabeceiras, saida, laterais=(), uniformes=()):
     u = [f"Flow Title=Cheia_Rede_Real", "Program Version=7.01", "Use Restart= 0 "]
     for t in trechos:
         u.append(f"Initial Flow Loc={p16(t['rio'])},{p16(t['reach'])},"
@@ -416,6 +421,16 @@ def escrever_fluxo(trechos, cabeceiras, saida, laterais=()):
         u.append("Interval=1HOUR")
         u.append(f"Lateral Inflow Hydrograph= {NHORAS} ")
         u.append(serie8(hidrograma(lt["q_pico"])))
+    for un in uniformes:
+        # Uniform Lateral Inflow: o campo 4 do Boundary Location recebe o RS
+        # de JUSANTE do intervalo (formato do exemplo oficial UngagedAreaInflows)
+        rs_hi = f"{un['rs_hi']:.2f}"[:8].ljust(8)
+        rs_lo = f"{un['rs_lo']:.2f}"[:8].ljust(8)
+        u.append(f"Boundary Location={p16(un['rio'])},{p16(un['reach'])},"
+                 f"{rs_hi},{rs_lo},                ,                ")
+        u.append("Interval=1HOUR")
+        u.append(f"Uniform Lateral Inflow Hydrograph= {NHORAS} ")
+        u.append(serie8(hidrograma(un["q_pico"])))
     u.append(bl(saida["rio"], saida["reach"], f"{saida['xs'][-1]['rs']:.2f}"))
     u.append(f"Friction Slope={DS_SLOPE}")
     open(f"{PROJECT}.u01", "w", encoding="ascii", errors="replace").write(
@@ -591,8 +606,35 @@ def main():
         print(f"      lateral: {rede[k]['nome']:<14} entra em {alvo['reach']} "
               f"RS {rs_sec/1000:6.1f} km, Q pico {pico:7.1f} m3/s")
 
+    # --- area de drenagem do proprio Acu, distribuida ao longo da calha
+    uniformes = []
+    if INCREMENTAL:
+        contab = AREA_CABECEIRA_ACU + sum(rede[k]["area"] for k in
+                                          list(ESCOPO) + list(LATERAIS)
+                                          if k in rede)
+        incr = max(area_total - contab, 0.0)
+        L_tot = sum(t["linha"].length for t in acu_reaches)
+        print(f"      incremental do Acu: {incr:.0f} km2 "
+              f"({100*incr/area_total:.1f}% da bacia), distribuida em "
+              f"{L_tot/1000:.1f} km")
+        for t in acu_reaches:
+            a = incr * t["linha"].length / L_tot
+            pico = Q_REF_FOZ * a / area_total
+            # O intervalo NAO pode tocar as secoes extremas do trecho:
+            # "Uniform lateral inflows cannot start on the upstream cross
+            #  section of a reach" (idem para a de jusante). Recua uma secao.
+            ordenadas = sorted((d["rs"] for d in t["xs"]), reverse=True)
+            if len(ordenadas) < 4:
+                continue                      # trecho curto demais p/ uniforme
+            rs_hi = ordenadas[1]
+            rs_lo = ordenadas[-2]
+            uniformes.append({"rio": t["rio"], "reach": t["reach"],
+                              "rs_hi": rs_hi, "rs_lo": rs_lo, "q_pico": pico})
+            print(f"        {t['reach']}: {a:7.0f} km2  ->  Q pico {pico:6.1f} m3/s"
+                  f"  (RS {rs_hi/1000:.1f} a {rs_lo/1000:.1f} km)")
+
     escrever(trechos, juncoes)
-    escrever_fluxo(trechos, cabeceiras, acu_reaches[-1], laterais)
+    escrever_fluxo(trechos, cabeceiras, acu_reaches[-1], laterais, uniformes)
     escrever_plano_prj()
     print(f"\nPronto.  Rode:  python run_hecras.py {PROJECT}")
 
