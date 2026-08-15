@@ -253,6 +253,7 @@
       <button class="tab-btn" id="dtab-plots" onclick="setMainView('plots')">📈 Hidrogramas</button>
       <button class="tab-btn" id="dtab-status" onclick="setMainView('status')">📍 10 Rios</button>
       <button class="tab-btn" id="dtab-dams" onclick="setMainView('dams')">🏰 Barragens</button>
+      <a href="mapa_perfis_hecras.html" class="tab-btn" style="text-decoration:none; background:#2563eb; color:#fff; font-weight:800;">📐 1.262 Seções HEC-RAS</a>
       <a href="perfil_longitudinal_cotas.html" class="tab-btn" style="text-decoration:none; background:#7c3aed; color:#fff;">📏 Perfil do Fundo do Rio</a>
       <a href="debug_hand_layers.html" class="tab-btn" style="text-decoration:none; background:#059669; color:#fff;">🔬 Diagnóstico 8 Camadas</a>
       <a href="mancha_inundacao_2d.html" class="tab-btn" style="text-decoration:none; background:#0891b2; color:#fff;">🗺️ Manchas 2D</a>
@@ -1387,7 +1388,34 @@
         })
         .catch(err => console.error(err));
 
-      // 4. Manchas 2D de Inundação HAND Espaço-Temporais Dinâmicas (Hora a Hora)
+      // 4. Seções Transversais HEC-RAS (1.262 Seções nos 10 Rios)
+      fetch('hecras_secoes_transversais.geojson?v=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          const hecrasLayer = L.geoJSON(data, {
+            style: function(feat) {
+              return {
+                color: feat.properties.is_overtop_t24 ? '#ef4444' : '#10b981',
+                weight: 2.0,
+                opacity: 0.80
+              };
+            },
+            onEachFeature: function(feat, layer) {
+              const p = feat.properties;
+              layer.bindPopup(`<b>📐 ${p.river}: ${p.xs_id}</b><br>
+                               <b>Distância:</b> km ${p.dist_km} (${p.city})<br>
+                               <b>Fundo Z_bed:</b> ${p.z_bed}m | <b>Margem Z_bank:</b> ${p.z_bank}m<br>
+                               <b>Cota de Pico (1983):</b> ${p.z_water_t24}m<br>
+                               <b>Status:</b> ${p.is_overtop_t24 ? '🚨 Transbordo' : '✅ Dentro da Calha'}<br>
+                               <a href="mapa_perfis_hecras.html" target="_blank" style="color:#00f0ff; font-weight:700;">🔍 Abrir no HEC-RAS Mapper</a>`);
+            }
+          });
+          overlayLayers["📐 1.262 Seções Transversais (HEC-RAS Cut Lines)"] = hecrasLayer;
+          setupLayerControl();
+        })
+        .catch(err => console.error(err));
+
+      // 5. Manchas 2D de Inundação HAND Espaço-Temporais Dinâmicas (Hora a Hora)
       fetch('manchas_inundacao_hand_dinamico.geojson?v=' + Date.now())
         .then(r => r.json())
         .then(data => {
@@ -1396,7 +1424,7 @@
         })
         .catch(err => console.error(err));
 
-      // 5. Barragens
+      // 6. Barragens
       [
         { name: "🏰 Barragem Oeste (Taió)", lat: -27.1150, lon: -49.9980 },
         { name: "🏰 Barragem Sul (Ituporanga)", lat: -27.4140, lon: -49.6050 },
@@ -1405,7 +1433,7 @@
         L.circleMarker([d.lat, d.lon], { pane: 'markersPane', radius: 7, fillColor: '#ef4444', color: '#fff', weight: 2, fillOpacity: 0.95 }).addTo(map).bindPopup(`<b>${d.name}</b>`);
       });
 
-      // 6. Cidades Estratégicas
+      // 7. Cidades Estratégicas
       [
         { name: "🏙️ Blumenau (15.34m em 1983 - Fundo Z=1.3m)", lat: -26.9180, lon: -49.0660 },
         { name: "🏙️ Rio do Sul (13.00m em 1983 - Fundo Z=330m)", lat: -27.2150, lon: -49.6430 },

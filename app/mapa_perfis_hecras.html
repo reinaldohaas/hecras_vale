@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Mapa de Perfis & Seções Transversais HEC-RAS: Vale do Itajaí (1.262 Seções)</title>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Plotly.js -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #070b14;
+      --bg-card: #0e1526;
+      --bg-card-hover: #162035;
+      --border-color: #1a253c;
+      --text-main: #f3f4f6;
+      --text-muted: #94a3b8;
+      --accent-cyan: #00f0ff;
+      --accent-blue: #3b82f6;
+      --accent-purple: #a855f7;
+      --accent-orange: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-magenta: #ff0055;
+      --accent-green: #10b981;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-dark); color: var(--text-main); font-family: var(--font-body);
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* HEADER */
+    header {
+      background: linear-gradient(135deg, #091022 0%, #101c36 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+      z-index: 1000;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .brand-title { font-family: var(--font-heading); font-size: 15px; font-weight: 700; color: #fff; }
+    .brand-subtitle { font-size: 11px; color: var(--accent-cyan); font-weight: 600; }
+
+    .nav-links { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-nav {
+      background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--border-color);
+      padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 11px; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 5px; transition: all 0.2s;
+    }
+    .btn-nav:hover { background: #2563eb; color: #fff; border-color: #3b82f6; }
+
+    /* CONTROLES */
+    .control-bar {
+      background: #0b1222; border-bottom: 1px solid var(--border-color); padding: 8px 16px;
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap; z-index: 990;
+    }
+
+    .btn-action {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      color: #070b14; font-weight: 800; border: none; padding: 7px 14px; border-radius: 6px;
+      cursor: pointer; font-size: 11.5px; transition: all 0.2s;
+    }
+    .btn-action:hover { filter: brightness(1.2); }
+
+    .sel-box {
+      background: #070b14; border: 1px solid var(--border-color); color: #fff;
+      padding: 6px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
+    }
+
+    .slider-box { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 3px; }
+    .slider-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; }
+    .time-val { color: var(--accent-cyan); font-family: var(--font-mono); font-weight: 700; }
+
+    /* LAYOUT PRINCIPAL (DIVIDIDO EM MAPA + PAINEL DE PERFIL) */
+    .main-workspace {
+      display: flex; flex: 1; height: calc(100vh - 110px); overflow: hidden; position: relative;
+    }
+
+    #map { flex: 1; height: 100%; z-index: 10; background: #070b14; }
+
+    /* DRAWER DO PERFIL TRANSVERSAL HEC-RAS (DIREITA) */
+    .profile-drawer {
+      width: 480px; background: var(--bg-card); border-left: 1px solid var(--border-color);
+      display: flex; flex-direction: column; z-index: 20; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: -5px 0 25px rgba(0,0,0,0.5);
+    }
+    @media (max-width: 1024px) {
+      .profile-drawer {
+        position: absolute; right: 0; top: 0; bottom: 0; width: 100%; max-width: 420px;
+      }
+    }
+
+    .drawer-header {
+      padding: 12px 16px; background: #091022; border-bottom: 1px solid var(--border-color);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .drawer-title { font-family: var(--font-heading); font-size: 14px; font-weight: 700; color: #fff; }
+    .drawer-badge { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 12px; }
+
+    .drawer-content {
+      padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; flex: 1;
+    }
+
+    /* CARDS DE PROPRIEDADES HIDRÁULICAS */
+    .xs-props-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+    }
+    .prop-card {
+      background: #070b14; border: 1px solid var(--border-color); border-radius: 6px;
+      padding: 6px 10px; display: flex; flex-direction: column; gap: 1px;
+    }
+    .prop-lbl { font-size: 9.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    .prop-val { font-size: 13px; font-weight: 800; font-family: var(--font-mono); }
+
+    /* LEGENDA HEC-RAS NO MAPA */
+    .map-legend {
+      position: absolute; bottom: 15px; left: 15px; z-index: 1000;
+      background: rgba(14, 21, 38, 0.92); border: 1px solid var(--border-color);
+      border-radius: 8px; padding: 10px 14px; font-size: 11px; backdrop-filter: blur(8px);
+      display: flex; flex-direction: column; gap: 6px; pointer-events: auto;
+    }
+    .legend-item { display: flex; align-items: center; gap: 8px; }
+    .legend-line { width: 22px; height: 4px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <!-- CABEÇALHO -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">📐</div>
+      <div>
+        <div class="brand-title">HEC-RAS Mapper: Malha Completa de 1.262 Seções Transversais</div>
+        <div class="brand-subtitle">Rede Hidráulica 1D/2D Georreferenciada • Copernicus DEM 30m • Batimetria Estuarina</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="btn-nav">🌊 Dashboard Principal</a>
+      <a href="perfil_longitudinal_cotas.html" class="btn-nav">📏 Perfil Longitudinal</a>
+      <a href="debug_hand_layers.html" class="btn-nav">🔬 Diagnóstico 8 Camadas</a>
+      <a href="mancha_inundacao_2d.html" class="btn-nav">🗺️ Manchas 2D</a>
+    </div>
+  </header>
+
+  <!-- CONTROLES -->
+  <div class="control-bar">
+    <div>
+      <label style="font-size:10.5px; color:var(--text-muted); display:block; margin-bottom:2px;">Rio:</label>
+      <select id="sel-river" class="sel-box" onchange="onRiverFilterChange()">
+        <option value="all">🌐 Todos os 10 Rios (1.262 Seções)</option>
+        <option value="acu">🌊 Rio Itajaí-Açu (306 Seções - 153 km)</option>
+        <option value="norte">💧 Rio Hercílio / Norte (226 Seções - 113 km)</option>
+        <option value="mirim">💧 Rio Itajaí-Mirim (216 Seções - 108 km)</option>
+        <option value="oeste">💧 Rio Itajaí do Oeste (179 Seções - 90 km)</option>
+        <option value="sul">💧 Rio Itajaí do Sul (152 Seções - 76 km)</option>
+        <option value="benedito">💧 Rio Benedito (111 Seções - 56 km)</option>
+        <option value="trombudo">💧 Rio Trombudo (96 Seções - 48 km)</option>
+        <option value="mirim_doce">💧 Rio Mirim Doce (84 Seções - 42 km)</option>
+        <option value="perimbo">💧 Rio Perimbó (76 Seções - 38 km)</option>
+        <option value="luis_alves">💧 Rio Luís Alves (72 Seções - 36 km)</option>
+      </select>
+    </div>
+
+    <div>
+      <label style="font-size:10.5px; color:var(--text-muted); display:block; margin-bottom:2px;">Evento:</label>
+      <select id="sel-event" class="sel-box" onchange="onEventChange()">
+        <option value="1983">Grande Cheia de 1983 (15.34m)</option>
+        <option value="2008">Cheia de 2008 (11.52m)</option>
+        <option value="2011">Cheia de 2011 (12.60m)</option>
+        <option value="2023">Cheia de 2023 (10.76m)</option>
+      </select>
+    </div>
+
+    <button id="btn-play" class="btn-action" onclick="togglePlay()">▶️ ANIMAR NÍVEIS</button>
+
+    <div class="slider-box">
+      <div class="slider-header">
+        <span>Instante da Cheia:</span>
+        <span class="time-val" id="lbl-time">t = 24:00h (Pico de 1983)</span>
+      </div>
+      <input type="range" id="slider-t" min="0" max="48" step="3" value="24" oninput="onTimeInput()">
+    </div>
+  </div>
+
+  <!-- WORKSPACE -->
+  <div class="main-workspace">
+    
+    <!-- MAPA -->
+    <div id="map"></div>
+
+    <!-- LEGENDA HEC-RAS -->
+    <div class="map-legend">
+      <div style="font-weight:700; color:#fff; font-size:11px; border-bottom:1px solid var(--border-color); padding-bottom:3px;">
+        📐 Seções HEC-RAS (Status Hidráulico)
+      </div>
+      <div class="legend-item">
+        <div class="legend-line" style="background:#10b981;"></div>
+        <span>Dentro da Calha (Z &le; Z_bank)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-line" style="background:#f59e0b;"></div>
+        <span>Atenção (> 70% Calha Plena)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-line" style="background:#ef4444;"></div>
+        <span>Transbordo / Várzea Inundada</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-line" style="background:#1d4ed8; height:3px;"></div>
+        <span>Linha Central do Rio (Talvegue)</span>
+      </div>
+    </div>
+
+    <!-- PAINEL LATERAL HEC-RAS CROSS-SECTION VIEWER -->
+    <div class="profile-drawer" id="profile-drawer">
+      <div class="drawer-header">
+        <div>
+          <div class="drawer-title" id="xs-title">Seção Transversal: Açu XS 0210</div>
+          <div style="font-size:11px; color:var(--text-muted);" id="xs-sub">km 105.0 • Blumenau Centro</div>
+        </div>
+        <span class="drawer-badge" id="xs-badge" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid #ef4444;">TRANSBORDO</span>
+      </div>
+
+      <div class="drawer-content">
+        <!-- GRÁFICO DA SEÇÃO GEOMÉTRICA (PLOTLY) -->
+        <div style="background:#070b14; border:1px solid var(--border-color); border-radius:8px; padding:10px;">
+          <div id="plot-xs" style="width:100%; height:260px;"></div>
+        </div>
+
+        <!-- TABELA DE PROPRIEDADES HIDRÁULICAS -->
+        <div class="xs-props-grid">
+          <div class="prop-card">
+            <span class="prop-lbl">Cota Linha d'Água (Z_water)</span>
+            <span class="prop-val" id="prop-zw" style="color:#00f0ff;">16.64 m</span>
+          </div>
+          <div class="prop-card">
+            <span class="prop-lbl">Fundo do Leito (Z_bed)</span>
+            <span class="prop-val" id="prop-zbed" style="color:#64748b;">1.30 m</span>
+          </div>
+          <div class="prop-card">
+            <span class="prop-lbl">Cota Margem (Z_bank)</span>
+            <span class="prop-val" id="prop-zbank" style="color:#f59e0b;">12.88 m</span>
+          </div>
+          <div class="prop-card">
+            <span class="prop-lbl">Profundidade no Talvegue (h)</span>
+            <span class="prop-val" id="prop-depth" style="color:#00f0ff;">15.34 m</span>
+          </div>
+          <div class="prop-card">
+            <span class="prop-lbl">Largura Superfície (Top Width)</span>
+            <span class="prop-val" id="prop-width" style="color:#a855f7;">700.0 m</span>
+          </div>
+          <div class="prop-card">
+            <span class="prop-lbl">River Station (RS HEC-RAS)</span>
+            <span class="prop-val" id="prop-rs" style="color:#fff;">km 48.13</span>
+          </div>
+        </div>
+
+        <div style="font-size:11px; color:var(--text-muted); line-height:1.4; background:rgba(0,240,255,0.04); border:1px solid rgba(0,240,255,0.15); border-radius:6px; padding:8px 10px;">
+          💡 <b>Interatividade:</b> Clique em qualquer seção transversal (linha perpendicular) no mapa para inspecionar a geometria do terreno, cotas e lâmina d'água instantânea.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let map = null;
+    let xsGeojsonData = null;
+    let riverCenterlinesLayer = null;
+    let xsCutLinesLayer = null;
+    let selectedFeature = null;
+    let isPlaying = false;
+    let playInterval = null;
+
+    function initMap() {
+      map = L.map('map').setView([-27.05, -49.30], 9);
+
+      // Base layers
+      const baseTopo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri Topo'
+      }).addTo(map);
+
+      const baseSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri Satélite'
+      });
+
+      const baseDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; CARTO'
+      });
+
+      // 1. Carregar Traçado dos Rios
+      fetch('itajai_real_dem_model.json?v=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.river_profiles) {
+            riverCenterlinesLayer = L.layerGroup();
+            for (const [rKey, prof] of Object.entries(data.river_profiles)) {
+              if (prof.coords && prof.coords.length > 1) {
+                const latlngs = prof.coords.map(c => [c[1], c[0]]);
+                L.polyline(latlngs, {
+                  color: '#1d4ed8',
+                  weight: 3.5,
+                  opacity: 0.95
+                }).addTo(riverCenterlinesLayer).bindPopup(`<b>${prof.name || rKey}</b><br>Extensão: ${prof.dists_km[prof.dists_km.length - 1].toFixed(1)} km`);
+              }
+            }
+            riverCenterlinesLayer.addTo(map);
+          }
+        });
+
+      // 2. Carregar as 1.262 Seções Transversais HEC-RAS
+      fetch('hecras_secoes_transversais.geojson?v=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          xsGeojsonData = data;
+          renderXsCutLines();
+
+          // Selecionar Blumenau Centro (Açu km 105) por padrão
+          const defaultFeat = data.features.find(f => f.properties.river_key === 'acu' && Math.abs(f.properties.dist_km - 105.0) < 1.0) || data.features[0];
+          if (defaultFeat) {
+            selectCrossSection(defaultFeat);
+          }
+        });
+    }
+
+    function renderXsCutLines() {
+      if (!map || !xsGeojsonData) return;
+      if (xsCutLinesLayer) map.removeLayer(xsCutLinesLayer);
+
+      const rFilter = document.getElementById('sel-river').value;
+      const evKey = document.getElementById('sel-event').value;
+      const tHour = parseInt(document.getElementById('slider-t').value);
+      const tIdx = Math.round(tHour / 3); // Passos de 3h (0 a 16)
+
+      xsCutLinesLayer = L.geoJSON(xsGeojsonData, {
+        filter: function(feat) {
+          if (rFilter === 'all') return true;
+          return feat.properties.river_key === rFilter;
+        },
+        style: function(feat) {
+          const p = feat.properties;
+          const stages = p[`water_stages_${evKey}`] || p.water_stages_1983;
+          const zWater = stages ? stages[tIdx] : p.z_water_t24;
+          const zBank = p.z_bank;
+          const isOver = zWater > zBank;
+          const isWarning = zWater > (zBank - 1.0);
+
+          let strokeColor = '#10b981'; // Normal
+          let weight = 2.5;
+          if (isOver) {
+            strokeColor = '#ef4444'; // Transbordo
+            weight = 3.5;
+          } else if (isWarning) {
+            strokeColor = '#f59e0b'; // Alerta
+            weight = 3.0;
+          }
+
+          return {
+            color: strokeColor,
+            weight: weight,
+            opacity: 0.90
+          };
+        },
+        onEachFeature: function(feat, layer) {
+          layer.on('click', () => {
+            selectCrossSection(feat);
+          });
+          layer.bindTooltip(`<b>${feat.properties.river}</b><br>RS: km ${feat.properties.rs_km} • ${feat.properties.city}`, { sticky: true });
+        }
+      }).addTo(map);
+    }
+
+    function selectCrossSection(feat) {
+      selectedFeature = feat;
+      const p = feat.properties;
+      const evKey = document.getElementById('sel-event').value;
+      const tHour = parseInt(document.getElementById('slider-t').value);
+      const tIdx = Math.round(tHour / 3);
+
+      const stages = p[`water_stages_${evKey}`] || p.water_stages_1983;
+      const zWater = stages ? stages[tIdx] : p.z_water_t24;
+      const zBed = p.z_bed;
+      const zBank = p.z_bank;
+      const depth = Math.max(0, zWater - zBed);
+      const isOver = zWater > zBank;
+
+      document.getElementById('xs-title').innerText = `${p.river}: ${p.xs_id}`;
+      document.getElementById('xs-sub').innerText = `km ${p.dist_km} • ${p.city}`;
+
+      const badge = document.getElementById('xs-badge');
+      if (isOver) {
+        badge.innerText = "TRANSBORDO / INUNDAÇÃO";
+        badge.style.background = "rgba(239, 68, 68, 0.2)";
+        badge.style.color = "#ef4444";
+        badge.style.borderColor = "#ef4444";
+      } else {
+        badge.innerText = "DENTRO DA CALHA";
+        badge.style.background = "rgba(16, 185, 129, 0.2)";
+        badge.style.color = "#10b981";
+        badge.style.borderColor = "#10b981";
+      }
+
+      document.getElementById('prop-zw').innerText = `${zWater.toFixed(2)} m`;
+      document.getElementById('prop-zbed').innerText = `${zBed.toFixed(2)} m`;
+      document.getElementById('prop-zbank').innerText = `${zBank.toFixed(2)} m`;
+      document.getElementById('prop-depth').innerText = `${depth.toFixed(2)} m`;
+      document.getElementById('prop-width').innerText = `${(isOver ? 700.0 : 85.0).toFixed(1)} m`;
+      document.getElementById('prop-rs').innerText = `km ${p.rs_km}`;
+
+      renderCrossSectionPlot(p, zWater, zBed, zBank);
+    }
+
+    function renderCrossSectionPlot(p, zWater, zBed, zBank) {
+      const offsets = p.offsets_m || [];
+      const staElevs = p.sta_elevs || [];
+
+      // 1. Terreno Natural da Seção Transversal (HEC-RAS Ground Line)
+      const traceGround = {
+        x: offsets,
+        y: staElevs,
+        name: "Terreno Natural (DEM 30m)",
+        line: { color: '#64748b', width: 2.5 },
+        mode: 'lines'
+      };
+
+      // 2. Linha d'Água Transversal (Water Surface)
+      const traceWater = {
+        x: [offsets[0], offsets[offsets.length - 1]],
+        y: [zWater, zWater],
+        name: "Superfície da Água (Z_water)",
+        line: { color: '#00f0ff', width: 3.0 },
+        fill: 'tozeroy',
+        fillcolor: 'rgba(0, 240, 255, 0.25)',
+        mode: 'lines'
+      };
+
+      // 3. Linha da Cota de Margem (Bankfull)
+      const traceBank = {
+        x: [offsets[0], offsets[offsets.length - 1]],
+        y: [zBank, zBank],
+        name: "Cota de Margem (Bankfull)",
+        line: { color: '#f59e0b', width: 1.5, dash: 'dash' },
+        mode: 'lines'
+      };
+
+      const layout = {
+        paper_bgcolor: '#0e1526',
+        plot_bgcolor: '#070b14',
+        font: { color: '#f3f4f6', family: 'Inter, sans-serif', size: 10 },
+        margin: { l: 45, r: 20, t: 25, b: 35 },
+        xaxis: {
+          title: "Estaca Transversal (metros do eixo)",
+          gridcolor: '#1a253c',
+          zeroline: true,
+          zerolinecolor: '#3b82f6'
+        },
+        yaxis: {
+          title: "Cota Z (m)",
+          gridcolor: '#1a253c'
+        },
+        legend: { orientation: 'h', y: 1.15, x: 0.0, font: { size: 9 } },
+        hovermode: 'x unified'
+      };
+
+      Plotly.react('plot-xs', [traceGround, traceWater, traceBank], layout, { responsive: true, displayModeBar: false });
+    }
+
+    function onRiverFilterChange() {
+      renderXsCutLines();
+      const rFilter = document.getElementById('sel-river').value;
+      if (rFilter !== 'all' && xsGeojsonData) {
+        const firstFeat = xsGeojsonData.features.find(f => f.properties.river_key === rFilter);
+        if (firstFeat) {
+          selectCrossSection(firstFeat);
+          const coords = firstFeat.geometry.coordinates;
+          map.setView([coords[0][1], coords[0][0]], 11);
+        }
+      }
+    }
+
+    function onEventChange() {
+      renderXsCutLines();
+      if (selectedFeature) selectCrossSection(selectedFeature);
+    }
+
+    function onTimeInput() {
+      const tHour = parseInt(document.getElementById('slider-t').value);
+      document.getElementById('lbl-time').innerText = `t = ${String(tHour).padStart(2,'0')}:00h`;
+      renderXsCutLines();
+      if (selectedFeature) selectCrossSection(selectedFeature);
+    }
+
+    function togglePlay() {
+      const btn = document.getElementById('btn-play');
+      if (isPlaying) {
+        clearInterval(playInterval);
+        isPlaying = false;
+        btn.innerText = "▶️ ANIMAR NÍVEIS";
+      } else {
+        isPlaying = true;
+        btn.innerText = "⏸️ PAUSAR";
+        playInterval = setInterval(() => {
+          const sl = document.getElementById('slider-t');
+          let v = parseInt(sl.value) + 3;
+          if (v > 48) v = 0;
+          sl.value = v;
+          onTimeInput();
+        }, 350);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+    });
+
+    window.addEventListener('resize', () => {
+      Plotly.Plots.resize('plot-xs');
+    });
+  </script>
+</body>
+</html>
