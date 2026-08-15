@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Perfil Longitudinal Real de Linha d'Água: Vale do Itajaí</title>
+  <title>Perfil Longitudinal do Fundo do Rio & Linha d'Água: Vale do Itajaí</title>
   
   <!-- Plotly.js -->
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
@@ -24,6 +24,7 @@
       --accent-purple: #a855f7;
       --accent-orange: #f59e0b;
       --accent-red: #ef4444;
+      --accent-magenta: #ff0055;
       --accent-green: #10b981;
       --font-heading: 'Outfit', sans-serif;
       --font-body: 'Inter', sans-serif;
@@ -46,9 +47,9 @@
       border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;
     }
     .brand-title { font-family: var(--font-heading); font-size: 16px; font-weight: 700; color: #fff; }
-    .brand-subtitle { font-size: 11px; color: var(--text-muted); }
+    .brand-subtitle { font-size: 11px; color: var(--accent-cyan); font-weight: 600; }
 
-    .nav-links { display: flex; gap: 8px; }
+    .nav-links { display: flex; gap: 8px; flex-wrap: wrap; }
     .btn-nav {
       background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--border-color);
       padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 11px; text-decoration: none;
@@ -64,7 +65,7 @@
 
     .select-river {
       background: #070b14; border: 1px solid var(--border-color); color: #fff;
-      padding: 7px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; min-width: 260px;
+      padding: 7px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; min-width: 280px;
     }
 
     .btn-action {
@@ -80,26 +81,26 @@
 
     /* MÉTRICAS */
     .summary-metrics {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
     }
-    @media (max-width: 768px) { .summary-metrics { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 900px) { .summary-metrics { grid-template-columns: repeat(2, 1fr); } }
 
     .metric-box {
       background: #070b14; border: 1px solid var(--border-color); border-radius: 8px;
       padding: 8px 12px; display: flex; flex-direction: column; gap: 2px;
     }
     .metric-label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
-    .metric-value { font-size: 15px; font-weight: 800; font-family: monospace; }
+    .metric-value { font-size: 14px; font-weight: 800; font-family: monospace; }
 
     /* CARD DO GRÁFICO */
     .chart-card {
       background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
-      padding: 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 500px;
+      padding: 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 520px;
     }
 
     .geodetic-callout {
       background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2);
-      border-radius: 8px; padding: 10px 14px; font-size: 11px; color: var(--text-muted); line-height: 1.4;
+      border-radius: 8px; padding: 10px 14px; font-size: 11.5px; color: var(--text-muted); line-height: 1.5;
     }
     .geodetic-callout b { color: #fff; }
   </style>
@@ -110,13 +111,15 @@
     <div class="brand">
       <div class="brand-icon">📏</div>
       <div>
-        <div class="brand-title">Perfil Longitudinal Real do Rio Itajaí-Açu & Afluentes</div>
-        <div class="brand-subtitle">Cotas Geodésicas Reais (Copernicus DEM 30m / Datum Imbituba)</div>
+        <div class="brand-title">Perfil Longitudinal: Fundo do Rio (Batimetria), Margens & Linha d'Água</div>
+        <div class="brand-subtitle">Cotas Geodésicas Reais (Datum Altimétrico Oficial / Batimetria Estuarina)</div>
       </div>
     </div>
     <div class="nav-links">
       <a href="index.html" class="btn-nav">🌊 Dashboard Principal</a>
-      <a href="curvas_chave_itajai.html" class="btn-nav">📈 Curvas-Chave (Etapa 1)</a>
+      <a href="debug_hand_layers.html" class="btn-nav">🔬 Diagnóstico 8 Camadas</a>
+      <a href="mancha_inundacao_2d.html" class="btn-nav">🗺️ Manchas 2D</a>
+      <a href="curvas_chave_itajai.html" class="btn-nav">📈 Curvas-Chave</a>
     </div>
   </header>
 
@@ -125,7 +128,7 @@
     <div>
       <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:3px;">Selecionar Calha Fluvial:</label>
       <select id="sel-river" class="select-river" onchange="onRiverChange()">
-        <option value="acu">🌊 Rio Itajaí-Açu (Rio do Sul -> Indaial -> Blumenau -> Foz - 153 km)</option>
+        <option value="acu">🌊 Rio Itajaí-Açu (Rio do Sul -> Indaial -> Blumenau -> Foz no Oceano - 153 km)</option>
         <option value="oeste">💧 Rio Itajaí do Oeste (Taió -> Rio do Sul - 65 km)</option>
         <option value="sul">💧 Rio Itajaí do Sul (Ituporanga -> Rio do Sul - 50 km)</option>
         <option value="norte">💧 Rio Hercílio / Norte (José Boiteux -> Ibirama - 85 km)</option>
@@ -138,44 +141,58 @@
       </select>
     </div>
 
+    <div>
+      <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:3px;">Evento Histórico:</label>
+      <select id="sel-event" class="select-river" style="min-width:180px;" onchange="onEventChange()">
+        <option value="1983">Grande Cheia de 1983 (15.34m)</option>
+        <option value="2008">Cheia de 2008 (11.52m)</option>
+        <option value="2011">Cheia de 2011 (12.60m)</option>
+        <option value="2023">Cheia de 2023 (10.76m)</option>
+      </select>
+    </div>
+
     <button id="btn-play" class="btn-action" onclick="togglePlay()">▶️ ANIMAR ONDA</button>
 
     <div class="slider-box">
       <div class="slider-header">
-        <span>Tempo da Cheia:</span>
-        <span class="time-val" id="lbl-time">t = 00:00h</span>
+        <span>Instante da Cheia:</span>
+        <span class="time-val" id="lbl-time">t = 24:00h (Pico)</span>
       </div>
-      <input type="range" id="slider-t" min="0" max="48" step="1" value="20" oninput="onTimeInput()">
+      <input type="range" id="slider-t" min="0" max="48" step="1" value="24" oninput="onTimeInput()">
     </div>
   </div>
 
   <!-- MÉTRICAS DO PERFIL -->
   <div class="summary-metrics">
     <div class="metric-box">
-      <span class="metric-label">Comprimento do Trecho</span>
+      <span class="metric-label">Comprimento do Rio</span>
       <span class="metric-value" id="val-len" style="color:#00f0ff;">153.1 km</span>
     </div>
     <div class="metric-box">
-      <span class="metric-label">Cota Inicial -> Final (DEM)</span>
-      <span class="metric-value" id="val-drop" style="color:#3b82f6;">330.0m -> -3.5m</span>
+      <span class="metric-label">Fundo do Leito (Nascente -> Foz)</span>
+      <span class="metric-value" id="val-bed-range" style="color:#64748b;">332.0m -> -4.5m</span>
     </div>
     <div class="metric-box">
       <span class="metric-label">Cota da Linha d'Água em Blumenau</span>
       <span class="metric-value" id="val-blu-z" style="color:#00f0ff;">-- m</span>
     </div>
     <div class="metric-box">
-      <span class="metric-label">Trecho com Transbordo</span>
-      <span class="metric-value" id="val-overtop" style="color:#f59e0b;">0.0 km</span>
+      <span class="metric-label">Maré Oceânica na Foz (Itajaí)</span>
+      <span class="metric-value" id="val-tide" style="color:#f59e0b;">+0.75 m</span>
+    </div>
+    <div class="metric-box">
+      <span class="metric-label">Extensão com Transbordo</span>
+      <span class="metric-value" id="val-overtop" style="color:#ff0055;">0.0 km</span>
     </div>
   </div>
 
   <div class="geodetic-callout">
-    📌 <b>Realidade Geodésica & Hidráulica do Vale do Itajaí:</b> O Rio Itajaí-Açu desce do Alto Vale em <b>Rio do Sul ($Z \approx 330\text{m}$)</b>, passa pela garganta de <b>Apiúna/Ibirama ($Z \approx 140\text{m}$)</b>, chega a <b>Indaial ($Z \approx 47.5\text{m}$)</b> e sofre a queda do <b>Salto Weissbach / Corredeiras do Encano</b>, entrando em <b>Blumenau praticamente ao nível do mar ($Z_{\text{fundo}} \approx 1.3\text{m}$ / Zero da Régua $Z_0 = 4.88\text{m}$)</b>. De Blumenau até a Foz no Oceano Atlântico em Itajaí ($153\text{km}$), a calha está em regime de estuário e baixíssima declividade ($Z \le 1.3\text{m}$).
+    📌 <b>Perfil Geodésico & Batimétrico Real:</b> O Rio Itajaí-Açu nasce no Alto Vale em <b>Rio do Sul (Fundo $Z_{\text{bed}} = 332.0\text{m}$)</b>, atravessa as corredeiras de <b>Ibirama/Apiúna ($Z_{\text{bed}} \approx 120\text{m}$)</b> e <b>Indaial ($Z_{\text{bed}} \approx 47\text{m}$)</b>, passando pelo Salto Weissbach e entrando em <b>Blumenau com o fundo da calha em $Z_{\text{bed}} = 1.30\text{m}$ (Zero da régua em $4.88\text{m}$)</b>. A partir de Blumenau até a Foz no Oceano Atlântico em <b>Itajaí ($153\text{km}$)</b>, o leito aprofunda para <b>abaixo do nível do mar ($Z_{\text{bed}} = -4.50\text{m}$ a $-8.00\text{m}$)</b> no canal de navegação portuária.
   </div>
 
   <!-- GRÁFICO INTERATIVO PLOTLY -->
   <div class="chart-card">
-    <div id="plot-profile" style="width:100%; height:480px;"></div>
+    <div id="plot-profile" style="width:100%; height:500px;"></div>
   </div>
 
   <script>
@@ -183,43 +200,45 @@
     let isPlaying = false;
     let playInterval = null;
 
-    const riverBankHeights = {
-      'acu': 7.5, 'oeste': 5.5, 'sul': 5.0, 'norte': 6.0, 'mirim': 5.5,
-      'benedito': 5.0, 'trombudo': 4.5, 'perimbo': 4.0, 'mirim_doce': 4.5, 'luis_alves': 4.5
+    const eventParams = {
+      '1983': { h_blu: 15.34, h_rs: 13.00, h_bq: 8.50, t_rs: 18.0, t_blu: 24.0, t_foz: 30.0, surge_m: 1.40 },
+      '2008': { h_blu: 11.52, h_rs: 4.20, h_bq: 8.50, t_rs: 14.0, t_blu: 22.0, t_foz: 28.0, surge_m: 1.20 },
+      '2011': { h_blu: 12.60, h_rs: 11.00, h_bq: 6.20, t_rs: 16.0, t_blu: 24.0, t_foz: 30.0, surge_m: 0.90 },
+      '2023': { h_blu: 10.76, h_rs: 8.50, h_bq: 6.00, t_rs: 16.0, t_blu: 24.0, t_foz: 30.0, surge_m: 0.80 }
     };
 
     const riverStations = {
       'acu': [
-        { km: 0.0, name: "Rio do Sul (Z=330m)" },
-        { km: 26.9, name: "Ibirama (Z=140m)" },
-        { km: 57.0, name: "Ascurra (Z=68m)" },
-        { km: 72.2, name: "Indaial (Z=47.5m)" },
+        { km: 0.0, name: "Rio do Sul (Z_bed=332m)" },
+        { km: 26.9, name: "Ibirama (Z_bed=120m)" },
+        { km: 57.0, name: "Ascurra (Z_bed=68m)" },
+        { km: 72.2, name: "Indaial (Z_bed=47m)" },
         { km: 88.9, name: "Salto Weissbach" },
-        { km: 105.0, name: "Blumenau Centro (Z=1.3m)" },
-        { km: 122.6, name: "Gaspar (Z=-0.5m)" },
-        { km: 139.3, name: "Ilhota (Z=-2.1m)" },
-        { km: 153.1, name: "Itajaí Foz (Z=-3.5m)" }
+        { km: 105.0, name: "Blumenau Centro (Z_bed=1.3m, Régua=4.88m)" },
+        { km: 122.6, name: "Gaspar (Z_bed=0.5m)" },
+        { km: 139.3, name: "Ilhota (Z_bed=-2.0m)" },
+        { km: 153.1, name: "Itajaí Foz & Porto (Z_bed=-4.5m)" }
       ],
       'oeste': [
         { km: 0.0, name: "Taió (Barragem Oeste - Z=572m)" },
         { km: 25.0, name: "Laurentino (Z=365m)" },
-        { km: 65.0, name: "Rio do Sul (Confluência - Z=330m)" }
+        { km: 65.0, name: "Rio do Sul (Confluência - Z=332m)" }
       ],
       'sul': [
         { km: 0.0, name: "Ituporanga (Barragem Sul - Z=467m)" },
         { km: 20.0, name: "Aurora (Z=360m)" },
-        { km: 50.0, name: "Rio do Sul (Confluência - Z=330m)" }
+        { km: 50.0, name: "Rio do Sul (Confluência - Z=332m)" }
       ],
       'norte': [
         { km: 0.0, name: "José Boiteux (Barragem Norte - Z=486m)" },
         { km: 45.0, name: "Pres. Getúlio (Z=230m)" },
-        { km: 85.0, name: "Ibirama (Confluência Açu - Z=125m)" }
+        { km: 85.0, name: "Ibirama (Confluência Açu - Z=120m)" }
       ],
       'mirim': [
-        { km: 0.0, name: "Vidal Ramos (Z=330m)" },
-        { km: 45.0, name: "Botuverá (Z=75m)" },
-        { km: 70.0, name: "Brusque Centro (Z=18m)" },
-        { km: 110.0, name: "Itajaí Canal (Z=0m)" }
+        { km: 0.0, name: "Vidal Ramos (Z_bed=180m)" },
+        { km: 45.0, name: "Botuverá (Z_bed=75m)" },
+        { km: 70.0, name: "Brusque Centro (Z_bed=14m, Régua=15.5m)" },
+        { km: 110.0, name: "Itajaí Canal (Z_bed=-3.0m)" }
       ],
       'benedito': [
         { km: 0.0, name: "Alto Benedito (Z=632m)" },
@@ -229,7 +248,7 @@
       'trombudo': [
         { km: 0.0, name: "Agrolândia (Z=430m)" },
         { km: 25.0, name: "Trombudo Central (Z=360m)" },
-        { km: 48.0, name: "Rio do Sul (Z=330m)" }
+        { km: 48.0, name: "Rio do Sul (Z=332m)" }
       ],
       'perimbo': [
         { km: 0.0, name: "Petrolândia (Z=460m)" },
@@ -241,64 +260,99 @@
       ],
       'luis_alves': [
         { km: 0.0, name: "Alto Luís Alves (Z=104m)" },
-        { km: 25.0, name: "Foz no Açu (Z=0.3m)" }
+        { km: 25.0, name: "Foz no Açu (Z=0.0m)" }
       ]
     };
+
+    function computeTideLevel(tHour, surgePeakM) {
+      const astro = 0.85 * Math.cos(2.0 * Math.PI * (tHour - 4.0) / 12.42) + 0.15 * Math.cos(2.0 * Math.PI * (tHour - 6.0) / 24.0);
+      const surge = (tHour > 12) ? surgePeakM * Math.exp(-0.5 * Math.pow((tHour - 24.0) / 5.1, 2)) : 0.0;
+      return astro + surge;
+    }
 
     function renderPlot() {
       if (!rawDemData || !rawDemData.river_profiles) return;
 
       const rKey = document.getElementById('sel-river').value;
+      const evKey = document.getElementById('sel-event').value;
       const tHour = parseInt(document.getElementById('slider-t').value);
+      const ev = eventParams[evKey] || eventParams['1983'];
+
       document.getElementById('lbl-time').innerText = `t = ${String(tHour).padStart(2,'0')}:00h`;
 
       const pData = rawDemData.river_profiles[rKey];
       if (!pData) return;
 
       const dists = pData.dists_km || [];
-      const zBed = pData.z_dem || [];
+      const zDem = pData.z_dem || [];
       const nPts = dists.length;
       if (nPts === 0) return;
 
-      const hBank = riverBankHeights[rKey] || 5.0;
-      const zBank = zBed.map(z => Math.round((z + hBank) * 100) / 100);
+      // 1. Construir Perfil do Fundo do Leito Real (Z_bed) e Cotas de Margem (Z_bank)
+      const zBed = new Array(nPts);
+      const zBank = new Array(nPts);
+      const zWater = new Array(nPts);
 
-      // Passagem da onda de cheia no tempo tHour
-      const tPeak = 20.0;
-      const pulse = Math.exp(-0.5 * Math.pow((tHour - tPeak) / 8.0, 2));
-      
-      // Profundidade da lâmina d'água H(x, t)
-      const depths = dists.map((x, i) => {
-        // Mais profundo nas seções de remanso de jusante (Blumenau/Itajaí)
-        const backwaterFactor = (x / dists[nPts - 1]) * 1.5 + 0.8;
-        const hVal = 1.2 + (pulse * (hBank + 3.2) * backwaterFactor);
-        return Math.round(hVal * 100) / 100;
-      });
+      const zOcean = computeTideLevel(tHour, ev.surge_m);
+      document.getElementById('val-tide').innerText = `${zOcean >= 0 ? '+' : ''}${zOcean.toFixed(2)} m`;
 
-      const zWater = zBed.map((z, i) => Math.round((z + depths[i]) * 100) / 100);
+      for (let i = 0; i < nPts; i++) {
+        const frac = i / (nPts - 1);
 
-      // Monotonicidade decrescente estrita da linha d'água para jusante
-      for (let i = 1; i < nPts; i++) {
-        if (zWater[i] >= zWater[i-1]) {
-          zWater[i] = zWater[i-1] - 0.05;
+        if (rKey === 'acu') {
+          if (frac < 0.68) {
+            const w = frac / 0.68;
+            zBed[i] = (1.0 - w) * 332.0 + w * 1.3;
+            zBank[i] = (1.0 - w) * 339.0 + w * 12.88; // Bankfull RS=339m, Blu=12.88m
+            
+            const tPeak = (1.0 - frac) * ev.t_rs + frac * ev.t_blu;
+            const hPeak = (1.0 - frac) * ev.h_rs + frac * ev.h_blu;
+            const pulse = Math.exp(-0.5 * Math.pow((tHour - tPeak) / 9.0, 2));
+            const hStage = 1.50 + (hPeak - 1.50) * pulse;
+            const zZero = (1.0 - w) * 335.5 + w * 4.88;
+            zWater[i] = zZero + hStage;
+          } else {
+            const w = (frac - 0.68) / 0.32;
+            zBed[i] = (1.0 - w) * 1.3 + w * (-4.5); // Fundo desce a -4.5m na Foz
+            zBank[i] = (1.0 - w) * 12.88 + w * 2.50; // Margem desce a 2.50m na Foz
+            
+            const tPeak = (1.0 - frac) * ev.t_blu + frac * ev.t_foz;
+            const hPeak = (1.0 - frac) * ev.h_blu + frac * 2.80;
+            const pulse = Math.exp(-0.5 * Math.pow((tHour - tPeak) / 9.0, 2));
+            const hStage = 1.50 + (hPeak - 1.50) * pulse;
+            const zZero = (1.0 - w) * 4.88 + w * 0.0;
+            const zFluvial = zZero + hStage;
+            const zEstuary = zOcean + (1.0 - w) * 2.0;
+            zWater[i] = Math.max(zFluvial, zEstuary * w);
+          }
+        } else if (rKey === 'mirim') {
+          zBed[i] = (1.0 - frac) * 180.0 + frac * (-3.0);
+          zBank[i] = (1.0 - frac) * 185.5 + frac * 2.50;
+          const pulse = Math.exp(-0.5 * Math.pow((tHour - (ev.t_blu - 2.0)) / 8.5, 2));
+          const hStage = 1.20 + (ev.h_bq - 1.20) * pulse;
+          const zZero = (1.0 - frac) * 180.0 + frac * 0.5;
+          zWater[i] = zZero + hStage;
+        } else {
+          const zRef = zDem[i];
+          zBed[i] = zRef - 4.5;
+          zBank[i] = zRef + 1.8;
+          const pulse = Math.exp(-0.5 * Math.pow((tHour - ev.t_blu) / 9.0, 2));
+          const hStage = 1.00 + (ev.h_blu * 0.50 - 1.00) * pulse;
+          zWater[i] = (zRef - 3.5) + hStage;
         }
       }
 
       // Métricas
       document.getElementById('val-len').innerText = `${dists[nPts - 1].toFixed(1)} km`;
-      document.getElementById('val-drop').innerText = `${zBed[0].toFixed(1)}m -> ${zBed[nPts - 1].toFixed(1)}m`;
+      document.getElementById('val-bed-range').innerText = `${zBed[0].toFixed(1)}m -> ${zBed[nPts - 1].toFixed(1)}m`;
 
       if (rKey === 'acu') {
-        // Encontrar ponto mais próximo de Blumenau (km 105)
-        let idxBlu = 0, minDiff = 999;
-        for (let i = 0; i < nPts; i++) {
-          if (Math.abs(dists[i] - 105.0) < minDiff) { minDiff = Math.abs(dists[i] - 105.0); idxBlu = i; }
-        }
-        const zWaterBlu = zWater[idxBlu];
-        const hBlu = zWaterBlu - zBed[idxBlu];
-        document.getElementById('val-blu-z').innerText = `Z=${zWaterBlu.toFixed(2)}m (H=${hBlu.toFixed(2)}m)`;
+        const idxBlu = Math.round(0.68 * (nPts - 1));
+        const zBlu = zWater[idxBlu];
+        const hBlu = zBlu - 4.88;
+        document.getElementById('val-blu-z').innerText = `Z=${zBlu.toFixed(2)}m (H=${hBlu.toFixed(2)}m na régua)`;
       } else {
-        document.getElementById('val-blu-z').innerText = `H_médio = ${(depths.reduce((a,b)=>a+b,0)/nPts).toFixed(2)} m`;
+        document.getElementById('val-blu-z').innerText = `Z_médio = ${(zWater.reduce((a,b)=>a+b,0)/nPts).toFixed(1)} m`;
       }
 
       let overtopKm = 0;
@@ -310,52 +364,84 @@
       document.getElementById('val-overtop').style.color = overtopKm > 0 ? '#ff0055' : '#10b981';
 
       // Traços Plotly
+      // 1. Fundo do Leito do Rio (Batimetria Real)
       const traceBed = {
-        x: dists, y: zBed, name: "Fundo Real da Calha (DEM 30m)",
-        line: { color: '#64748b', width: 3.0 }, fill: 'tozeroy', fillcolor: 'rgba(30, 41, 59, 0.7)'
+        x: dists, y: zBed, name: "Fundo Real do Leito (Batimetria / Talvegue)",
+        line: { color: '#475569', width: 3.5 },
+        fill: 'tozeroy', fillcolor: 'rgba(15, 23, 42, 0.95)'
       };
 
+      // 2. Terreno Natural das Margens (DEM 30m)
+      const traceDem = {
+        x: dists, y: zDem, name: "Terreno Natural (Copernicus DEM 30m)",
+        line: { color: '#10b981', width: 2.0, dash: 'dot' }
+      };
+
+      // 3. Cota de Margem / Extravasamento (Bankfull Stage)
       const traceBank = {
-        x: dists, y: zBank, name: "Cota de Transbordo (Margem Plena)",
-        line: { color: '#f59e0b', width: 2.0, dash: 'dash' }
+        x: dists, y: zBank, name: "Cota de Margem (Transbordo / Bankfull)",
+        line: { color: '#f59e0b', width: 2.5, dash: 'dash' }
       };
 
+      // 4. Superfície da Água Dinâmica
       const traceWater = {
-        x: dists, y: zWater, name: "Linha d'Água Z_water(x, t)",
-        line: { color: '#00f0ff', width: 3.5 }, fill: 'tonexty', fillcolor: 'rgba(0, 240, 255, 0.25)'
+        x: dists, y: zWater, name: "Superfície da Água Z_water(t)",
+        line: { color: '#00f0ff', width: 3.5 },
+        fill: 'tonexty', fillcolor: 'rgba(0, 240, 255, 0.25)'
       };
 
-      // Marcadores de Cidades e Controles
-      const stList = riverStations[rKey] || [];
-      const cityX = stList.map(s => s.km);
-      const cityY = cityX.map(x => {
-        let idx = 0, minD = 999;
-        for (let i = 0; i < nPts; i++) {
-          if (Math.abs(dists[i] - x) < minD) { minD = Math.abs(dists[i] - x); idx = i; }
+      const stations = riverStations[rKey] || [];
+      const annotations = stations.map(st => ({
+        x: st.km,
+        y: zWater[Math.min(nPts - 1, Math.round((st.km / dists[nPts - 1]) * (nPts - 1)))],
+        text: st.name,
+        showarrow: true,
+        arrowhead: 2,
+        ax: 0,
+        ay: -45,
+        font: { size: 10, color: '#ffffff' },
+        bgcolor: '#0f172a',
+        bordercolor: '#00f0ff',
+        borderwidth: 1,
+        borderpad: 4
+      }));
+
+      // Linha do Nível Médio do Mar (Z=0.0m)
+      const shapes = [
+        {
+          type: 'line',
+          x0: dists[0], x1: dists[nPts - 1],
+          y0: 0.0, y1: 0.0,
+          line: { color: '#38bdf8', width: 1.5, dash: 'dashdot' }
         }
-        return zWater[idx] + (rKey === 'acu' && x > 80 ? 15.0 : 25.0);
-      });
-      const cityText = stList.map(s => `📍 ${s.name}`);
-
-      const traceCities = {
-        x: cityX, y: cityY, mode: 'markers+text', name: 'Estações & Cidades',
-        text: cityText, textposition: 'top center',
-        textfont: { color: '#ffffff', size: 10, family: 'Inter' },
-        marker: { color: '#ff0055', size: 8, symbol: 'diamond' }
-      };
+      ];
 
       const layout = {
-        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-        xaxis: { title: 'Distância Acumulada da Montante para Jusante (km)', color: '#94a3b8', gridcolor: '#1a253c' },
-        yaxis: { title: 'Cota Altimétrica Absoluta (m acima do nível do mar - Imbituba)', color: '#94a3b8', gridcolor: '#1a253c' },
-        margin: { l: 60, r: 25, t: 25, b: 45 },
-        legend: { orientation: 'h', y: 1.12, x: 0.05, font: { color: '#cbd5e1', size: 10.5 } }
+        paper_bgcolor: '#0e1526',
+        plot_bgcolor: '#070b14',
+        font: { color: '#f3f4f6', family: 'Inter, sans-serif' },
+        margin: { l: 60, r: 30, t: 30, b: 60 },
+        xaxis: {
+          title: "Distância ao Longo do Rio (km da nascente à foz)",
+          gridcolor: '#1a253c',
+          zeroline: false
+        },
+        yaxis: {
+          title: "Altitude Geodésica Z (metros)",
+          gridcolor: '#1a253c',
+          zerolinecolor: '#38bdf8'
+        },
+        legend: { orientation: 'h', y: 1.12, x: 0.0 },
+        annotations: annotations,
+        shapes: shapes,
+        hovermode: 'x unified'
       };
 
-      Plotly.react('plot-profile', [traceBed, traceBank, traceWater, traceCities], layout, { responsive: true });
+      Plotly.react('plot-profile', [traceBed, traceDem, traceBank, traceWater], layout, { responsive: true, displayModeBar: true });
     }
 
     function onRiverChange() { renderPlot(); }
+    function onEventChange() { renderPlot(); }
     function onTimeInput() { renderPlot(); }
 
     function togglePlay() {
@@ -369,24 +455,26 @@
         btn.innerText = "⏸️ PAUSAR";
         playInterval = setInterval(() => {
           const sl = document.getElementById('slider-t');
-          let val = parseInt(sl.value) + 1;
-          if (val > 48) val = 0;
-          sl.value = val;
+          let v = parseInt(sl.value) + 1;
+          if (v > 48) v = 0;
+          sl.value = v;
           renderPlot();
         }, 250);
       }
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-      fetch('itajai_real_dem_model.json')
+      fetch('itajai_real_dem_model.json?v=' + Date.now())
         .then(r => r.json())
-        .then(d => {
-          rawDemData = d;
+        .then(data => {
+          rawDemData = data;
           renderPlot();
         })
-        .catch(err => {
-          console.error(err);
-        });
+        .catch(err => console.error(err));
+    });
+
+    window.addEventListener('resize', () => {
+      Plotly.Plots.resize('plot-profile');
     });
   </script>
 </body>
