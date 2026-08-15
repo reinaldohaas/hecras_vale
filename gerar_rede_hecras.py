@@ -82,7 +82,14 @@ ESCOPO = ["mirim"]
 # Area de drenagem que entra pela CABECEIRA do Acu. No escopo reduzido os
 # afluentes ausentes sao somados aqui para que as vazoes a jusante (Blumenau,
 # Itajai) fiquem na ordem de grandeza correta.
-AREA_CABECEIRA_ACU = 9881.0    # Sul+Oeste+Norte+Benedito (km2)
+LATERAIS = ["norte", "benedito"]
+# Afluentes injetados como VAZAO LATERAL na estaca da confluencia, sem virar
+# trecho nem juncao. Motivo: uma varredura mostrou que 1 juncao roda limpa
+# (0 falhas, erro de volume 0,02-0,18%) mas 2 ou mais divergem -- inclusive
+# combinando afluentes que funcionam isolados. A vazao lateral entrega a
+# agua no ponto certo sem adicionar juncao.
+AREA_CABECEIRA_ACU = 5033.0    # Sul + Oeste (km2), que formam o Acu
+                               # na confluencia de Rio do Sul
 # nomes das juncoes por ordem de km ao longo do Acu
 NOME_JUNCAO = {0: "Rio_do_Sul", 1: "Ibirama", 2: "Indaial", 3: "Itajai"}
 
@@ -196,7 +203,7 @@ def montar_rede():
 
     rede = {}
     for k, (pat, nome) in RIOS.items():
-        if k != MAIN and k not in ESCOPO:
+        if k != MAIN and k not in ESCOPO and k not in LATERAIS:
             continue
         ch = cadeia(pat)
         rede[k] = {"nome": nome, "linha": eixo(ch),
@@ -340,6 +347,18 @@ def escrever(trechos, juncoes):
     g.append(f"Spatial Reference System={wkt}")
     g.append("")
 
+    for j in juncoes:
+        g.append(f"Junct Name={p16(j['nome'])}")
+        g.append(f"Junct Desc={j['desc']}, 0 , 0 , 0 ,0")
+        g.append(f"Junct X Y & Text X Y={j['x']:.2f},{j['y']:.2f},"
+                 f"{j['x'] + 800:.2f},{j['y'] + 800:.2f}")
+        for r, rc in j["up"]:
+            g.append(f"Up River,Reach={p16(r)},{p16(rc)}")
+        g.append(f"Dn River,Reach={p16(j['dn'][0])},{p16(j['dn'][1])}")
+        for _ in j["up"]:
+            g.append("Junc L&A=500,0")
+        g.append("")
+
     for t in trechos:
         g.append(f"River Reach={p16(t['rio'])},{p16(t['reach'])}")
         c = list(t["linha"].coords)
@@ -376,25 +395,13 @@ def escrever(trechos, juncoes):
             g.append("Exp/Cntr=0.3,0.1")
             g.append("")
 
-    for j in juncoes:
-        g.append(f"Junct Name={p16(j['nome'])}")
-        g.append(f"Junct Desc={j['desc']}, 0 , 0 , 0 ,0")
-        g.append(f"Junct X Y & Text X Y={j['x']:.2f},{j['y']:.2f},"
-                 f"{j['x'] + 800:.2f},{j['y'] + 800:.2f}")
-        for r, rc in j["up"]:
-            g.append(f"Up River,Reach={p16(r)},{p16(rc)}")
-        g.append(f"Dn River,Reach={p16(j['dn'][0])},{p16(j['dn'][1])}")
-        for _ in j["up"]:
-            g.append("Junc L&A=500,")
-        g.append("")
-
     open(f"{PROJECT}.g01", "w", encoding="ascii", errors="replace").write(
         "\n".join(g) + "\n")
     n_xs = sum(len(t["xs"]) for t in trechos)
     print(f"  [OK] {PROJECT}.g01  ({len(trechos)} trechos, {len(juncoes)} juncoes, {n_xs} secoes)")
 
 
-def escrever_fluxo(trechos, cabeceiras, saida):
+def escrever_fluxo(trechos, cabeceiras, saida, laterais=()):
     u = [f"Flow Title=Cheia_Rede_Real", "Program Version=7.01", "Use Restart= 0 "]
     for t in trechos:
         u.append(f"Initial Flow Loc={p16(t['rio'])},{p16(t['reach'])},"
@@ -404,11 +411,17 @@ def escrever_fluxo(trechos, cabeceiras, saida):
         u.append("Interval=1HOUR")
         u.append(f"Flow Hydrograph= {NHORAS} ")
         u.append(serie8(hidrograma(t["q_pico"])))
+    for lt in laterais:
+        u.append(bl(lt["rio"], lt["reach"], f"{lt['rs']:.2f}"))
+        u.append("Interval=1HOUR")
+        u.append(f"Lateral Inflow Hydrograph= {NHORAS} ")
+        u.append(serie8(hidrograma(lt["q_pico"])))
     u.append(bl(saida["rio"], saida["reach"], f"{saida['xs'][-1]['rs']:.2f}"))
     u.append(f"Friction Slope={DS_SLOPE}")
     open(f"{PROJECT}.u01", "w", encoding="ascii", errors="replace").write(
         "\n".join(u) + "\n")
-    print(f"  [OK] {PROJECT}.u01  ({len(cabeceiras)} hidrogramas de cabeceira)")
+    print(f"  [OK] {PROJECT}.u01  ({len(cabeceiras)} hidrogramas de cabeceira, "
+          f"{len(laterais)} vazoes laterais)")
 
 
 def escrever_plano_prj():
@@ -443,7 +456,7 @@ def main():
     # posicao de cada afluente ao longo do Acu
     conf = []
     for k, v in rede.items():
-        if k == MAIN:
+        if k == MAIN or k not in ESCOPO:
             continue
         p = Point(list(v["linha"].coords)[-1])
         conf.append({"k": k, "s": acu.project(p), "pt": p})
@@ -554,8 +567,32 @@ def main():
     for t in cabeceiras:
         print(f"      {t['rio']:<14} Q pico = {t['q_pico']:7.1f} m3/s")
 
+    # --- afluentes injetados como vazao lateral (sem juncao)
+    laterais = []
+    for k in LATERAIS:
+        if k not in rede:
+            continue
+        p_ = Point(list(rede[k]["linha"].coords)[-1])
+        s_ = acu.project(p_)
+        rs_conf = acu.length - s_
+        alvo = None
+        for t in acu_reaches:
+            rss = [d["rs"] for d in t["xs"]]
+            if min(rss) <= rs_conf <= max(rss):
+                alvo = t
+                break
+        if alvo is None:
+            print(f"      ! {rede[k]['nome']}: confluencia fora dos trechos, ignorado")
+            continue
+        rs_sec = min((d["rs"] for d in alvo["xs"]), key=lambda r: abs(r - rs_conf))
+        pico = Q_REF_FOZ * rede[k]["area"] / area_total
+        laterais.append({"rio": alvo["rio"], "reach": alvo["reach"], "rs": rs_sec,
+                         "nome": rede[k]["nome"], "q_pico": pico})
+        print(f"      lateral: {rede[k]['nome']:<14} entra em {alvo['reach']} "
+              f"RS {rs_sec/1000:6.1f} km, Q pico {pico:7.1f} m3/s")
+
     escrever(trechos, juncoes)
-    escrever_fluxo(trechos, cabeceiras, acu_reaches[-1])
+    escrever_fluxo(trechos, cabeceiras, acu_reaches[-1], laterais)
     escrever_plano_prj()
     print(f"\nPronto.  Rode:  python run_hecras.py {PROJECT}")
 
