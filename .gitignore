@@ -1,5 +1,11 @@
-*.tif
-__pycache__/
-*.pyc
-app/debug_rasters/
-.pytest_cache/
+
+# Saidas de execucao do HEC-RAS (regeneraveis a partir do .g01/.u01/.p01)
+*.O0*
+*.b0[0-9]
+*.bco*
+*.ic.o*
+*.r0[0-9]
+*.x0[0-9]
+*.dss
+*.p0*.hdf
+*.computeMsgs.txt

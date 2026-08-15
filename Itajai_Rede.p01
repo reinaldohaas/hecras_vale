@@ -1,0 +1,15 @@
+Plan Title=Rede_Real_Bacia_Itajai
+Program Version=7.01
+Short Identifier=REDE
+Geom File=g01
+Flow File=u01
+Simulation Date=01AUG2026,0000,03AUG2026,0000
+Mixed Flow Regime
+Computation Interval=15SEC
+Output Interval=1HOUR
+Instantaneous Interval=1HOUR
+Mapping Interval=1HOUR
+Run HTab=-1
+Run UNet=-1
+Run PostProcess=-1
+Run RASMapper=0

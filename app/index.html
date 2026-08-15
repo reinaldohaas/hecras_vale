@@ -1144,6 +1144,7 @@
       updatePeakMarkers(t);
       renderFourHydrographPlots(t);
       update2DFloodPlainLayer();
+      updateHecrasFloodLayer();
     }
 
     function updateToposWindows(t) {
@@ -1305,6 +1306,8 @@
     let highResTributariesLayer = null;
     let highResFloodLayer = null;
     let floodGeojsonData = null;
+    let hecrasFloodLayer = null;
+    let hecrasFloodData = null;
 
     function initMap() {
       map = L.map('map').setView([-27.05, -49.30], 9);
@@ -1424,6 +1427,16 @@
         })
         .catch(err => console.error(err));
 
+      // 5b. Mancha derivada do HEC-RAS (cota d'água do solver - DEM).
+      //     Camada separada, para comparar lado a lado com o HAND sintético.
+      fetch('manchas_inundacao_hecras.geojson?v=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          hecrasFloodData = data;
+          updateHecrasFloodLayer();
+        })
+        .catch(err => console.warn('mancha HEC-RAS ainda não gerada:', err));
+
       // 6. Barragens
       [
         { name: "🏰 Barragem Oeste (Taió)", lat: -27.1150, lon: -49.9980 },
@@ -1498,6 +1511,44 @@
                            <i>Metodologia: Topographic HAND + Sincronização Hidrodinâmica + Marés</i>`);
         }
       }).addTo(map);
+    }
+
+    // Mancha do HEC-RAS: cota d'água do solver 1D subtraída do DEM.
+    // Fica em camada própria (ligável no controle) para comparar com o HAND.
+    function updateHecrasFloodLayer() {
+      if (!map || !hecrasFloodData) return;
+      const jaVisivel = hecrasFloodLayer && map.hasLayer(hecrasFloodLayer);
+      if (hecrasFloodLayer) {
+        map.removeLayer(hecrasFloodLayer);
+        delete overlayLayers["🔷 Mancha HEC-RAS (solver 1D)"];
+      }
+
+      const t = parseInt(document.getElementById('slider-time').value || 0);
+      const horas = [12, 18, 24, 30, 36, 48];
+      const alvo = horas.reduce((a, b) => Math.abs(b - t) < Math.abs(a - t) ? b : a);
+
+      hecrasFloodLayer = L.geoJSON(hecrasFloodData, {
+        pane: 'floodPane',
+        filter: f => f.properties.time_hour === alvo,
+        style: function() {
+          // contorno tracejado quente: contrasta com o preenchimento azul do HAND
+          return { color: '#f59e0b', weight: 1.6, dashArray: '5,3',
+                   fillColor: '#f59e0b', fillOpacity: 0.28 };
+        },
+        onEachFeature: function(feat, layer) {
+          const p = feat.properties;
+          layer.bindPopup(`<b>🔷 Mancha HEC-RAS &mdash; t = ${p.time_hour}:00h</b><br>
+                           <b>Classe:</b> ${p.class_name}<br>
+                           <b>Área da classe:</b> ${p.area_km2} km²<br>
+                           <b>Volume:</b> ${p.volume_hm3} hm³<br>
+                           <i>Cota d'água do solver 1D (${p.fonte || 'HEC-RAS'})
+                           subtraída do DEM Copernicus 30&nbsp;m.</i>`);
+        }
+      });
+
+      overlayLayers["🔷 Mancha HEC-RAS (solver 1D)"] = hecrasFloodLayer;
+      if (jaVisivel) hecrasFloodLayer.addTo(map);
+      setupLayerControl();
     }
 
     window.addEventListener('DOMContentLoaded', () => {
