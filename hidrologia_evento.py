@@ -41,6 +41,8 @@ DIR_CHUVA = os.path.join("itajai_flood_model", "data", "rainfall_events")
 # com 33 m3/s para 5.033 km2 -- lamina fina demais numa secao de 1.400 m, e o
 # solver instabiliza nas dezenas de horas antes de a cheia chegar.
 RENDIMENTO_BASE = 0.022        # m3/s por km2 (22 L/s.km2)
+K_RECUPERACAO   = 0.03         # recuperacao de umidade por hora seca
+CHUVA_MINIMA    = 0.2          # mm/h abaixo do qual a hora conta como seca
 
 # Barragens de contencao, de dados_estruturas/barragens_itajai.json.
 # q_fundo = descarga controlada pelas comportas de fundo durante a cheia.
@@ -91,21 +93,38 @@ def ler_chuva(evento):
     return serie, len(linhas)
 
 
-def chuva_efetiva_scs(p_horaria, cn):
-    """Perda SCS-CN aplicada ao hietograma REAL (nao a um bloco sintetico).
+def chuva_efetiva_scs(p_horaria, cn, k_recup=None):
+    """Perda SCS-CN sobre o hietograma REAL, com RECUPERACAO DE UMIDADE.
 
-    S  = 25400/CN - 254           (mm)
-    Ia = 0,2 S
-    Pe = (P - Ia)^2 / (P - Ia + S) para P acumulado > Ia
+    O SCS-CN e formulado para UM evento: a perda depende da chuva ACUMULADA
+    desde o inicio. Aplicado direto a uma serie de 8 dias, o armazenamento S
+    se esgota depois dos primeiros pulsos e praticamente toda chuva tardia
+    vira escoamento -- o que faz um pulso posterior dominar o hidrograma.
+    Foi o que aconteceu em 1983: a chuva tem dois picos (07/07 com 770 mm e
+    11/07 com 609 mm) e o modelo respondia ao segundo, enquanto a cheia real
+    foi do primeiro (pico em Blumenau no dia 09/07).
+
+    Aqui a chuva acumulada "ativa" decai nas horas sem chuva, a taxa
+    K_RECUPERACAO por hora, representando a drenagem/evapotranspiracao do
+    solo entre pulsos. Com 0,03/h, 24 h secas devolvem cerca de metade da
+    capacidade de infiltracao.
     """
+    k = K_RECUPERACAO if k_recup is None else k_recup
     s_mm = (25400.0 / cn) - 254.0
     ia_mm = 0.2 * s_mm
-    p_acum = np.cumsum(np.asarray(p_horaria, dtype=float))
-    excedente = p_acum - ia_mm
-    pe_acum = np.where(excedente > 0.0,
-                       (excedente ** 2) / (excedente + s_mm), 0.0)
-    pe_inc = np.diff(np.insert(pe_acum, 0, 0.0))
-    return np.clip(pe_inc, 0.0, None)
+    p_ac = 0.0                 # chuva acumulada ativa (com recuperacao)
+    pe_ac_ant = 0.0
+    saida = np.empty(len(p_horaria), dtype=float)
+    for i, p_t in enumerate(np.asarray(p_horaria, dtype=float)):
+        if p_t < CHUVA_MINIMA:            # hora seca: solo recupera
+            p_ac *= (1.0 - k)
+        else:
+            p_ac += p_t
+        exc = p_ac - ia_mm
+        pe_ac = (exc * exc) / (exc + s_mm) if exc > 0.0 else 0.0
+        saida[i] = max(0.0, pe_ac - pe_ac_ant)
+        pe_ac_ant = pe_ac
+    return saida
 
 
 def puls_barragem(q_in, cap_hm3, q_fundo, q_vert_max, dt_h=1.0):
