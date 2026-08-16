@@ -157,9 +157,12 @@ MAIN = "acu"
 # validar a cadeia inteira ate a mancha antes de voltar os demais rios.
 #   completo -> ["sul","oeste","norte","benedito","mirim"]
 #   reduzido -> ["mirim"]   (Acu + Mirim, 1 juncao)
-ESCOPO = ["sul", "oeste", "norte", "benedito", "mirim",
-          "luisalves", "trombudo", "taio", "pombas", "cedros",
-          "krauel", "iraputa", "testo"]
+ESCOPO = ["sul", "oeste", "norte", "benedito", "mirim"]
+# Os oito afluentes de 2a ordem (Luis Alves, Trombudo, Taio, das Pombas, dos
+# Cedros, Krauel, Iraputa, do Testo) ficam FORA por ora: a area deles continua
+# entrando como vazao incremental distribuida, que e o que ja acontecia antes.
+# Basta acrescenta-los a lista acima para voltarem -- o codigo da arvore ja
+# resolve sozinho em que rio cada um desagua.
 # Area de drenagem que entra pela CABECEIRA do Acu. No escopo reduzido os
 # afluentes ausentes sao somados aqui para que as vazoes a jusante (Blumenau,
 # Itajai) fiquem na ordem de grandeza correta.
