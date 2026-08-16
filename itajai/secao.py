@@ -174,8 +174,24 @@ def limites_por_curvatura(linha, estacas, meia_largura):
                 esq[i] = min(esq[i], R)
             else:
                 dir_[i] = min(dir_[i], R)
+    # Suaviza ao longo do trecho. Sem isto o limite apara a secao i e nao a
+    # i+1, e a largura sai em dente de serra -- no Rio do Testo dava
+    # 1000, 941, 746, 737, 1000, 846, ... O que importa nao e a largura em si,
+    # e o SALTO entre vizinhas: area e conducao mudam de degrau e o solver ve
+    # uma contracao seguida de expansao a cada secao. Um minimo movel garante
+    # que a secao nunca seja mais larga que as vizinhas precisam, e a media
+    # movel tira o degrau que sobra.
+    def alisar(v, jan=5):
+        n_ = len(v)
+        if n_ < jan:
+            return v
+        m = np.array([v[max(0, i - jan // 2):i + jan // 2 + 1].min()
+                      for i in range(n_)])
+        k = np.ones(3) / 3.0
+        return np.convolve(np.pad(m, 1, mode="edge"), k, "valid")
+
     minimo = 120.0
-    return np.maximum(esq, minimo), np.maximum(dir_, minimo)
+    return (np.maximum(alisar(esq), minimo), np.maximum(alisar(dir_), minimo))
 
 
 def cortar(linha, s, amostrador, meia_largura, area_km2, hw_esq=None,
