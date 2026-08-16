@@ -723,6 +723,33 @@ def escrever_plano_prj():
         "Short Identifier=REDE", "Geom File=g01", "Flow File=u01",
         f"Simulation Date={data_ras(ini)},{data_ras(fim)}",
         "Mixed Flow Regime",
+        # --- opcoes do solver 1D, que ate aqui ficaram TODAS no padrao.
+        #
+        # 'Mixed Flow Regime' e o LPI sao coisas separadas: o primeiro so
+        # permite regime misto, o segundo amortece os termos de inercia
+        # quando o Froude se aproxima de 1. O amortecimento vem DESLIGADO de
+        # fabrica (Froude Reduction=False), e e exatamente do que a garganta
+        # do Salto Pilao precisa -- o diagnostico acusa 51 secoes com Fr > 0,9.
+        "UNET Froude Reduction=True",
+        "UNET Froude Limit= 0.8 ",
+        "UNET Froude Power= 4 ",
+        # O log mostrava '20' no fim de cada linha de iteracao: o solver batia
+        # o teto de iteracoes com erro de 1,06 m e desistia sem convergir.
+        "UNET MxIter= 40 ",
+        "UNET Max Iter WO Improvement= 20 ",
+        "UNET Theta= 1 ",
+        "UNET Theta Warmup= 1 ",
+        "UNET ZTol= 0.01 ",
+        "UNET ZSATol= 0.01 ",
+        "UNET DZMax Abort= 30 ",
+        # Passos so para assentar a condicao inicial, antes de comecar a
+        # contar o tempo. E o que tira o transiente de partida que secava os
+        # trechos planos (257 secoes chegavam a menos de 5 cm de lamina).
+        "UNET MaxInSteps= 200 ",
+        "UNET DtIC= 0 ",
+        "Flow Smoothing Iterations=10",
+        "Unsteady Friction Slope Method= 2 ",
+        "UNET 1D Methodology=Finite Difference",
         # 15SEC era necessario para a rede instavel de varias juncoes; com
         # uma juncao so, 1MIN converge e roda ~4x mais rapido (relevante para
         # eventos reais de 168-312 h).
