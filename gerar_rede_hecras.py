@@ -633,9 +633,27 @@ def bl(river, reach, rs):
 
 
 def escrever(trechos, juncoes):
+    # 'Viewing Rectangle' e a extensao geografica da geometria, e estava
+    # gravado como o placeholder "0 , 1 , 1 , 0" -- um quadrado de 1 m na
+    # origem. E dele que o HEC-RAS deriva o atributo Extents do .g01.hdf, e e
+    # o Extents que o RAS Mapper usa para saber ONDE desenhar. Com [0,1,0,1] a
+    # janela do RAS Mapper abria vazia mesmo com a geometria marcada: ele
+    # procurava a bacia inteira dentro de um metro quadrado na origem.
+    # A ordem dos quatro campos e xmin, xmax, ymax, ymin.
+    xs, ys = [], []
+    for t in trechos:
+        for x, y in t["linha"].coords:
+            xs.append(x); ys.append(y)
+        for d in t["xs"]:
+            cu = d["cut"]
+            xs += [cu[0], cu[2]]
+            ys += [cu[1], cu[3]]
+    folga = 0.02 * max(max(xs) - min(xs), max(ys) - min(ys), 1.0)
+    x0, x1 = min(xs) - folga, max(xs) + folga
+    y0, y1 = min(ys) - folga, max(ys) + folga
     g = [f"Geom Title={PROJECT} - rede real ANA + relevo DEM",
          "Program Version=7.01",
-         "Viewing Rectangle= 0 , 1 , 1 , 0 "]
+         f"Viewing Rectangle= {x0:.6f} , {x1:.6f} , {y1:.6f} , {y0:.6f} "]
     wkt = ('PROJCS["SIRGAS 2000 / UTM zone 22S",GEOGCS["SIRGAS 2000",'
            'DATUM["Sistema_de_Referencia_Geocentrico_para_las_Americas_2000",'
            'SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],'
@@ -828,12 +846,32 @@ def escrever_plano_prj():
            'PARAMETER["false_northing",10000000],UNIT["metre",1]]')
     with open(f"{PROJECT}.projection", "w", encoding="utf-8") as f:
         f.write(wkt)
+    # O .rasmap so declarava a projecao, com <Terrains/> e <Results/> vazios e
+    # NENHUM bloco <Geometries>. Sem ele o RAS Mapper nao sabe que camada
+    # desenhar. A estrutura abaixo e a que o proprio RAS Mapper grava, com os
+    # caminhos no formato ".\arquivo" que ele usa.
     with open(f"{PROJECT}.rasmap", "w", encoding="utf-8") as f:
-        f.write('<?xml version="1.0" encoding="utf-8"?>\n<RASMapper>\n'
-                '  <Version>2.00</Version>\n'
-                f'  <RASProjectionFilename Filename="{PROJECT}.projection" />\n'
-                '  <Terrains />\n'
-                '  <Results />\n</RASMapper>\n')
+        f.write(
+            '<?xml version="1.0" encoding="utf-8"?>\n<RASMapper>\n'
+            '  <Version>2.00</Version>\n'
+            f'  <RASProjectionFilename Filename=".\\{PROJECT}.projection" />\n'
+            '  <Geometries Checked="True" Expanded="True">\n'
+            f'    <Layer Name="{PROJECT}" Type="RASGeometry" Checked="True" '
+            f'Expanded="True" Filename=".\\{PROJECT}.g01.hdf">\n'
+            '      <Layer Type="RASXS" Checked="True" '
+            'UnitsRiverStation="Meters" RiverStationDecimalPlaces="0" />\n'
+            '    </Layer>\n'
+            '  </Geometries>\n'
+            '  <Results Checked="True" Expanded="True">\n'
+            f'    <Layer Name="REDE" Type="RASResults" Checked="True" '
+            f'Expanded="True" Filename=".\\{PROJECT}.p01.hdf">\n'
+            f'      <Layer Name="Event Conditions" Type="RASEventConditions" '
+            f'Filename=".\\{PROJECT}.p01.hdf" />\n'
+            '    </Layer>\n'
+            '  </Results>\n'
+            '  <Terrains Checked="True" />\n'
+            '  <MapLayers Checked="True" />\n'
+            '</RASMapper>\n')
     print(f"  [OK] {PROJECT}.p01 / {PROJECT}.prj / {PROJECT}.rasmap")
 
 
