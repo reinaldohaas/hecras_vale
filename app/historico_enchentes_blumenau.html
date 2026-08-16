@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Banco Histórico de Enchentes de Blumenau (1940 - 2024)</title>
+
+  <!-- Plotly.js -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #070b14;
+      --bg-card: #0e1526;
+      --bg-card-hover: #162035;
+      --border-color: #1a253c;
+      --text-main: #f3f4f6;
+      --text-muted: #94a3b8;
+      --accent-cyan: #00f0ff;
+      --accent-blue: #3b82f6;
+      --accent-purple: #a855f7;
+      --accent-orange: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-magenta: #ff0055;
+      --accent-green: #10b981;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-dark); color: var(--text-main); font-family: var(--font-body);
+      min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; padding-bottom: 20px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #091022 0%, #101c36 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent-magenta), var(--accent-orange));
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .brand-title { font-family: var(--font-heading); font-size: 16px; font-weight: 700; color: #fff; }
+    .brand-subtitle { font-size: 11px; color: var(--accent-cyan); font-weight: 600; }
+
+    .nav-links { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-nav {
+      background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--border-color);
+      padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 11px; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 5px; transition: all 0.2s;
+    }
+    .btn-nav:hover { background: #2563eb; color: #fff; border-color: #3b82f6; }
+
+    .container-layout {
+      display: grid; grid-template-columns: 380px 1fr; gap: 14px; padding: 14px 18px; flex: 1;
+    }
+    @media (max-width: 1024px) { .container-layout { grid-template-columns: 1fr; } }
+
+    /* LISTA DE ENCHENTES (ESQUERDA) */
+    .panel-list {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
+      padding: 14px; display: flex; flex-direction: column; gap: 10px; height: calc(100vh - 120px);
+    }
+    .search-row { display: flex; gap: 8px; }
+    .input-search {
+      flex: 1; background: #070b14; border: 1px solid var(--border-color); color: #fff;
+      padding: 7px 10px; border-radius: 6px; font-size: 11.5px; font-family: var(--font-mono);
+    }
+    .sel-filter {
+      background: #070b14; border: 1px solid var(--border-color); color: #fff;
+      padding: 7px 10px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
+    }
+
+    .events-scroll {
+      flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;
+    }
+    .event-card {
+      background: #070b14; border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 9px 12px; display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; transition: all 0.15s; border-left: 4px solid var(--accent-blue);
+    }
+    .event-card:hover { background: var(--bg-card-hover); border-color: var(--accent-cyan); }
+    .event-card.active {
+      background: #0f1c3a; border-color: var(--accent-cyan); border-left-color: var(--accent-magenta);
+      box-shadow: 0 0 12px rgba(0,240,255,0.2);
+    }
+
+    .ev-date { font-weight: 700; font-size: 13px; color: #fff; }
+    .ev-source { font-size: 9.5px; color: var(--text-muted); }
+    .ev-stage {
+      font-family: var(--font-mono); font-weight: 800; font-size: 15px; text-align: right;
+    }
+    .ev-mm { font-size: 10px; color: var(--accent-cyan); font-family: var(--font-mono); }
+
+    /* PAINEL DE DETALHES (DIREITA) */
+    .panel-details {
+      display: flex; flex-direction: column; gap: 14px; overflow-y: auto; height: calc(100vh - 120px);
+    }
+
+    .summary-metrics {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    @media (max-width: 768px) { .summary-metrics { grid-template-columns: repeat(2, 1fr); } }
+
+    .metric-card {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;
+      padding: 10px 14px; display: flex; flex-direction: column; gap: 2px;
+    }
+    .metric-lbl { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    .metric-val { font-size: 16px; font-weight: 800; font-family: var(--font-mono); }
+
+    .chart-card {
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
+      padding: 14px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; }
+    .chart-title { font-family: var(--font-heading); font-size: 14px; font-weight: 700; color: #fff; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">📚</div>
+      <div>
+        <div class="brand-title">Banco Histórico de Enchentes de Blumenau (1940 - 2024)</div>
+        <div class="brand-subtitle">71 Enchentes Registradas • Defesa Civil de Blumenau • EPAGRI/CEOPS/ANA • ERA5-Land</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="btn-nav">🌊 Dashboard Principal</a>
+      <a href="mapa_perfis_hecras.html" class="btn-nav">📐 1.262 Seções HEC-RAS</a>
+      <a href="perfil_longitudinal_cotas.html" class="btn-nav">📏 Perfil do Fundo do Rio</a>
+      <a href="debug_hand_layers.html" class="btn-nav">🔬 Diagnóstico 8 Camadas</a>
+    </div>
+  </header>
+
+  <div class="container-layout">
+    
+    <!-- LISTA DE ENCHENTES -->
+    <div class="panel-list">
+      <div class="search-row">
+        <input type="text" id="input-search" class="input-search" placeholder="🔍 Buscar ano, mês ou cota..." oninput="filterEvents()">
+        <select id="sel-decade" class="sel-filter" onchange="filterEvents()">
+          <option value="all">Todas as Décadas</option>
+          <option value="2020">2020s (7 enchentes)</option>
+          <option value="2010">2010s (10 enchentes)</option>
+          <option value="2000">2000s (3 enchentes)</option>
+          <option value="1990">1990s (6 enchentes)</option>
+          <option value="1980">1980s (8 enchentes)</option>
+          <option value="1970">1970s (16 enchentes)</option>
+          <option value="1960">1960s (9 enchentes)</option>
+          <option value="1950">1950s (8 enchentes)</option>
+          <option value="1940">1940s (4 enchentes)</option>
+        </select>
+      </div>
+
+      <div style="font-size:11px; color:var(--text-muted); display:flex; justify-content:space-between; padding:0 4px;">
+        <span id="lbl-count">71 eventos carregados</span>
+        <span>Ordenado por Data / Cota</span>
+      </div>
+
+      <div class="events-scroll" id="events-list">
+        <!-- Cards injetados via JS -->
+      </div>
+    </div>
+
+    <!-- PAINEL DE DETALHES DO EVENTO SELECIONADO -->
+    <div class="panel-details">
+      
+      <!-- MÉTRICAS DO EVENTO -->
+      <div class="summary-metrics">
+        <div class="metric-card">
+          <span class="metric-lbl">Cota Oficial Blumenau</span>
+          <span class="metric-val" id="det-stage" style="color:#ff0055;">15.34 m</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-lbl">Vazão Máxima Estimada</span>
+          <span class="metric-val" id="det-flow" style="color:#00f0ff;">5.856 m³/s</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-lbl">Chuva Média na Bacia</span>
+          <span class="metric-val" id="det-precip-avg" style="color:#10b981;">340.0 mm</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-lbl">Sub-Bacia com Maior Chuva</span>
+          <span class="metric-val" id="det-max-basin" style="color:#f59e0b;">420.0 mm</span>
+        </div>
+      </div>
+
+      <!-- GRÁFICO 1: HIETOGRAMA HORÁRIO DAS 10 SUB-BACIAS (168 HORAS) -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title" id="plot-title-hourly">🌧️ Hietograma Horário do Evento (168 Horas / 7 Dias)</div>
+          <span style="font-size:11px; color:var(--text-muted);" id="det-source">Fonte: EPAGRI/CEOPS/ANA</span>
+        </div>
+        <div id="plot-hourly" style="width:100%; height:290px;"></div>
+      </div>
+
+      <!-- GRÁFICO 2: ACUMULADO ESPACIAL POR SUB-BACIA -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title">🗺️ Distribuição Espacial de Chuva Acumulada nas 10 Sub-Bacias (mm)</div>
+          <button class="btn-nav" id="btn-download-csv" onclick="downloadCurrentCsv()">📥 Baixar CSV do Evento</button>
+        </div>
+        <div id="plot-subbasins" style="width:100%; height:250px;"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    let catalogData = [];
+    let currentEvent = null;
+
+    const subBasinNames = {
+      'oeste': 'Rio do Oeste (Taió)',
+      'mirim_doce': 'Rio Mirim Doce',
+      'sul': 'Rio do Sul (Ituporanga)',
+      'perimbo': 'Rio Perimbó',
+      'trombudo': 'Rio Trombudo',
+      'norte': 'Rio Hercílio (Ibirama)',
+      'benedito': 'Rio Benedito (Timbó)',
+      'mirim': 'Rio Itajaí-Mirim (Brusque)',
+      'luis_alves': 'Rio Luís Alves',
+      'acu': 'Tronco Açu (Blumenau)'
+    };
+
+    function flowFromStage(stage) {
+      // Curva-chave oficial de Blumenau (CEOPS/ANA)
+      if (stage <= 1.0) return stage * 80.0;
+      return 2.402 * Math.pow(stage, 1.95) * 42.0;
+    }
+
+    function initPage() {
+      fetch('../itajai_flood_model/data/enchentes_blumenau_1940_2024/catalogo_enchentes_1940_2024.json?v=' + Date.now())
+        .then(r => r.json())
+        .then(data => {
+          catalogData = data;
+          renderEventsList();
+          // Selecionar 1983-07-09 por padrão (ou o primeiro da lista)
+          const defaultEv = catalogData.find(e => e.data_pico === '1983-07-09') || catalogData[0];
+          selectEvent(defaultEv);
+        })
+        .catch(err => {
+          console.error(err);
+          // Fallback para caminho local se servido diretamente da raiz
+          fetch('catalogo_enchentes_1940_2024.json?v=' + Date.now())
+            .then(r => r.json())
+            .then(data => {
+              catalogData = data;
+              renderEventsList();
+              selectEvent(catalogData[0]);
+            });
+        });
+    }
+
+    function renderEventsList() {
+      const container = document.getElementById('events-list');
+      container.innerHTML = '';
+
+      const searchTxt = document.getElementById('input-search').value.toLowerCase();
+      const decade = document.getElementById('sel-decade').value;
+
+      const filtered = catalogData.filter(ev => {
+        if (decade !== 'all') {
+          const decStart = parseInt(decade);
+          if (ev.ano < decStart || ev.ano >= decStart + 10) return false;
+        }
+        if (searchTxt) {
+          const s = `${ev.ano} ${ev.data_pico} ${ev.cota_blumenau_m}`.toLowerCase();
+          if (!s.includes(searchTxt)) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('lbl-count').innerText = `${filtered.length} eventos exibidos`;
+
+      filtered.forEach(ev => {
+        const card = document.createElement('div');
+        card.className = `event-card ${currentEvent && currentEvent.id === ev.id ? 'active' : ''}`;
+        
+        let color = '#3b82f6';
+        if (ev.cota_blumenau_m >= 13.0) color = '#ef4444';
+        else if (ev.cota_blumenau_m >= 10.0) color = '#f59e0b';
+
+        card.style.borderLeftColor = color;
+        card.onclick = () => selectEvent(ev);
+
+        card.innerHTML = `
+          <div>
+            <div class="ev-date">📅 ${ev.data_pico}</div>
+            <div class="ev-source">${ev.fonte_dados.includes('Estações') ? '🔬 Estações + ERA5' : '🌐 ERA5-Land'}</div>
+          </div>
+          <div>
+            <div class="ev-stage" style="color:${color};">${ev.cota_blumenau_m.toFixed(2)} m</div>
+            <div class="ev-mm">${ev.chuva_media_bacia_mm} mm bacia</div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function selectEvent(ev) {
+      currentEvent = ev;
+      renderEventsList();
+
+      document.getElementById('det-stage').innerText = `${ev.cota_blumenau_m.toFixed(2)} m`;
+      const qEst = flowFromStage(ev.cota_blumenau_m);
+      document.getElementById('det-flow').innerText = `${Math.round(qEst).toLocaleString('pt-BR')} m³/s`;
+      document.getElementById('det-precip-avg').innerText = `${ev.chuva_media_bacia_mm.toFixed(1)} mm`;
+      document.getElementById('det-max-basin').innerText = `${ev.chuva_max_sub_bacia_mm.toFixed(1)} mm`;
+      document.getElementById('det-source').innerText = `Fonte: ${ev.fonte_dados}`;
+      document.getElementById('plot-title-hourly').innerText = `🌧️ Hietograma Horário do Evento de ${ev.data_pico} (Cota ${ev.cota_blumenau_m.toFixed(2)}m)`;
+
+      // Gráfico de Barras Espaciais por Sub-Bacia
+      renderSpatialPlot(ev);
+
+      // Carregar CSV Horário e Plotar Hietograma
+      loadAndPlotHourly(ev);
+    }
+
+    function renderSpatialPlot(ev) {
+      const basins = Object.keys(ev.chuva_por_sub_bacia_mm);
+      const vals = Object.values(ev.chuva_por_sub_bacia_mm);
+      const names = basins.map(b => subBasinNames[b] || b);
+
+      const trace = {
+        x: names,
+        y: vals,
+        type: 'bar',
+        marker: {
+          color: vals.map(v => v >= 300 ? '#ff0055' : (v >= 150 ? '#f59e0b' : '#00f0ff')),
+          line: { color: '#ffffff', width: 1 }
+        },
+        text: vals.map(v => `${v.toFixed(1)} mm`),
+        textposition: 'outside'
+      };
+
+      const layout = {
+        paper_bgcolor: '#0e1526',
+        plot_bgcolor: '#070b14',
+        font: { color: '#f3f4f6', family: 'Inter, sans-serif', size: 10 },
+        margin: { l: 45, r: 20, t: 20, b: 65 },
+        yaxis: { title: "Precipitação Acumulada (mm)", gridcolor: '#1a253c' },
+        xaxis: { tickangle: -25, gridcolor: '#1a253c' }
+      };
+
+      Plotly.react('plot-subbasins', [trace], layout, { responsive: true, displayModeBar: false });
+    }
+
+    function loadAndPlotHourly(ev) {
+      const csvUrl = `../itajai_flood_model/data/enchentes_blumenau_1940_2024/${ev.arquivo_csv}?v=` + Date.now();
+      
+      fetch(csvUrl)
+        .then(r => r.text())
+        .then(csvTxt => {
+          const lines = csvTxt.trim().split('\n');
+          const headers = lines[0].split(',');
+          const timestamps = [];
+          const dataSeries = {};
+
+          for (let col = 1; col < headers.length; col++) {
+            dataSeries[headers[col]] = [];
+          }
+
+          for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].split(',');
+            timestamps.push(parts[0]);
+            for (let col = 1; col < headers.length; col++) {
+              dataSeries[headers[col]].push(parseFloat(parts[col]) || 0.0);
+            }
+          }
+
+          // Montar traços Plotly
+          const traces = [];
+          const colors = {
+            'acu': '#00f0ff',
+            'oeste': '#3b82f6',
+            'sul': '#a855f7',
+            'norte': '#10b981',
+            'mirim': '#f59e0b',
+            'benedito': '#ec4899',
+            'luis_alves': '#e11d48'
+          };
+
+          for (const [k, vals] of Object.entries(dataSeries)) {
+            if (['acu', 'oeste', 'sul', 'norte', 'mirim', 'benedito', 'luis_alves'].includes(k)) {
+              traces.push({
+                x: timestamps,
+                y: vals,
+                name: subBasinNames[k] || k,
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: colors[k] || '#94a3b8', width: k === 'acu' ? 2.5 : 1.5 }
+              });
+            }
+          }
+
+          const layout = {
+            paper_bgcolor: '#0e1526',
+            plot_bgcolor: '#070b14',
+            font: { color: '#f3f4f6', family: 'Inter, sans-serif', size: 10 },
+            margin: { l: 45, r: 20, t: 20, b: 35 },
+            xaxis: { title: "Data / Hora", gridcolor: '#1a253c' },
+            yaxis: { title: "Intensidade Horária (mm/h)", gridcolor: '#1a253c' },
+            legend: { orientation: 'h', y: 1.18, x: 0.0, font: { size: 9 } },
+            hovermode: 'x unified'
+          };
+
+          Plotly.react('plot-hourly', traces, layout, { responsive: true, displayModeBar: true });
+        })
+        .catch(err => console.error("Erro ao carregar CSV:", err));
+    }
+
+    function downloadCurrentCsv() {
+      if (!currentEvent) return;
+      const csvUrl = `../itajai_flood_model/data/enchentes_blumenau_1940_2024/${currentEvent.arquivo_csv}`;
+      window.open(csvUrl, '_blank');
+    }
+
+    function filterEvents() { renderEventsList(); }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initPage();
+    });
+
+    window.addEventListener('resize', () => {
+      Plotly.Plots.resize('plot-hourly');
+      Plotly.Plots.resize('plot-subbasins');
+    });
+  </script>
+</body>
+</html>
