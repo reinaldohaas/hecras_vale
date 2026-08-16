@@ -29,6 +29,7 @@ Formatos validados contra os projetos-exemplo oficiais do HEC-RAS:
 Uso:   python gerar_rede_hecras.py
 Depois: python run_hecras.py Itajai_Rede
 """
+import datetime
 import os
 import unicodedata
 import numpy as np
@@ -114,6 +115,9 @@ DS_SLOPE  = 0.0005             # declividade (usada so se MARE = False)
 # hidrograma triangular sintetico. None = sintetico.
 EVENTO      = None       # "2008"/"2011"/... usa chuva real (ver nota abaixo)
 BARRAGENS   = True             # False = cenario "sem obras" (comportas abertas)
+DATA_INICIO = None             # datetime do inicio da simulacao. Vem da data
+                               # REAL do evento (primeiro registro do arquivo
+                               # de chuva observada); None = cenario sintetico.
 NHORAS    = 97                 # ordinatas horarias (h = 0..96). 48 h nao
                                # bastam: o pico leva mais de 48 h para
                                # percorrer os 187 km ate a foz, e a
@@ -127,6 +131,20 @@ RIOS = {
     "norte":    ("Itajaí do Norte|Hercílio",  "Itajai_Norte"),
     "benedito": ("Benedito",                  "Rio_Benedito"),
     "mirim":    ("Itajaí-mirim",              "Itajai_Mirim"),
+    # Afluentes de 2a ordem. Nenhum deles desagua no Acu, exceto Luis Alves e
+    # do Testo: o Trombudo, o Taio e o das Pombas entram no Oeste; o Krauel e o
+    # Iraputa no Norte; o dos Cedros no Benedito. Sao os oito rios acima de
+    # 240 km2 que faltavam na rede -- juntos, 4.000 km2 que ate aqui entravam
+    # como vazao incremental distribuida, sem geometria propria (portanto sem
+    # mancha de inundacao em Luis Alves, Taio, Trombudo Central ou Mirim Doce).
+    "luisalves": ("Luís Alves",   "Rio_Luis_Alves"),
+    "trombudo":  ("Trombudo",     "Rio_Trombudo"),
+    "taio":      ("Taió",         "Rio_Taio"),
+    "pombas":    ("das Pombas",   "Rio_das_Pombas"),
+    "cedros":    ("dos Cedros",   "Rio_dos_Cedros"),
+    "krauel":    ("Krauel",       "Rio_Krauel"),
+    "iraputa":   ("Iraputã",      "Rio_Iraputa"),
+    "testo":     ("do Testo",     "Rio_do_Testo"),
 }
 # Canais retificados que SUBSTITUEM o curso natural. A base da ANA traz o
 # leito antigo meandrante; onde houve retificacao, o rio real corre pelo
@@ -139,7 +157,9 @@ MAIN = "acu"
 # validar a cadeia inteira ate a mancha antes de voltar os demais rios.
 #   completo -> ["sul","oeste","norte","benedito","mirim"]
 #   reduzido -> ["mirim"]   (Acu + Mirim, 1 juncao)
-ESCOPO = ["sul", "oeste", "norte", "benedito", "mirim"]
+ESCOPO = ["sul", "oeste", "norte", "benedito", "mirim",
+          "luisalves", "trombudo", "taio", "pombas", "cedros",
+          "krauel", "iraputa", "testo"]
 # Area de drenagem que entra pela CABECEIRA do Acu. No escopo reduzido os
 # afluentes ausentes sao somados aqui para que as vazoes a jusante (Blumenau,
 # Itajai) fiquem na ordem de grandeza correta.
@@ -281,12 +301,15 @@ def montar_rede():
         out = int(sub.loc[sub["NUAREAMONT"].idxmax(), "COTRECHO"])
         ch = [out]
         while True:
+            # str() obrigatorio: nem todo trecho da BHO tem nome, e o valor
+            # vem como NaN (float). Sem isso a busca quebra com AttributeError
+            # ao subir por qualquer rio cujo caminho passe por trecho sem nome.
             ups = [c for c in pred.get(ch[-1], [])
-                   if c in by and any(a.lower() in by[c].NORIOCOMP.lower()
+                   if c in by and any(a.lower() in str(by[c].NORIOCOMP).lower()
                                       for a in pat.split("|"))]
             if not ups:
                 break
-            melhor = max(ups, key=lambda c: by[c].NUAREAMONT)
+            melhor = max(ups, key=lambda c: float(by[c].NUAREAMONT or 0))
             if float(by[melhor].NUAREAMONT or 0) < MIN_AREA:
                 break          # torrente de cabeceira: nao modela
             ch.append(melhor)
@@ -665,17 +688,30 @@ def escrever_fluxo(trechos, cabeceiras, saida, laterais=(), uniformes=()):
           f"{len(laterais)} vazoes laterais)")
 
 
+MES_RAS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+           "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+
+
+def data_ras(dt):
+    """datetime -> '05JUL1983,0000', o formato de data do HEC-RAS."""
+    return f"{dt.day:02d}{MES_RAS[dt.month-1]}{dt.year},{dt.hour:02d}00"
+
+
 def escrever_plano_prj():
     # A janela tem de terminar EXATAMENTE na ultima ordinata da serie
     # (h = NHORAS-1). Terminar depois disso aborta o calculo com
     # "Time series data ends before the end of the simulation".
+    #
+    # A data vem do EVENTO. Estava fixa em 01AUG2026, entao a cheia de julho de
+    # 1983 aparecia rotulada como agosto de 2026 no RAS, no RAS Mapper, no HDF e
+    # em tudo que le dali -- inclusive na interface web.
     total_h = NHORAS - 1
-    DIA_FIM = 1 + total_h // 24
-    HORA_FIM = f"{(total_h % 24) * 100:04d}"
+    ini = DATA_INICIO or datetime.datetime(2026, 8, 1)
+    fim = ini + datetime.timedelta(hours=total_h)
     open(f"{PROJECT}.p01", "w", encoding="ascii").write("\n".join([
         "Plan Title=Rede_Real_Bacia_Itajai", "Program Version=7.01",
         "Short Identifier=REDE", "Geom File=g01", "Flow File=u01",
-        f"Simulation Date=01AUG2026,0000,{DIA_FIM:02d}AUG2026,{HORA_FIM}",
+        f"Simulation Date={data_ras(ini)},{data_ras(fim)}",
         "Mixed Flow Regime",
         # 15SEC era necessario para a rede instavel de varias juncoes; com
         # uma juncao so, 1MIN converge e roda ~4x mais rapido (relevante para
@@ -723,12 +759,25 @@ def main():
     print("REDE 1D REAL DA BACIA DO ITAJAI — topologia ANA + relevo DEM")
     print("=" * 68)
 
-    global NHORAS, PROJECT
+    global NHORAS, PROJECT, DATA_INICIO
     q_ev = None
     if EVENTO:
         from hidrologia_evento import hidrogramas
         q_ev, NHORAS = hidrogramas(EVENTO, barragens=BARRAGENS)
         PROJECT = f"Itajai_Rede_{EVENTO}"   # projeto separado do sintetico
+        # data real do evento, do proprio arquivo de chuva observada
+        for cam in (os.path.join("itajai_flood_model", "data",
+                                 "rainfall_events", f"chuva_real_{EVENTO}.csv"),):
+            if os.path.exists(cam):
+                with open(cam, encoding="utf-8") as fh:
+                    fh.readline()                     # cabecalho
+                    t0 = fh.readline().split(",")[0].strip()
+                try:
+                    DATA_INICIO = datetime.datetime.fromisoformat(t0)
+                    print(f"      inicio da simulacao: {data_ras(DATA_INICIO)} "
+                          f"(data real do evento)")
+                except ValueError:
+                    pass
         print(f"[0/4] Evento {EVENTO}: chuva real observada, "
               f"{NHORAS} h, barragens "
               f"{'ATIVAS' if BARRAGENS else 'ABERTAS (sem obras)'}")
@@ -741,17 +790,42 @@ def main():
     print(f"\n[1/4] Topologia — calha principal: {acu.length/1000:.1f} km, "
           f"{area_total:.0f} km2")
 
-    # posicao de cada afluente ao longo do Acu
-    conf = []
-    for k, v in rede.items():
-        if k == MAIN or k not in ESCOPO:
+    # --- ARVORE da rede: em qual rio cada afluente desagua
+    # Antes todo afluente era projetado no eixo do Acu, o que so vale para quem
+    # entra no proprio Acu. Dos afluentes maiores da bacia, a maioria NAO
+    # entra: o Trombudo, o Taio e o das Pombas desaguam no Oeste, o Krauel e o
+    # Iraputa no Norte, o dos Cedros no Benedito. Projetar esses no Acu punha a
+    # confluencia a dezenas de km do lugar certo. Agora a rede e uma arvore e o
+    # Acu e so a raiz.
+    ativos = [k for k in rede if k == MAIN or k in ESCOPO]
+    receptor, filhos = {}, {k: [] for k in ativos}
+    for k in ativos:
+        if k == MAIN:
             continue
-        p = Point(list(v["linha"].coords)[-1])
-        conf.append({"k": k, "s": acu.project(p), "pt": p})
-    conf.sort(key=lambda d: d["s"])
-    for c in conf:
-        print(f"      {rede[c['k']]['nome']:<14} entra em {c['s']/1000:6.1f} km "
-              f"({(acu.length-c['s'])/1000:5.1f} km da foz)")
+        foz = Point(list(rede[k]["linha"].coords)[-1])
+        # o receptor e sempre um rio MAIOR: assim um afluente nunca e
+        # pendurado noutro afluente menor que por acaso passe perto da foz
+        cand = [m for m in ativos
+                if m != k and rede[m]["area"] > rede[k]["area"]]
+        if not cand:
+            continue
+        alvo = min(cand, key=lambda m: rede[m]["linha"].distance(foz))
+        d = rede[alvo]["linha"].distance(foz)
+        if d > 500.0:
+            print(f"      ! {rede[k]['nome']}: foz a {d:.0f} m do rio mais "
+                  f"proximo, fora da rede")
+            continue
+        receptor[k] = alvo
+        filhos[alvo].append({"k": k, "s": rede[alvo]["linha"].project(foz),
+                             "pt": foz})
+    for m in filhos:
+        filhos[m].sort(key=lambda d: d["s"])
+    for m in sorted(filhos, key=lambda x: -rede[x]["area"]):
+        for c in filhos[m]:
+            Lm = rede[m]["linha"].length
+            print(f"      {rede[c['k']]['nome']:<16} -> {rede[m]['nome']:<14} "
+                  f"a {(Lm-c['s'])/1000:6.1f} km da foz dele")
+    conf = filhos[MAIN]        # confluencias no proprio Acu
 
     dem = None
     if USAR_SIGSC:
@@ -769,82 +843,103 @@ def main():
     print(f"\n[2/4] Cortando secoes do DEM (espacamento {SPACING:.0f} m, "
           f"largura {2*HALFWIDTH:.0f} m)...")
 
-    # --- Acu: corta e condiciona como UM perfil continuo (evita degrau de
-    #     leito nas juncoes internas), so depois divide em trechos
+    # --- corta e condiciona CADA rio como um perfil continuo (evita degrau de
+    #     leito nas juncoes internas) e so depois divide em trechos, nas
+    #     confluencias dos SEUS proprios afluentes.
     def hw_area(frac):
         return AREA_CABECEIRA_ACU + (area_total - AREA_CABECEIRA_ACU) * frac
 
     def hw_acu(frac):
         return largura(hw_area(frac))
-    acu_xs = condicionar(secoes(acu, dem, 0.0, hw_acu, hw_area), rede[MAIN]["nome"])
-    acu_bed = {d["rs"]: d["z"].min() for d in acu_xs}
 
-    def bed_em(rs_alvo):
-        """cota do leito do Acu na estaca mais proxima de rs_alvo"""
-        k = min(acu_bed, key=lambda r: abs(r - rs_alvo))
-        return acu_bed[k]
-
-    cortes = sorted({0.0} | {c["s"] for c in conf if c["s"] > 1.0} |
-                    {acu.length})
-    trechos, acu_reaches = [], []
-    for i in range(len(cortes) - 1):
-        a, b = cortes[i], cortes[i + 1]
-        if b - a < SPACING:
-            continue
-        seg = substring(acu, a, b)
-        rs_hi, rs_lo = acu.length - a, acu.length - b
-        xs = [d for d in acu_xs if rs_lo < d["rs"] <= rs_hi] if acu_reaches \
-             else [d for d in acu_xs if rs_lo <= d["rs"] <= rs_hi]
-        if len(xs) < 2:
-            continue
-        t = {"rio": rede[MAIN]["nome"], "reach": f"R{len(acu_reaches)+1}",
-             "linha": seg, "xs": xs, "a": a, "b": b}
-        trechos.append(t); acu_reaches.append(t)
-        print(f"      {t['rio']}/{t['reach']}: {seg.length/1000:6.1f} km, "
-              f"{len(xs):3d} secoes  (km {a/1000:.1f}–{b/1000:.1f})")
-
-    # --- afluentes: condiciona e ANCORA o leito na cota do Acu na confluencia
     DROP = 0.5                                # desnivel na juncao (m)
-    for c in conf:
-        k = c["k"]; ln = rede[k]["linha"]
-        xs = condicionar(secoes(ln, dem, 0.0, largura(rede[k]["area"]),
-                                rede[k]["area"]), rede[k]["nome"])
-        alvo = bed_em(acu.length - c["s"]) + DROP
-        desl = alvo - xs[-1]["z"].min()
-        for d in xs:                          # desloca o trecho inteiro
-            d["z"] = d["z"] + desl
-        t = {"rio": rede[k]["nome"], "reach": "R1", "linha": ln, "xs": xs,
-             "k": k, "conf_s": c["s"], "pt": c["pt"]}
-        trechos.append(t)
-        print(f"      {t['rio']}/R1: {ln.length/1000:6.1f} km, {len(xs):3d} secoes"
-              f"  (ancorado em {alvo:.1f} m, deslocado {desl:+.1f} m)")
+    trechos, acu_reaches = [], []
+    reaches_de, bed_de = {}, {}
 
-    # --- juncoes: cada confluencia liga (afluentes + Acu montante) -> Acu jusante
+    def bed_em(k, rs_alvo):
+        """cota do leito do rio k na estaca mais proxima de rs_alvo"""
+        b = bed_de[k]
+        return b[min(b, key=lambda r: abs(r - rs_alvo))]
+
+    # Do MAIOR para o menor: quando um afluente e processado o leito do rio que
+    # o recebe ja existe, e ele pode ser ancorado na cota certa da confluencia.
+    for k in sorted(ativos, key=lambda x: -rede[x]["area"]):
+        ln = rede[k]["linha"]
+        L = ln.length
+        if k == MAIN:
+            xs = condicionar(secoes(ln, dem, 0.0, hw_acu, hw_area),
+                             rede[k]["nome"])
+            anc = ""
+        else:
+            a_k = rede[k]["area"]
+            xs = condicionar(secoes(ln, dem, 0.0, largura(a_k), a_k),
+                             rede[k]["nome"])
+            m = receptor[k]
+            s_conf = next(c["s"] for c in filhos[m] if c["k"] == k)
+            alvo = bed_em(m, rede[m]["linha"].length - s_conf) + DROP
+            desl = alvo - xs[-1]["z"].min()
+            for d in xs:                      # desloca o trecho inteiro
+                d["z"] = d["z"] + desl
+            anc = f"  ancorado em {alvo:.1f} m ({desl:+.1f} m)"
+        bed_de[k] = {d["rs"]: d["z"].min() for d in xs}
+
+        cortes = sorted({0.0} | {c["s"] for c in filhos[k] if c["s"] > 1.0}
+                        | {L})
+        reaches_de[k] = []
+        for i in range(len(cortes) - 1):
+            a, b = cortes[i], cortes[i + 1]
+            if b - a < SPACING:
+                continue
+            rs_hi, rs_lo = L - a, L - b
+            sel = ([d for d in xs if rs_lo < d["rs"] <= rs_hi] if reaches_de[k]
+                   else [d for d in xs if rs_lo <= d["rs"] <= rs_hi])
+            if len(sel) < 2:
+                continue
+            t = {"rio": rede[k]["nome"], "reach": f"R{len(reaches_de[k])+1}",
+                 "linha": substring(ln, a, b), "xs": sel, "a": a, "b": b,
+                 "rio_k": k}
+            trechos.append(t)
+            reaches_de[k].append(t)
+            if k == MAIN:
+                acu_reaches.append(t)
+        # 'k' marca APENAS o trecho de jusante de um afluente -- e o que se
+        # liga a juncao e o que recebe o hidrograma de cabeceira adiante.
+        if k != MAIN and reaches_de[k]:
+            c = next(c for c in filhos[receptor[k]] if c["k"] == k)
+            reaches_de[k][-1].update({"k": k, "conf_s": c["s"], "pt": c["pt"]})
+        print(f"      {rede[k]['nome']:<16}{L/1000:7.1f} km, {len(xs):4d} secoes,"
+              f" {len(reaches_de[k])} trecho(s){anc}")
+
+    # --- juncoes: em CADA rio, toda estaca que recebe afluente vira uma juncao
+    #     ligando (afluentes que chegam ali + trecho de montante) -> trecho de
+    #     jusante do proprio rio.
     print("\n[3/4] Juncoes")
     juncoes = []
-    for i, c in enumerate(conf):
-        ups = [t for t in trechos if t.get("k") == c["k"]]
-        # trecho do Acu imediatamente a montante desta confluencia
-        up_acu = [t for t in acu_reaches if abs(t["b"] - c["s"]) < 1.0]
-        dn_acu = [t for t in acu_reaches if abs(t["a"] - c["s"]) < 1.0]
-        if not dn_acu:
-            continue
-        # afluentes que entram exatamente no mesmo ponto (ex.: Sul + Oeste)
-        ups += [t for t in trechos
-                if t.get("k") and t["k"] != c["k"]
-                and abs(t.get("conf_s", -1) - c["s"]) < 1.0
-                and not any(u is t for u in ups)]
-        if any(j["s"] == c["s"] for j in juncoes):
-            continue
-        j = {"s": c["s"], "nome": NOME_JUNCAO.get(len(juncoes), f"J{len(juncoes)+1}"),
-             "desc": "Confluencia", "x": c["pt"].x, "y": c["pt"].y,
-             "up": [(t["rio"], t["reach"]) for t in ups + up_acu],
-             "dists": [ (t["xs"][-1]["rs"] if t.get("k")
-                         else t["xs"][-1]["rs"] - (acu.length - c["s"]))
-                        for t in ups + up_acu ],
-             "dn": (dn_acu[0]["rio"], dn_acu[0]["reach"])}
-        juncoes.append(j)
-        print(f"      {j['nome']:<12} {[u[0] for u in j['up']]} -> {j['dn'][0]}/{j['dn'][1]}")
+    n_acu = 0
+    for m in sorted(filhos, key=lambda x: -rede[x]["area"]):
+        for s in sorted({c["s"] for c in filhos[m]}):
+            entra = [c for c in filhos[m] if abs(c["s"] - s) < 1.0]
+            ups = [reaches_de[c["k"]][-1] for c in entra
+                   if reaches_de.get(c["k"])]
+            up_m = [t for t in reaches_de[m] if abs(t["b"] - s) < 1.0]
+            dn_m = [t for t in reaches_de[m] if abs(t["a"] - s) < 1.0]
+            if not dn_m or not ups:
+                continue
+            # As juncoes do Acu tem nome de cidade; as dos afluentes levam o
+            # nome do proprio afluente, senao NOME_JUNCAO passaria a rotular
+            # confluencias erradas assim que a rede deixou de ser so o Acu.
+            if m == MAIN:
+                nome = NOME_JUNCAO.get(n_acu, f"J{n_acu+1}")
+                n_acu += 1
+            else:
+                nome = f"Foz_{rede[entra[0]['k']]['nome']}"[:16].strip()
+            j = {"s": s, "nome": nome, "desc": "Confluencia",
+                 "x": entra[0]["pt"].x, "y": entra[0]["pt"].y,
+                 "up": [(t["rio"], t["reach"]) for t in ups + up_m],
+                 "dn": (dn_m[0]["rio"], dn_m[0]["reach"])}
+            juncoes.append(j)
+            print(f"      {j['nome']:<18} {[u[0] for u in j['up']]} -> "
+                  f"{j['dn'][0]}/{j['dn'][1]}")
 
     # --- vazoes rateadas por area de drenagem
     # cabeceira do Acu vira contorno de vazao no escopo reduzido
@@ -856,24 +951,38 @@ def main():
         acu_head["serie"] = q_ev["sul"] + q_ev["oeste"]
         acu_head["q_base"] = float(acu_head["serie"][0])
 
-    # Se Sul e Oeste sao TRECHOS, o Acu nasce da juncao Rio do Sul e NAO
-    # pode ter contorno proprio ali -- seria vazao contada duas vezes.
-    acu_nasce_de_juncao = any(abs(c["s"]) < 1.0 for c in conf)
+    # Um rio que nasce de uma juncao NAO pode ter contorno proprio na cabeceira
+    # -- seria vazao contada duas vezes. Vale para o Acu (juncao Sul+Oeste) e
+    # agora tambem para qualquer afluente que receba outro na estaca zero.
+    def nasce_de_juncao(k):
+        return any(abs(c["s"]) < 1.0 for c in filhos.get(k, []))
+
+    acu_nasce_de_juncao = nasce_de_juncao(MAIN)
     cabeceiras = [] if acu_nasce_de_juncao else [acu_head]
     if acu_nasce_de_juncao:
         print("      cabeceira do Acu = juncao Sul+Oeste (sem contorno proprio)")
+
+    # area de drenagem que ja chegou ao inicio de um trecho, em QUALQUER rio:
+    # a area propria do rio (o que nao pertence a nenhum afluente nomeado dele)
+    # mais os afluentes que ja entraram a montante. Antes so o Acu acumulava;
+    # com a arvore o Oeste, o Norte e o Benedito tambem tem afluentes proprios.
+    def incremental_de(k):
+        """Area do rio k que NAO pertence a nenhum afluente nomeado dele."""
+        return max(rede[k]["area"]
+                   - sum(rede[c["k"]]["area"] for c in filhos.get(k, []))
+                   - (AREA_CABECEIRA_ACU if k == MAIN else 0.0), 0.0)
+
+    def area_ate(k, s):
+        propria = AREA_CABECEIRA_ACU if k == MAIN else incremental_de(k)
+        return propria + sum(rede[c["k"]]["area"] for c in filhos.get(k, [])
+                             if c["s"] <= s + 1.0)
+
     for t in trechos:
-        if t.get("k"):                         # afluente: area propria
-            a = rede[t["k"]]["area"]
-        else:                                  # trecho do Acu: ACUMULA os
-            # afluentes que ja entraram a montante deste trecho. Sem isso o
-            # Acu comeca praticamente seco e a juncao instabiliza no warm-up.
-            a = AREA_CABECEIRA_ACU + sum(rede[c["k"]]["area"]
-                                         for c in conf if c["s"] <= t["a"] + 1.0)
+        a = area_ate(t["rio_k"], t["a"])
         if t is not acu_head:
             t["q_pico"] = Q_REF_FOZ * a / area_total
             t["q_base"] = max(t["q_pico"] * 0.15, 20.0)
-            if q_ev and not t.get("k"):
+            if q_ev and t["rio_k"] == MAIN:
                 # Com evento, a vazao inicial dos trechos do Acu TEM de vir da
                 # mesma fonte da cabeceira. Misturar serie real na cabeceira
                 # com valor sintetico aqui cria um degrau de vazao na juncao
@@ -890,11 +999,53 @@ def main():
                 if "acu_incr" in q_ev:            # incremental ja acumulado
                     q0 += float(q_ev["acu_incr"][0]) * (t["a"] / max(acu.length, 1.0))
                 t["q_base"] = q0
-        if t.get("k"):
-            if q_ev and t["k"] in q_ev:
-                t["serie"] = q_ev[t["k"]]
-                t["q_base"] = float(t["serie"][0])
-            cabeceiras.append(t)
+    # O contorno de vazao entra na CABECEIRA de cada rio, isto e, no primeiro
+    # trecho -- nao no ultimo. Enquanto cada afluente tinha um unico trecho os
+    # dois eram o mesmo; agora que Oeste, Norte e Benedito se dividem em varios,
+    # pendurar o hidrograma no trecho de jusante injetaria a agua ja na foz.
+    # De onde vem o hidrograma de cada rio novo. O evento so traz serie para
+    # Sul, Oeste, Norte, Benedito, Mirim e o incremental da bacia -- os oito
+    # afluentes recem-adicionados nao tem serie propria. Mas a area deles JA
+    # ESTA dentro da serie do rio que os recebe: o Trombudo esta dentro do
+    # Oeste, o Krauel dentro do Norte, o Luis Alves dentro do incremental. Cada
+    # um leva entao a fatia da serie do seu receptor proporcional a area, e o
+    # receptor fica com o resto. Assim o volume do evento nao muda ao detalhar
+    # a rede, e ninguem recebe agua sintetica misturada com serie real.
+    a_ref = area_total - sum(rede[c["k"]]["area"] for c in filhos[MAIN]
+                             if q_ev and c["k"] in q_ev)
+
+    def fonte_serie(k):
+        """(serie, area coberta) da fonte de hidrograma que cobre o rio k."""
+        if q_ev and k in q_ev:
+            return q_ev[k], rede[k]["area"]
+        m = receptor.get(k)
+        if m is not None:
+            return fonte_serie(m)
+        if q_ev and "acu_incr" in q_ev:
+            return q_ev["acu_incr"], a_ref
+        return None, 1.0
+
+    def serie_de_area(k, area_km2):
+        s, a = fonte_serie(k)
+        return None if s is None else s * (area_km2 / max(a, 1.0))
+
+    for k in sorted(ativos, key=lambda x: -rede[x]["area"]):
+        if k == MAIN or not reaches_de.get(k):
+            continue
+        if nasce_de_juncao(k):
+            print(f"      cabeceira do {rede[k]['nome']} = juncao "
+                  f"(area propria entra como vazao lateral)")
+            continue
+        t = reaches_de[k][0]
+        # a cabeceira leva a area PROPRIA do rio; o que pertence aos afluentes
+        # dele entra nas respectivas confluencias, nao aqui
+        own = incremental_de(k)
+        t["q_pico"] = Q_REF_FOZ * own / area_total
+        s = serie_de_area(k, own)
+        if s is not None:
+            t["serie"] = s
+            t["q_base"] = float(s[0])
+        cabeceiras.append(t)
     print("      vazao inicial acumulada na calha:")
     for t in acu_reaches:
         print(f"        {t['rio']}/{t['reach']}: Q inicial = {t['q_base']:6.1f} m3/s")
@@ -927,35 +1078,48 @@ def main():
         print(f"      lateral: {rede[k]['nome']:<14} entra em {alvo['reach']} "
               f"RS {rs_sec/1000:6.1f} km, Q pico {pico:7.1f} m3/s")
 
-    # --- area de drenagem do proprio Acu, distribuida ao longo da calha
+    # --- area de drenagem PROPRIA de cada rio, distribuida ao longo da calha
+    #
+    # Duas correcoes que a arvore tornou necessarias:
+    #
+    # 1. O contab antigo somava rede[k]["area"] de TODO o ESCOPO. Como a area
+    #    do Trombudo ja esta dentro da do Oeste, os netos eram contados duas
+    #    vezes: a soma passava de 15.500 km2 numa bacia de 14.871 e o
+    #    incremental do Acu zerava. So os afluentes DIRETOS do Acu contam.
+    #
+    # 2. Cada afluente tem incremental proprio, nao so o Acu. O Oeste tem
+    #    1.593 km2 que nao pertencem ao Taio, ao Trombudo nem ao das Pombas;
+    #    como ele passou a nascer da juncao do Taio, sem isto receberia apenas
+    #    a agua do Taio e esses 1.593 km2 sumiriam do balanco.
     uniformes = []
     if INCREMENTAL:
-        contab = AREA_CABECEIRA_ACU + sum(rede[k]["area"] for k in
-                                          list(ESCOPO) + list(LATERAIS)
-                                          if k in rede)
-        incr = max(area_total - contab, 0.0)
-        L_tot = sum(t["linha"].length for t in acu_reaches)
-        print(f"      incremental do Acu: {incr:.0f} km2 "
-              f"({100*incr/area_total:.1f}% da bacia), distribuida em "
-              f"{L_tot/1000:.1f} km")
-        for t in acu_reaches:
-            a = incr * t["linha"].length / L_tot
-            pico = Q_REF_FOZ * a / area_total
-            # O intervalo NAO pode tocar as secoes extremas do trecho:
-            # "Uniform lateral inflows cannot start on the upstream cross
-            #  section of a reach" (idem para a de jusante). Recua uma secao.
-            ordenadas = sorted((d["rs"] for d in t["xs"]), reverse=True)
-            if len(ordenadas) < 4:
-                continue                      # trecho curto demais p/ uniforme
-            rs_hi = ordenadas[1]
-            rs_lo = ordenadas[-2]
-            frac = t["linha"].length / L_tot
-            uniformes.append({"rio": t["rio"], "reach": t["reach"],
-                              "rs_hi": rs_hi, "rs_lo": rs_lo, "q_pico": pico,
-                              "serie": (q_ev["acu_incr"] * frac)
-                                       if (q_ev and "acu_incr" in q_ev) else None})
-            print(f"        {t['reach']}: {a:7.0f} km2  ->  Q pico {pico:6.1f} m3/s"
-                  f"  (RS {rs_hi/1000:.1f} a {rs_lo/1000:.1f} km)")
+        for k in sorted(ativos, key=lambda x: -rede[x]["area"]):
+            rr = reaches_de.get(k) or []
+            incr = incremental_de(k)
+            # So quem NASCE DE JUNCAO recebe a area propria distribuida. Quem
+            # tem contorno de cabeceira ja a recebeu la; repetir aqui dobrava a
+            # vazao (o Sul aparecia com 776 m3/s na cabeceira e 776 de lateral).
+            if not rr or incr < 1.0 or not nasce_de_juncao(k):
+                continue
+            L_tot = sum(t["linha"].length for t in rr)
+            print(f"      incremental {rede[k]['nome']:<16}{incr:7.0f} km2 "
+                  f"({100*incr/area_total:4.1f}% da bacia) em {L_tot/1000:6.1f} km")
+            for t in rr:
+                a = incr * t["linha"].length / L_tot
+                pico = Q_REF_FOZ * a / area_total
+                # O intervalo NAO pode tocar as secoes extremas do trecho:
+                # "Uniform lateral inflows cannot start on the upstream cross
+                #  section of a reach" (idem para a de jusante). Recua uma secao.
+                ordenadas = sorted((d["rs"] for d in t["xs"]), reverse=True)
+                if len(ordenadas) < 4:
+                    continue                  # trecho curto demais p/ uniforme
+                serie = serie_de_area(k, a)
+                uniformes.append({"rio": t["rio"], "reach": t["reach"],
+                                  "rs_hi": ordenadas[1], "rs_lo": ordenadas[-2],
+                                  "q_pico": pico, "serie": serie})
+                print(f"        {t['reach']}: {a:7.0f} km2  ->  Q pico "
+                      f"{pico:6.1f} m3/s  (RS {ordenadas[1]/1000:.1f} a "
+                      f"{ordenadas[-2]/1000:.1f} km)")
 
     # --- n de Manning por secao, a partir da zona de cada rio
     for t in trechos:
