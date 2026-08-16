@@ -914,17 +914,30 @@ def escrever_plano_prj():
     # (Project > New Terrain), que o converte para o .hdf dele. Apontar para o
     # GeoTIFF cru produz uma cascata de "HDF5-DIAG: file signature not found".
     # Enquanto nao existir, a entrada fica vazia e o resto do .rasmap funciona.
+    # O .hdf tem prioridade: e o formato proprio, criado em Project > New
+    # Terrain, e o unico que serve para o HEC-RAS calcular profundidade. O .tif
+    # ja reprojetado (preparar_terreno.py) entra como alternativa para pelo
+    # menos VER o relevo, e e tambem o arquivo que se aponta no import.
     terr = None
     for cand in ("Terrain/Terreno.hdf", "Terrain/Terrain.hdf",
-                 f"Terrain/{PROJECT}.hdf"):
+                 f"Terrain/{PROJECT}.hdf", "Terrain/Terreno_Copernicus.tif"):
         if os.path.exists(cand):
             terr = cand.replace("/", "\\")
             break
     terrenos = ('  <Terrains Checked="True" Expanded="True">\n'
-                f'    <Layer Name="{os.path.basename(terr)[:-4]}" '
+                f'    <Layer Name="{os.path.splitext(os.path.basename(terr))[0]}" '
                 f'Type="TerrainLayer" Checked="True" '
                 f'Filename=".\\{terr}" />\n'
                 '  </Terrains>\n') if terr else '  <Terrains Checked="True" />\n'
+
+    # limites da planicie de inundacao, se ja gerados (gerar_planicie.py)
+    shp = f"{PROJECT}_planicie.shp"
+    mapas = ('  <MapLayers Checked="True" Expanded="True">\n'
+             f'    <Layer Name="Planicie de inundacao" '
+             f'Type="PolygonFeatureLayer" Checked="True" '
+             f'Filename=".\\{shp}" />\n'
+             '  </MapLayers>\n') if os.path.exists(shp) else \
+            '  <MapLayers Checked="True" />\n'
     with open(f"{PROJECT}.rasmap", "w", encoding="utf-8") as f:
         f.write(
             '<?xml version="1.0" encoding="utf-8"?>\n<RASMapper>\n'
@@ -960,8 +973,7 @@ def escrever_plano_prj():
             '      </Layer>\n'
             '    </Layer>\n'
             '  </Results>\n'
-            + terrenos +
-            '  <MapLayers Checked="True" />\n'
+            + terrenos + mapas +
             '</RASMapper>\n')
     print(f"  [OK] {PROJECT}.p01 / {PROJECT}.prj / {PROJECT}.rasmap")
 

@@ -1,18 +1,11 @@
-*.projection
-*.rasmap.backup
-REDE/
-01/
-eraveis a partir do .g01/.u01/.p01)
-*.O0*
-*.b0[0-9]
-*.bco*
-*.ic.o*
-*.r0[0-9]
-*.x0[0-9]
-*.dss
-*.p0*.hdf
-*.computeMsgs.txt
 
-# KML/KMZ exportados (regeneraveis)
-*.kml
-*.kmz
+# Terreno reprojetado e mancha derivada: refeitos por preparar_terreno.py e
+# gerar_planicie.py, grandes demais para versionar.
+Terrain/
+*_planicie.shp
+*_planicie.shx
+*_planicie.dbf
+*_planicie.prj
+*_planicie.cpg
+*_planicie.geojson
+*_motor.npz
