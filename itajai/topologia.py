@@ -26,6 +26,15 @@ RIOS = {
     "norte":    ("Itajaí do Norte|Hercílio", "Itajai_Norte"),
     "benedito": ("Benedito",                 "Rio_Benedito"),
     "mirim":    ("Itajaí-mirim",             "Itajai_Mirim"),
+    # afluentes de 2a ordem. Nenhum destes desagua no Acu: Trombudo, das
+    # Pombas e Taio entram no Oeste; Iraputa no Norte (o Hercilio); dos Cedros
+    # no Benedito. So o do Testo entra na calha principal.
+    "trombudo": ("Trombudo",                 "Rio_Trombudo"),
+    "pombas":   ("das Pombas",               "Rio_das_Pombas"),
+    "taio":     ("Taió",                     "Rio_Taio"),
+    "iraputa":  ("Iraputã",                  "Rio_Iraputa"),
+    "cedros":   ("dos Cedros",               "Rio_dos_Cedros"),
+    "testo":    ("do Testo",                 "Rio_do_Testo"),
 }
 PRINCIPAL = "acu"
 

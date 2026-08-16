@@ -121,22 +121,80 @@ def margens(sta, z, i0, prof_canal):
     return round(float(sta[e]), 2), round(float(sta[d]), 2)
 
 
-def cortar(linha, s, amostrador, meia_largura, area_km2):
-    """Uma secao perpendicular ao eixo na posicao s."""
+FOLGA_CURVA = 0.70       # fracao do raio de curvatura ate onde a secao pode ir
+
+
+def direcao(linha, s):
+    """Direcao local do eixo, suavizada em +-SUAVIZA_DIR.
+
+    Com janela de +-1 m as cutlines se cruzam nas curvas e o RAS avisa
+    "edge lines have self intersections".
+    """
     a = linha.interpolate(max(0.0, s - SUAVIZA_DIR))
     b = linha.interpolate(min(linha.length, s + SUAVIZA_DIR))
     tx, ty = b.x - a.x, b.y - a.y
     n = np.hypot(tx, ty) or 1.0
-    rx, ry = ty / n, -tx / n                       # normal a direita
+    return tx / n, ty / n
+
+
+def limites_por_curvatura(linha, estacas, meia_largura):
+    """Ate onde cada semi-secao pode ir sem cruzar as vizinhas.
+
+    Numa curva de raio R, duas perpendiculares vizinhas convergem e se
+    encontram a R do eixo, do lado CONCAVO. Passar disso e o que produz
+    cutlines cruzadas -- 24% dos pares vizinhos, no primeiro corte desta
+    reescrita. E dai que sai a mancha continua e sem sentido no Depth do RAS
+    Mapper: ele interpola a superficie d'agua ENTRE as cutlines, e onde elas se
+    cruzam a interpolacao nao tem significado.
+
+    R sai da variacao de angulo entre estacas consecutivas: R = ds / |dtheta|.
+    Aparar so o lado concavo preserva a largura nos trechos retos, que e onde
+    a planicie precisa dela.
+    """
+    n = len(estacas)
+    dirs = [direcao(linha, s) for s in estacas]
+    ang = np.unwrap([np.arctan2(t[1], t[0]) for t in dirs])
+    esq = np.full(n, float(meia_largura) if np.isscalar(meia_largura)
+                  else 0.0)
+    dir_ = esq.copy()
+    if not np.isscalar(meia_largura):
+        esq = np.asarray(meia_largura, float).copy()
+        dir_ = esq.copy()
+    for i in range(n):
+        for j in (i - 1, i + 1):
+            if j < 0 or j >= n:
+                continue
+            ds = abs(estacas[j] - estacas[i])
+            dth = abs(ang[j] - ang[i])
+            if ds <= 0 or dth < 1e-6:
+                continue
+            R = FOLGA_CURVA * ds / dth
+            # dtheta > 0 = curva a esquerda: as perpendiculares convergem la
+            if (ang[j] - ang[i]) * (1 if j > i else -1) > 0:
+                esq[i] = min(esq[i], R)
+            else:
+                dir_[i] = min(dir_[i], R)
+    minimo = 120.0
+    return np.maximum(esq, minimo), np.maximum(dir_, minimo)
+
+
+def cortar(linha, s, amostrador, meia_largura, area_km2, hw_esq=None,
+           hw_dir=None):
+    """Uma secao perpendicular ao eixo na posicao s."""
+    tx, ty = direcao(linha, s)
+    rx, ry = ty, -tx                               # normal a direita
     p = linha.interpolate(s)
-    off = np.linspace(-meia_largura, meia_largura, N_PONTOS)
+    he = float(hw_esq if hw_esq is not None else meia_largura)
+    hd = float(hw_dir if hw_dir is not None else meia_largura)
+    off = np.concatenate([np.linspace(-he, 0, N_PONTOS // 2, endpoint=False),
+                          np.linspace(0, hd, N_PONTOS - N_PONTOS // 2)])
     z = amostrador.cota(p.x + off * rx, p.y + off * ry)
     if np.isnan(z).all():
         return None
     if np.isnan(z).any():
         ok = ~np.isnan(z)
         z = np.interp(np.arange(len(z)), np.flatnonzero(ok), z[ok])
-    sta = off + meia_largura
+    sta = off + he
 
     prof, larg = canal(area_km2)
     i0 = indice_eixo(sta, z, max(larg, 150.0))
@@ -145,8 +203,7 @@ def cortar(linha, s, amostrador, meia_largura, area_km2):
     i0 = indice_eixo(sta, z, max(larg, 150.0))
     z = np.maximum(z, z[i0])
     lb, rb = margens(sta, z, i0, prof)
-    cut = (p.x - meia_largura * rx, p.y - meia_largura * ry,
-           p.x + meia_largura * rx, p.y + meia_largura * ry)
+    cut = (p.x - he * rx, p.y - he * ry, p.x + hd * rx, p.y + hd * ry)
     return {"sta": sta, "z": z, "i_thal": i0, "lb": lb, "rb": rb,
             "cut": cut, "area_km2": area_km2, "prof_canal": prof,
             "larg_canal": larg}
@@ -160,11 +217,16 @@ def cortar_trecho(linha, amostrador, area_foz, rs0=0.0, area_cabeceira=None):
     """
     L = linha.length
     a0 = area_cabeceira if area_cabeceira is not None else area_foz * 0.05
+    ss = estacas(linha, amostrador)
+    areas = [a0 + (area_foz - a0) * (s / max(L, 1.0)) for s in ss]
+    hw = [largura_secao(a) for a in areas]
+    # apara o lado concavo de cada secao ANTES de cortar: e o que impede as
+    # cutlines de se cruzarem nas curvas
+    hw_e, hw_d = limites_por_curvatura(linha, ss, hw)
     xs = []
-    for s in estacas(linha, amostrador):
-        frac = s / max(L, 1.0)
-        area = a0 + (area_foz - a0) * frac
-        r = cortar(linha, s, amostrador, largura_secao(area), area)
+    for i, s in enumerate(ss):
+        r = cortar(linha, s, amostrador, hw[i], areas[i],
+                   hw_esq=hw_e[i], hw_dir=hw_d[i])
         if r is None:
             continue
         r["rs"] = round(rs0 + (L - s), 2)
