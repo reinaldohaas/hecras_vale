@@ -25,6 +25,7 @@ import time
 
 import numpy as np
 from shapely.geometry import Point
+from shapely.ops import substring
 
 from itajai import config, terreno, tracado, topologia, secao, perfil, escrita
 
@@ -135,8 +136,14 @@ def main():
                    [d for d in v["xs"] if rs_lo <= d["rs"] <= rs_hi])
             if len(sel) < 2:
                 continue
+            # SEGMENTO do eixo, nao o rio inteiro. Dando a mesma linha a todos
+            # os trechos, os quatro do Acu saem com os mesmos 174 km de
+            # Reach XY: o RAS Mapper desenha um sobre o outro e liga os pontos
+            # de juncao entre si, formando uma teia de linhas tracejadas. As
+            # bank lines, que se apoiam no tracado do trecho, herdam o erro.
             t = {"rio": v["nome"], "reach": f"R{len(por_rio[k])+1}", "k": k,
-                 "linha": v["linha"], "xs": sel, "a": a, "b": b}
+                 "linha": substring(v["linha"], a, b), "xs": sel,
+                 "a": a, "b": b}
             trechos.append(t)
             por_rio[k].append(t)
         print(f"    {v['nome']:<14} {len(por_rio[k])} trecho(s)")
