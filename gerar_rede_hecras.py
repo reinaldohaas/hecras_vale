@@ -54,7 +54,16 @@ DEM       = "dem_itajai.tif"
 # MDT do SIG-SC a 1 m (terreno, nao superficie). Cobre 100% dos rios
 # modelados no mesmo CRS. Contra o Copernicus GLO-30, nas encostas a
 # diferenca chega a 15 m -- que e a COPA DA MATA sendo tratada como terreno.
-USAR_SIGSC = True
+USAR_SIGSC = False             # TUDO do Copernicus: eixo, secoes e planicie.
+                               # Misturar as duas fontes desencontra a
+                               # geometria -- o eixo sai do fundo de vale que o
+                               # Copernicus enxerga e a secao e amostrada no
+                               # SIG-SC, cujo talvegue esta noutro lugar (e que
+                               # ainda grava 0,00 sobre a agua). A calha
+                               # escavada ficava fora do eixo por desencontro
+                               # entre modelos de terreno, nao por erro de
+                               # nenhum dos dois. Ligar de volta so faz sentido
+                               # depois que a cadeia fechar com uma fonte so.
 # Corta a secao onde ela reencontraria o rio. Uma secao 1D tem de cruzar o
 # canal UMA vez; em trecho meandrante 17% das cutlines cruzavam 2 ou 3 vezes
 # e a mesma agua era contada vezes repetidas.
@@ -970,13 +979,15 @@ def escrever_plano_prj():
     # (Project > New Terrain), que o converte para o .hdf dele. Apontar para o
     # GeoTIFF cru produz uma cascata de "HDF5-DIAG: file signature not found".
     # Enquanto nao existir, a entrada fica vazia e o resto do .rasmap funciona.
-    # O .hdf tem prioridade: e o formato proprio, criado em Project > New
-    # Terrain, e o unico que serve para o HEC-RAS calcular profundidade. O .tif
-    # ja reprojetado (preparar_terreno.py) entra como alternativa para pelo
-    # menos VER o relevo, e e tambem o arquivo que se aponta no import.
+    # SO o .hdf. Declarar o GeoTIFF como TerrainLayer parecia inofensivo -- na
+    # pior hipotese a camada nao apareceria -- mas o HEC-RAS tenta abri-lo como
+    # HDF5 ao escrever a geometria e despeja uma cascata de
+    #   HDF5-DIAG ... Terrain: Terrain ... file signature not found
+    # a cada execucao. O .hdf so existe depois do import em
+    # Project > New Terrain, que e onde se aponta o .tif reprojetado.
     terr = None
     for cand in ("Terrain/Terreno.hdf", "Terrain/Terrain.hdf",
-                 f"Terrain/{PROJECT}.hdf", "Terrain/Terreno_Copernicus.tif"):
+                 f"Terrain/{PROJECT}.hdf"):
         if os.path.exists(cand):
             terr = cand.replace("/", "\\")
             break
