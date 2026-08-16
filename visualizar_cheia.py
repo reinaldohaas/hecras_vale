@@ -77,6 +77,27 @@ def ler_motor(projeto):
 
 
 # ------------------------------------------------------------------- MONTAGEM
+def cotas_margem(projeto, riv, rch, rs):
+    """Cota da margem (Bank Sta) de cada secao, lida do .g01.
+
+    Sem ela o grafico so mostra lamina e leito, e um canal CHEIO fica igual a
+    uma cheia: no baixo Itajai o leito escavado esta abaixo do nivel do mar por
+    76 km, entao a mare enche a calha e a area azul ocupa metade do grafico
+    desde o passo zero. Com a linha da margem da para ver o que e canal cheio e
+    o que e agua fora dele.
+    """
+    import motor_hidraulico as M
+    secs, _ = M.ler_geometria(projeto)
+    idx = {}
+    for s in secs:
+        i_lb = int(np.argmin(np.abs(s["sta"] - s["lb"])))
+        i_rb = int(np.argmin(np.abs(s["sta"] - s["rb"])))
+        idx[(s["rio"], s["reach"], round(s["rs"], 2))] = float(
+            min(s["z"][i_lb], s["z"][i_rb]))
+    return np.array([idx.get((str(riv[i]), str(rch[i]), round(float(rs[i]), 2)),
+                             np.nan) for i in range(len(rs))])
+
+
 def preparar(d, rio="Itajai_Acu", n_secoes=90, n_tempos=60):
     """Reduz a malha para caber na pagina sem perder a forma da cheia."""
     m = d["riv"] == rio
@@ -96,11 +117,15 @@ def preparar(d, rio="Itajai_Acu", n_secoes=90, n_tempos=60):
         k = np.linspace(0, len(p) - 1, min(len(p), 70)).round().astype(int)
         secs.append({"x": [round(float(v), 1) for v in p[k, 0]],
                      "z": [round(float(v), 2) for v in p[k, 1]]})
+    mrg = d.get("margem")
     return {
         "rio": rio,
         "rs": [round(float(d["rs"][j]) / 1000, 2) for j in idx],
         "leito": [round(v, 2) for v in leito],
         "topo": [round(v, 2) for v in topo],
+        "margem": ([round(float(mrg[j]), 2) if np.isfinite(mrg[j])
+                    else round(leito[n], 2)
+                    for n, j in enumerate(idx)] if mrg is not None else None),
         "horas": [int(t) for t in ts],
         "ws": [[round(float(d["ws"][t, j]), 2) for j in idx] for t in ts],
         "q": [[round(float(d["q"][t, j]), 1) for j in idx] for t in ts],
@@ -112,7 +137,10 @@ def preparar(d, rio="Itajai_Acu", n_secoes=90, n_tempos=60):
 def pagina(dados, projeto, meta):
     j = json.dumps(dados, ensure_ascii=False, separators=(",", ":"))
     aviso = ""
-    if "Success" not in meta["estado"]:
+    # 'Concluido' e o estado de sucesso do motor proprio; 'Success' e o do
+    # HEC-RAS. Testar so por 'Success' fazia a pagina do motor exibir
+    # "Simulacao incompleta" logo acima de "192 de 192 saidas".
+    if not any(x in meta["estado"] for x in ("Success", "Concluido")):
         aviso = (f'<div class="aviso"><b>Simulação incompleta.</b> '
                  f'O solver parou com <code>{meta["estado"]}</code> após '
                  f'{meta["n_saidas"]} de {meta["n_previstas"]} saídas horárias. '
@@ -191,7 +219,8 @@ svg{display:block;width:100%;height:auto}
     <svg id="perfil" viewBox="0 0 1100 380"></svg>
     <div class="legenda">
       <span class="chave"><i class="sw" style="background:var(--leito)"></i>leito escavado</span>
-      <span class="chave"><i class="sw" style="background:var(--terra)"></i>topo da seção</span>
+      <span class="chave"><i class="sw" style="background:var(--terra)"></i>margem / topo da seção</span>
+      <span class="chave"><i class="sw" style="background:var(--alerta);opacity:.6"></i>água acima da margem</span>
       <span class="chave"><i class="sw" style="background:var(--agua)"></i>lâmina d'água</span>
       <span class="chave"><i class="sw" style="background:var(--alerta)"></i>seção escolhida</span>
     </div>
@@ -220,8 +249,13 @@ const mk = (t,a) => { const e = document.createElementNS(SVGNS,t);
   for(const k in a) e.setAttribute(k,a[k]); return e; };
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
-/* escala vertical comprimida: o vale vai de -14 m a 460 m */
-const comp = z => Math.sign(z)*Math.log1p(Math.abs(z)/3);
+/* Escala vertical comprimida: o vale vai de -14 m a 490 m, e sem comprimir o
+   baixo vale vira uma linha. icomp e a INVERSA, usada para rotular o eixo.
+   Sem ela os rotulos saiam em espaco linear sobre um eixo comprimido: a linha
+   d'agua da mare, a 0,30 m, aparecia junto de um rotulo de "112 m", dando a
+   impressao de que o vale inteiro estava inundado desde o primeiro passo. */
+const comp  = z => Math.sign(z)*Math.log1p(Math.abs(z)/3);
+const icomp = c => Math.sign(c)*(Math.exp(Math.abs(c))-1)*3;
 
 function perfil(){
   const s = el("perfil"); s.replaceChildren();
@@ -260,6 +294,14 @@ function perfil(){
     s.appendChild(mk("path",{d:p,fill:"none",stroke:cor,"stroke-width":w,
       "stroke-linejoin":"round"})); };
   linha(D.topo, css('--terra'), 1.2);
+  if(D.margem){
+    /* agua ACIMA da margem = extravasamento; e o que importa ver */
+    let p=`M ${X(0)} ${Y(Math.max(D.ws[ti][0],D.margem[0]))}`;
+    for(let i=1;i<n;i++) p+=` L ${X(i)} ${Y(Math.max(D.ws[ti][i],D.margem[i]))}`;
+    for(let i=n-1;i>=0;i--) p+=` L ${X(i)} ${Y(D.margem[i])}`;
+    s.appendChild(mk("path",{d:p+" Z",fill:css('--alerta'),opacity:.45}));
+    linha(D.margem, css('--terra'), 1.6);
+  }
   linha(D.leito, css('--leito'), 1.8);
   linha(D.ws[ti], css('--agua'), 2.2);
 
@@ -276,12 +318,14 @@ function perfil(){
   /* secao escolhida */
   s.appendChild(mk("line",{x1:X(sel),x2:X(sel),y1:T,y2:H-B,
     stroke:css('--alerta'),"stroke-width":2}));
-  /* eixo Y */
+  /* eixo Y: o rotulo tem de vir da INVERSA da compressao */
   for(let k=0;k<=4;k++){
     const y=T+(H-T-B)*k/4;
-    const zv=lo+(hi-lo)*(1-k/4);
+    const zv=icomp(clo+(chi-clo)*(1-k/4));
     const t=mk("text",{x:L-8,y:y+4,fill:css('--fraco'),"font-size":11,
-      "text-anchor":"end"}); t.textContent=zv.toFixed(0)+" m"; s.appendChild(t);
+      "text-anchor":"end"});
+    t.textContent=(Math.abs(zv)<10?zv.toFixed(1):zv.toFixed(0))+" m";
+    s.appendChild(t);
   }
   s.onclick = ev => {
     const b=s.getBoundingClientRect();
@@ -377,6 +421,10 @@ def main():
     a = ap.parse_args()
 
     d = ler_motor(a.projeto) if a.fonte == "motor" else ler_hecras(a.projeto)
+    try:
+        d["margem"] = cotas_margem(a.projeto, d["riv"], d["rch"], d["rs"])
+    except Exception as e:
+        print(f"  (sem cotas de margem: {e})")
     dados = preparar(d, rio=a.rio)
 
     # data real do inicio, do proprio plano
