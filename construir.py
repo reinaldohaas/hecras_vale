@@ -215,15 +215,30 @@ def main():
         return propria + sum(rede[c["k"]]["area"] for c in conf[k]
                              if c["s"] <= s + 1.0)
 
+    # CRITERIO: precisa de contorno todo trecho que nao e o 'dn' de alguma
+    # juncao. E o que o HEC-RAS exige, literalmente:
+    #   "River: Itajai_Oeste  Reach: R1  needs a upstream boundary condition."
+    # A heuristica anterior -- "o rio nasce de juncao, logo nao tem contorno" --
+    # entrava em conflito com o afastamento da confluencia: mover a foz do Taio
+    # 1 km rio abaixo CRIA um trecho de 1 km acima dela, que fica sem fonte.
+    # Marcar o rio inteiro como alimentado pela juncao deixava esse trecho orfao.
+    alimentados = {(j["dn"][0], j["dn"][1]) for j in juncoes}
     cabeceiras = []
     for k in ordem:
-        # rio que NASCE de juncao nao pode ter contorno proprio: seria vazao
-        # contada duas vezes
-        if any(abs(c.get("s_bruto", c["s"])) < 1.0 for c in conf[k])                 or not por_rio[k]:
-            print(f"    {rede[k]['nome']:<14} nasce de juncao (sem contorno)")
+        if not por_rio[k]:
             continue
         t = por_rio[k][0]
+        if (t["rio"], t["reach"]) in alimentados:
+            print(f"    {rede[k]['nome']:<14} alimentado por juncao")
+            continue
+        # area que chega ao INICIO deste trecho: a propria do rio ate ali,
+        # mais os afluentes ja incorporados. Num trecho de cabeceira curto
+        # (o vao acima de uma confluencia afastada) isso e pequeno, e deve ser.
         propria = rede[k]["area"] - sum(rede[c["k"]]["area"] for c in conf[k])
+        propria = propria * max(t["b"] - t["a"], 1.0) / max(
+            rede[k]["linha"].length, 1.0) if len(por_rio[k]) > 1 else propria
+        propria += sum(rede[c["k"]]["area"] for c in conf[k]
+                       if c["s"] <= t["a"] + 1.0)
         t["q_pico"] = Q_REF_FOZ * max(propria, 1.0) / area_total
         t["serie"] = hidrograma(t["q_pico"])
         t["q_base"] = float(t["serie"][0])
