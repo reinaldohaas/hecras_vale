@@ -86,14 +86,36 @@ def condicionar(xs, rotulo=""):
 
 
 def ancorar(xs, cota_alvo, degrau=0.5):
-    """Desloca o trecho inteiro para casar a foz com o receptor na juncao.
+    """Casa a foz do afluente com o leito do receptor, na juncao.
 
-    Aqui o deslocamento uniforme e legitimo: e mudanca de referencia de um
-    afluente inteiro, entao o relevo relativo dentro dele nao se altera.
+    Eu tinha escrito aqui que o deslocamento uniforme da secao inteira era
+    legitimo, "porque o relevo relativo dentro do afluente nao se altera".
+    Preserva o relativo e afunda o ABSOLUTO -- e num rio que termina no mar
+    isso poe a planicie abaixo de zero. No Itajai-Mirim o deslocamento era de
+    -6,0 m e as secoes dos ultimos 12 km saiam assim:
+
+        RS 12.137   leito -8,85   topo -0,96
+        RS  8.137   leito -9,25   topo -2,22
+
+    O ponto MAIS ALTO da secao a -2 m: nao havia cota acima do mar em 1.474 m
+    de largura. Qualquer lamina extrapola a tabela de conducao, e o HEC-RAS
+    falhava ja no assentamento (200 passos de warm-up), antes do primeiro passo
+    de tempo -- ele nao conseguia sequer estabelecer a lamina inicial.
+
+    Duas mudancas:
+      - so a CALHA se move, como no condicionamento. A planicie fica onde o
+        DEM a pos.
+      - o ajuste e ATENUADO ao longo do trecho: inteiro na foz, nulo na
+        cabeceira. O desencontro esta na confluencia; nao ha razao para
+        propaga-lo 114 km rio acima.
     """
     desl = (cota_alvo + degrau) - cota_talvegue(xs[-1])
+    if abs(desl) < 1e-6 or len(xs) < 2:
+        return desl
+    rs = np.array([d["rs"] for d in xs], float)
+    faixa = max(rs.max() - rs.min(), 1.0)
     for d in xs:
-        d["z"] = d["z"] + desl
+        mover_calha(d, desl * (rs.max() - d["rs"]) / faixa)
     return desl
 
 
