@@ -448,17 +448,56 @@ def canal_geometria(area_km2):
     return float(h), float(w)
 
 
-def cavar_canal(sta, z, area_km2):
-    """Rebaixa a calha no ponto mais baixo da secao (a lamina do DEM).
+def indice_eixo(sta, z, janela):
+    """Indice do talvegue PROXIMO AO EIXO do rio, nao o minimo global.
 
-    Escava um trapezio de largura w e profundidade h centrado no talvegue,
-    com taludes de 1 celula para nao criar degrau vertical.
+    O eixo da cutline esta no offset 0, que por construcao e sta[len//2].
+    Usar o minimo GLOBAL da secao poe a calha no lugar errado sempre que o
+    corte atravessa outro canal mais fundo. E o que acontecia no Itajai-Mirim:
+    a secao cruza o LEITO ANTIGO, que no DEM e mais baixo que o canal
+    retificado, entao o "talvegue" caia la. O RAS Mapper mostrou o efeito --
+    as bank lines desenhadas sobre o leito antigo, e no Acu cruzando-se em
+    estrela, porque a margem saltava de um canal para o outro entre secoes
+    vizinhas. Junto com elas iam a zona de Manning do canal e a propria
+    escavacao, ou seja, a calha condutora ficava fora do caminho da agua.
+
+    A busca fica restrita a uma janela em volta do eixo: pega o talvegue real
+    (o tracado da ANA nao passa exatamente no fundo) sem pular de canal.
+    """
+    i_eixo = len(sta) // 2
+    m = np.abs(np.asarray(sta) - sta[i_eixo]) <= janela
+    idx = np.flatnonzero(m & np.isfinite(z))
+    if not len(idx):
+        return i_eixo
+    return int(idx[np.nanargmin(np.asarray(z)[idx])])
+
+
+def zt(d):
+    """Cota do talvegue da secao -- SEMPRE a do canal junto ao eixo.
+
+    Nao pode ser z.min(): onde a secao atravessa o leito antigo do Mirim (ou
+    um meandro do proprio rio), o minimo global fica noutro canal. Ate aqui o
+    condicionamento do perfil longitudinal usava esse minimo enquanto a calha
+    condutora, as margens e a escavacao ja apontavam para o eixo -- perfil e
+    conducao descreviam canais diferentes, e a simulacao caiu de 30 para 2
+    passos. O indice e guardado no corte e sobrevive aos deslocamentos que o
+    condicionamento aplica a secao inteira.
+    """
+    i = d.get("i_thal")
+    return float(d["z"][i]) if i is not None else float(np.nanmin(d["z"]))
+
+
+def cavar_canal(sta, z, area_km2):
+    """Rebaixa a calha no talvegue junto ao EIXO do rio.
+
+    Escava um trapezio de largura w e profundidade h centrado ali, com
+    taludes para nao criar degrau vertical.
     """
     if not CAVAR_CANAL:
         return z
     h, w = canal_geometria(area_km2)
     z = np.asarray(z, dtype=float).copy()
-    i0 = int(np.nanargmin(z))
+    i0 = indice_eixo(sta, z, max(w, 150.0))
     centro = sta[i0]
     d = np.abs(sta - centro)
     meia = w / 2.0
@@ -469,15 +508,18 @@ def cavar_canal(sta, z, area_km2):
     return z - h * frac
 
 
-def margens(sta, z, h_canal=0.0, altura_margem=BANK_H):
+def margens(sta, z, h_canal=0.0, altura_margem=BANK_H, larg_canal=150.0):
     """Margens topograficas: do talvegue ate o TOPO DA CALHA + BANK_H.
 
     Com a calha escavada, medir BANK_H acima do talvegue coloca a margem
     DENTRO do canal -- o modelo passa a achar que tudo extravasa. A margem
     real e o topo da calha (o terreno original, h_canal acima do fundo
     escavado); BANK_H e a folga a partir dali.
-    O valor DEVE coincidir com um sta da tabela, na mesma precisao (.2f)."""
-    i = int(np.nanargmin(z))
+    O valor DEVE coincidir com um sta da tabela, na mesma precisao (.2f).
+
+    Parte do talvegue JUNTO AO EIXO (ver indice_eixo): partir do minimo global
+    punha as margens em volta do leito antigo quando a secao o atravessava."""
+    i = indice_eixo(sta, z, max(larg_canal, 150.0))
     lim = z[i] + h_canal + altura_margem
     li = i
     while li > 0 and z[li] < lim:
@@ -571,8 +613,21 @@ def secoes(linha, dem, rs0, hw=HALFWIDTH, area=None):
         sta, z, cut = r
         a_km2 = area(s / max(L, 1.0)) if callable(area) else (area or 1000.0)
         z = cavar_canal(sta, z, a_km2)     # escava a calha no talvegue
+        _, w_c = canal_geometria(a_km2)
+        # UM canal por secao. Depois de escavar no eixo, qualquer ponto ainda
+        # MAIS FUNDO e outro canal que o corte atravessou -- o leito antigo do
+        # Mirim, um meandro do proprio rio. Num modelo 1D isso nao e um segundo
+        # caminho de escoamento: e um poco mais fundo que o canal principal
+        # dentro da MESMA secao, e a conducao calculada em cima disso nao tem
+        # sentido (a simulacao caiu de 30 para 2 passos assim que a escavacao
+        # passou a ser no eixo). Subir esses pontos ate o fundo da calha deixa
+        # uma calha so; o resto da secao nao e tocado.
+        i_t = indice_eixo(sta, z, max(w_c, 150.0))
+        z = np.maximum(z, z[i_t])
+        z[i_t] = min(z[i_t], float(np.nanmin(z)))
         xs.append({"rs": round(rs0 + (L - s), 2), "sta": sta, "z": z,
-                   "cut": cut, "area_km2": a_km2})
+                   "cut": cut, "area_km2": a_km2,
+                   "i_thal": indice_eixo(sta, z, max(w_c, 150.0))})
     xs.sort(key=lambda d: -d["rs"])           # montante -> jusante
     # remove RS repetido (o RAS exige unicidade)
     fin, visto = [], set()
@@ -599,7 +654,7 @@ def condicionar(xs, rotulo=""):
     corte = 0
     while corte < len(xs) - 2:
         dx = xs[corte]["rs"] - xs[corte + 1]["rs"]
-        dz = xs[corte]["z"].min() - xs[corte + 1]["z"].min()
+        dz = zt(xs[corte]) - zt(xs[corte + 1])
         if dx > 0 and abs(dz) / dx > MAX_SLOPE:
             corte += 1
         else:
@@ -612,15 +667,15 @@ def condicionar(xs, rotulo=""):
     # -- 2. monotonico rio abaixo
     for i in range(1, len(xs)):
         dx = xs[i - 1]["rs"] - xs[i]["rs"]
-        teto = xs[i - 1]["z"].min() - MIN_SLOPE * dx
-        atual = xs[i]["z"].min()
+        teto = zt(xs[i - 1]) - MIN_SLOPE * dx
+        atual = zt(xs[i])
         if atual > teto:
             xs[i]["z"] = xs[i]["z"] - (atual - teto)
     # -- 3. limita declividade ancorando a JUSANTE
     for i in range(len(xs) - 2, -1, -1):
         dx = xs[i]["rs"] - xs[i + 1]["rs"]
-        lim = xs[i + 1]["z"].min() + MAX_SLOPE * dx
-        atual = xs[i]["z"].min()
+        lim = zt(xs[i + 1]) + MAX_SLOPE * dx
+        atual = zt(xs[i])
         if atual > lim:
             xs[i]["z"] = xs[i]["z"] - (atual - lim)
     return xs
@@ -702,8 +757,8 @@ def escrever(trechos, juncoes):
             par = [v for p in zip(sta, z) for v in p]
             g += [ "".join(f8(v) for v in par[i:i + 10])
                    for i in range(0, len(par), 10) ]
-            h_c, _ = canal_geometria(d.get('area_km2', 1000.0))
-            lb, rb = margens(sta, z, h_c)
+            h_c, w_c = canal_geometria(d.get('area_km2', 1000.0))
+            lb, rb = margens(sta, z, h_c, larg_canal=w_c)
             n_ch = d.get("n", N_CANAL_PADRAO)
             n_fp = round(n_ch * RAZAO_PLANICIE, 3)
             g.append("#Mann= 3 ,-1,0")
@@ -821,7 +876,11 @@ def escrever_plano_prj():
         "Computation Interval=1MIN", "Output Interval=1HOUR",
         "Instantaneous Interval=1HOUR", "Mapping Interval=1HOUR",
         "Run HTab=-1", "Run UNet=-1", "Run PostProcess=-1",
-        "Run RASMapper=0"]) + "\n")
+        # Mapeamento de planicie ligado. Ele so PRODUZ os rasters se houver um
+        # terreno importado no RAS Mapper (Project > New Terrain), porque a
+        # profundidade e a cota d'agua menos o terreno. Sem terreno o HEC-RAS
+        # simplesmente nao escreve os mapas, sem erro.
+        "Run RASMapper=-1"]) + "\n")
     open(f"{PROJECT}.prj", "w", encoding="ascii").write("\n".join([
         f"Proj Title={PROJECT}", "Current Plan=p01",
         "Default Exp/Contr=0.3,0.1", "SI Units", "Geom File=g01",
@@ -850,6 +909,22 @@ def escrever_plano_prj():
     # NENHUM bloco <Geometries>. Sem ele o RAS Mapper nao sabe que camada
     # desenhar. A estrutura abaixo e a que o proprio RAS Mapper grava, com os
     # caminhos no formato ".\arquivo" que ele usa.
+    #
+    # O terreno so e referenciado se ja tiver sido IMPORTADO pelo RAS Mapper
+    # (Project > New Terrain), que o converte para o .hdf dele. Apontar para o
+    # GeoTIFF cru produz uma cascata de "HDF5-DIAG: file signature not found".
+    # Enquanto nao existir, a entrada fica vazia e o resto do .rasmap funciona.
+    terr = None
+    for cand in ("Terrain/Terreno.hdf", "Terrain/Terrain.hdf",
+                 f"Terrain/{PROJECT}.hdf"):
+        if os.path.exists(cand):
+            terr = cand.replace("/", "\\")
+            break
+    terrenos = ('  <Terrains Checked="True" Expanded="True">\n'
+                f'    <Layer Name="{os.path.basename(terr)[:-4]}" '
+                f'Type="TerrainLayer" Checked="True" '
+                f'Filename=".\\{terr}" />\n'
+                '  </Terrains>\n') if terr else '  <Terrains Checked="True" />\n'
     with open(f"{PROJECT}.rasmap", "w", encoding="utf-8") as f:
         f.write(
             '<?xml version="1.0" encoding="utf-8"?>\n<RASMapper>\n'
@@ -867,9 +942,25 @@ def escrever_plano_prj():
             f'Expanded="True" Filename=".\\{PROJECT}.p01.hdf">\n'
             f'      <Layer Name="Event Conditions" Type="RASEventConditions" '
             f'Filename=".\\{PROJECT}.p01.hdf" />\n'
+            # Mapas armazenados: e o que faz o HEC-RAS gerar a MANCHA. Sem
+            # estas tres camadas declaradas, 'Run RASMapper=-1' nao tem o que
+            # produzir. ProfileName="Max" pede o envelope maximo da cheia --
+            # a mancha de inundacao do evento inteiro.
+            '      <Layer Name="Depth" Type="RASResultsMap" Checked="True">\n'
+            '        <MapParameters MapType="depth" '
+            'ProfileIndex="2147483647" ProfileName="Max" />\n'
+            '      </Layer>\n'
+            '      <Layer Name="WSE" Type="RASResultsMap" Checked="True">\n'
+            '        <MapParameters MapType="elevation" '
+            'ProfileIndex="2147483647" ProfileName="Max" />\n'
+            '      </Layer>\n'
+            '      <Layer Name="Velocity" Type="RASResultsMap" Checked="True">\n'
+            '        <MapParameters MapType="velocity" '
+            'ProfileIndex="2147483647" ProfileName="Max" />\n'
+            '      </Layer>\n'
             '    </Layer>\n'
             '  </Results>\n'
-            '  <Terrains Checked="True" />\n'
+            + terrenos +
             '  <MapLayers Checked="True" />\n'
             '</RASMapper>\n')
     print(f"  [OK] {PROJECT}.p01 / {PROJECT}.prj / {PROJECT}.rasmap")
@@ -999,11 +1090,11 @@ def main():
             m = receptor[k]
             s_conf = next(c["s"] for c in filhos[m] if c["k"] == k)
             alvo = bed_em(m, rede[m]["linha"].length - s_conf) + DROP
-            desl = alvo - xs[-1]["z"].min()
+            desl = alvo - zt(xs[-1])
             for d in xs:                      # desloca o trecho inteiro
                 d["z"] = d["z"] + desl
             anc = f"  ancorado em {alvo:.1f} m ({desl:+.1f} m)"
-        bed_de[k] = {d["rs"]: d["z"].min() for d in xs}
+        bed_de[k] = {d["rs"]: zt(d) for d in xs}
 
         cortes = sorted({0.0} | {c["s"] for c in filhos[k] if c["s"] > 1.0}
                         | {L})
@@ -1299,7 +1390,7 @@ def main():
             dx = d["rs"] - viz["rs"]
             if dx <= 0:
                 continue
-            S = abs(d["z"].min() - viz["z"].min()) / dx
+            S = abs(zt(d) - zt(viz)) / dx
             if S < 0.002:                       # fora da faixa de Jarrett
                 continue
             R = max(canal_geometria(d.get("area_km2", 1000.0))[0], 0.5)
