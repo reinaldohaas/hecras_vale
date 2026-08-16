@@ -130,11 +130,23 @@ def geometria(projeto, trechos, juncoes, titulo=None):
 
 
 # --------------------------------------------------------------------- FLUXO
-def fluxo(projeto, cabeceiras, saida, mare, n_horas):
+def fluxo(projeto, trechos, cabeceiras, saida, mare, n_horas):
+    """Contornos e condicao inicial.
+
+    'Initial RS' vai para TODOS os trechos, nao so para as cabeceiras. Um
+    trecho sem vazao inicial parte indefinido, e o HEC-RAS acusa isso como
+    erro de volume gigantesco ja no primeiro passo -- com 12 rios eram dez
+    trechos nessa situacao (Acu R1-R5, Oeste R2-R4, Norte R2, Benedito R2) e o
+    erro de balanco subiu de 5.372% para 73.310% conforme a rede cresceu.
+
+    A vazao de cada trecho e a ACUMULADA: o que ja entrou pelas cabeceiras a
+    montante dele. Comecar um trecho de jusante com a vazao de uma cabeceira
+    isolada cria um degrau na juncao, e o solver nao converge.
+    """
     u = [f"Flow Title=Cheia_{projeto}", "Program Version=7.01", "Use Restart= 0 "]
-    for t in cabeceiras:
+    for t in trechos:
         u += [f"Initial RS={p16(t['rio'])},{p16(t['reach'])},"
-              f"{t['xs'][0]['rs']:<8.0f},{t['q_base']:.0f}"]
+              f"{t['xs'][0]['rs']:<8.0f},{t.get('q_base', 20.0):.0f}"]
     u.append("")
     for t in cabeceiras:
         u += [contorno(t["rio"], t["reach"], f"{t['xs'][0]['rs']:.2f}"),

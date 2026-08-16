@@ -188,6 +188,17 @@ def main():
 
     # ------------------------------------------------------------ contornos
     print("\n[5] contornos")
+
+    def area_ate(k, s):
+        """Area de drenagem que ja chegou a estaca s do rio k.
+
+        Propria do rio mais os afluentes que entraram a montante -- e,
+        recursivamente, o que veio nos afluentes deles.
+        """
+        propria = rede[k]["area"] - sum(rede[c["k"]]["area"] for c in conf[k])
+        return propria + sum(rede[c["k"]]["area"] for c in conf[k]
+                             if c["s"] <= s + 1.0)
+
     cabeceiras = []
     for k in ordem:
         # rio que NASCE de juncao nao pode ter contorno proprio: seria vazao
@@ -202,12 +213,24 @@ def main():
         cabeceiras.append(t)
         print(f"    {t['rio']:<14} Q pico {t['q_pico']:7.1f} m3/s")
 
+    # vazao inicial de TODO trecho, pela area que ja chegou nele. Sem isto os
+    # trechos de jusante partem indefinidos e o balanco estoura no passo 1.
+    for t in trechos:
+        if "q_base" in t:
+            continue
+        a = area_ate(t["k"], t["a"])
+        t["q_pico"] = Q_REF_FOZ * max(a, 1.0) / area_total
+        t["q_base"] = max(t["q_pico"] * 0.15, 20.0)
+    print(f"    vazao inicial em {len(trechos)} trechos "
+          f"({min(t['q_base'] for t in trechos):.0f} a "
+          f"{max(t['q_base'] for t in trechos):.0f} m3/s)")
+
     # -------------------------------------------------------------- escrita
     print("\n[6] escrita")
     saida = por_rio[topologia.PRINCIPAL][-1]
     print("   ", escrita.geometria(projeto, trechos, juncoes,
                                    f"{projeto} - eixo do relevo Copernicus"))
-    print("   ", escrita.fluxo(projeto, cabeceiras, saida, mare(), N_HORAS))
+    print("   ", escrita.fluxo(projeto, trechos, cabeceiras, saida, mare(), N_HORAS))
     print("   ", escrita.plano(projeto, INICIO, N_HORAS))
     if "--terreno" in sys.argv:
         hdf = terreno.preparar_hdf(config.WKT)
