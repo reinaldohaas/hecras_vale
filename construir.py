@@ -32,21 +32,14 @@ import time
 import numpy as np
 from shapely.geometry import Point
 
-from itajai import terreno, tracado, topologia
+from itajai import terreno, tracado, topologia, config
 
-WKT = ('PROJCS["SIRGAS 2000 / UTM zone 22S",GEOGCS["SIRGAS 2000",'
-       'DATUM["Sistema_de_Referencia_Geocentrico_para_las_Americas_2000",'
-       'SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],'
-       'UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],'
-       'PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",-51],'
-       'PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],'
-       'PARAMETER["false_northing",10000000],UNIT["metre",1]]')
 
 
 def main():
     t0 = time.time()
     print("=" * 70)
-    print("BACIA DO ITAJAI  |  construcao a partir do relevo")
+    print(f"{config.PROJETO}  |  construcao a partir do relevo")
     print("=" * 70)
 
     print("\n[1] topologia (ANA BHO 2017)")
@@ -77,7 +70,7 @@ def main():
 
     if "--terreno" in sys.argv:
         print("\n[4] terreno do RAS Mapper (RasProcess CreateTerrain)")
-        print(f"    {terreno.preparar_hdf(WKT)}")
+        print(f"    {terreno.preparar_hdf(config.WKT)}")
 
     print(f"\nconcluido em {time.time()-t0:.0f} s")
     return rede

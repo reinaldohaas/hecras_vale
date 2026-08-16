@@ -13,7 +13,8 @@ Sul, Oeste e Acu se encontram no MESMO ponto em Rio do Sul, e pelo criterio de
 import geopandas as gpd
 from shapely.geometry import LineString, Point
 
-EPSG = 31982
+from .config import EPSG
+
 BASE = "rios_itajai.geojson"
 AREA_MINIMA = 200.0      # km2; abaixo disso e torrente de cabeceira
 

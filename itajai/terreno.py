@@ -20,7 +20,8 @@ from rasterio.enums import Resampling
 from rasterio.warp import calculate_default_transform, reproject
 from pyproj import Transformer
 
-EPSG = 31982                   # SIRGAS 2000 / UTM 22S
+from .config import EPSG
+
 BRUTO = "dem_itajai.tif"       # Copernicus GLO-30, como baixado (EPSG:4326)
 PASTA = "Terrain"
 UTM = os.path.join(PASTA, "Terreno_Copernicus.tif")
