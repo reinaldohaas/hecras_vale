@@ -59,6 +59,51 @@ def main():
         print(f"\n[OK] {SAIDA}  ({os.path.getsize(SAIDA)/1e6:.0f} MB)")
         print(f"     extensao {[round(x) for x in d.bounds]}")
         print(f"     cotas de {v.min():.1f} a {v.max():.1f} m")
+    terreno_hdf()
+
+
+def terreno_hdf():
+    """Converte para o .hdf do RAS Mapper, sem passar pela interface.
+
+    Eu vinha dizendo que este passo so existia em Project > New Terrain. Nao e
+    o caso: o ras-commander chama o RasProcess.exe CreateTerrain, que e o mesmo
+    construtor que a GUI usa -- gera as 7 piramides, o TIN e o armazenamento em
+    tiles. Sem este .hdf o HEC-RAS nao calcula profundidade nenhuma, porque
+    profundidade e cota d'agua menos terreno.
+
+    Pega: o RasProcess exige um .prj ESRI. Apontar o nosso .projection falha em
+    100% do progresso com "Referencia de objeto nao definida" -- erro do .NET
+    que nao diz nada sobre a causa. Por isso a copia com a extensao certa.
+    """
+    try:
+        from ras_commander import RasTerrain
+    except ImportError:
+        print("\n  (ras-commander ausente: pip install ras-commander)")
+        return
+    prj = os.path.join(PASTA, "projecao.prj")
+    origem = None
+    for c in ("Itajai_Rede_1983.projection", "Itajai_Rede.projection"):
+        if os.path.exists(c):
+            origem = c
+            break
+    if origem is None:
+        print("\n  (nenhum .projection encontrado; rode o gerador antes)")
+        return
+    with open(origem, encoding="utf-8") as f:
+        wkt = f.read()
+    with open(prj, "w", encoding="utf-8") as f:
+        f.write(wkt)
+    saida = os.path.join(PASTA, "Terreno.hdf")
+    try:
+        RasTerrain.create_terrain_hdf(
+            input_rasters=[os.path.abspath(SAIDA)],
+            output_hdf=os.path.abspath(saida),
+            projection_prj=os.path.abspath(prj), units="Meters")
+    except Exception as e:
+        print(f"\n  [ERRO] CreateTerrain: {e}")
+        return
+    print(f"[OK] {saida}  ({os.path.getsize(saida)/1e6:.2f} MB)")
+    print("     o .rasmap passa a declarar este terreno automaticamente")
 
 
 if __name__ == "__main__":
