@@ -230,7 +230,12 @@ function perfil(){
   const zs = D.leito.concat(D.topo, D.ws[ti]);
   let lo=Math.min(...zs), hi=Math.max(...zs);
   const clo=comp(lo), chi=comp(hi);
-  const X = i => L + (W-L-R)*i/(n-1);
+  /* X por DISTANCIA, nao por indice da secao. O espacamento das secoes varia
+     de 0,45 a 4,0 km -- ha refino na garganta do Salto Pilao -- entao plotar
+     por indice dava a esse trecho 35% da largura para 21% do rio, e espremia
+     todo o baixo vale. Ibirama aparecia em 0,35 quando deveria estar em 0,21. */
+  const rsA = D.rs[0], rsB = D.rs[n-1], span = (rsA - rsB) || 1;
+  const X = i => L + (W-L-R)*(rsA - D.rs[i])/span;
   const Y = z => T + (H-T-B)*(1-(comp(z)-clo)/((chi-clo)||1));
 
   /* grade */
@@ -281,8 +286,12 @@ function perfil(){
   s.onclick = ev => {
     const b=s.getBoundingClientRect();
     const x=(ev.clientX-b.left)/b.width*W;
-    sel=Math.max(0,Math.min(n-1,Math.round((x-L)/((W-L-R)/(n-1)))));
-    desenhar();
+    /* inverte o eixo em DISTANCIA e procura a secao mais proxima */
+    const rsAlvo = rsA - span*(x-L)/(W-L-R);
+    let melhor=0, dmin=1e12;
+    for(let i=0;i<n;i++){ const d=Math.abs(D.rs[i]-rsAlvo);
+      if(d<dmin){dmin=d;melhor=i;} }
+    sel=melhor; desenhar();
   };
 }
 
