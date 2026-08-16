@@ -42,9 +42,28 @@ from pyproj import Transformer
 PROJECT   = "Itajai_Rede"      # recebe sufixo _<EVENTO> se houver evento
 GEOJSON   = "rios_itajai.geojson"
 DEM       = "dem_itajai.tif"
+# MDT do SIG-SC a 1 m (terreno, nao superficie). Cobre 100% dos rios
+# modelados no mesmo CRS. Contra o Copernicus GLO-30, nas encostas a
+# diferenca chega a 15 m -- que e a COPA DA MATA sendo tratada como terreno.
+USAR_SIGSC = True
+# Corta a secao onde ela reencontraria o rio. Uma secao 1D tem de cruzar o
+# canal UMA vez; em trecho meandrante 17% das cutlines cruzavam 2 ou 3 vezes
+# e a mesma agua era contada vezes repetidas.
+CORTAR_NO_REENCONTRO = True
 UTM_EPSG  = 31982              # SIRGAS 2000 / UTM 22S
 
-SPACING   = 1000.0             # espacamento entre secoes (m)
+SPACING   = 1000.0             # espacamento entre secoes (m) no trecho PLANO
+SPACING_MIN = 150.0            # espacamento nas gargantas. O Acu cai 195 m em
+                               # 13 km entre Lontras e Ibirama (Salto Pilao) --
+                               # confirmado no terreno SIG-SC de 1 m, nao e
+                               # ruido de DEM. A 1 km de espacamento sao 8 m de
+                               # queda ENTRE SECOES VIZINHAS: o solver unsteady
+                               # falha no primeiro passo ("Solution Solver
+                               # Failed" em Itajai_Acu R1 150611.9). O criterio
+                               # usual para regime nao permanente e
+                               # dx <~ 0,15*D/S; com D~4 m e S=0,008 da ~75 m.
+DECL_PLANO  = 0.0010           # ate aqui, espacamento SPACING
+DECL_INGREME = 0.0060          # daqui pra cima, espacamento SPACING_MIN
 HALFWIDTH = 2500.0             # meia-largura MAXIMA da secao (m). A secao TEM
                                # de conter a cheia: com 700 m o HEC-RAS avisava
                                # "Extrapolated above Cross Section Table" nos
@@ -120,11 +139,11 @@ MAIN = "acu"
 # validar a cadeia inteira ate a mancha antes de voltar os demais rios.
 #   completo -> ["sul","oeste","norte","benedito","mirim"]
 #   reduzido -> ["mirim"]   (Acu + Mirim, 1 juncao)
-ESCOPO = ["mirim"]
+ESCOPO = ["sul", "oeste", "norte", "benedito", "mirim"]
 # Area de drenagem que entra pela CABECEIRA do Acu. No escopo reduzido os
 # afluentes ausentes sao somados aqui para que as vazoes a jusante (Blumenau,
 # Itajai) fiquem na ordem de grandeza correta.
-LATERAIS = ["norte", "benedito"]
+LATERAIS = []
 # Afluentes injetados como VAZAO LATERAL na estaca da confluencia, sem virar
 # trecho nem juncao. Motivo: uma varredura mostrou que 1 juncao roda limpa
 # (0 falhas, erro de volume 0,02-0,18%) mas 2 ou mais divergem -- inclusive
@@ -135,7 +154,7 @@ INCREMENTAL = True             # distribui a area de drenagem do PROPRIO Acu
                                # como Uniform Lateral Inflow ao longo da calha.
                                # Sem isso faltam ~3.300 km2 de contribuicao e a
                                # vazao em Blumenau sai ~25% baixa.
-AREA_CABECEIRA_ACU = 5033.0    # Sul + Oeste (km2), que formam o Acu
+AREA_CABECEIRA_ACU = 0.0    # Sul + Oeste (km2), que formam o Acu
                                # na confluencia de Rio do Sul
 # nomes das juncoes por ordem de km ao longo do Acu
 NOME_JUNCAO = {0: "Rio_do_Sul", 1: "Ibirama", 2: "Indaial", 3: "Itajai"}
@@ -299,7 +318,22 @@ def montar_rede():
 
 
 # --------------------------------------------------------------------- SECOES
-def cortar(linha, s, dem, hw=HALFWIDTH):
+def _ate_reencontro(p, rx, ry, hw, eixo, s, linha, folga=40.0):
+    """Ate onde a semi-secao pode ir sem reencontrar o rio."""
+    raio = LineString([(p.x, p.y), (p.x + hw * rx, p.y + hw * ry)])
+    it = raio.intersection(eixo)
+    if it.is_empty:
+        return hw
+    pts = [it] if it.geom_type == "Point" else list(getattr(it, "geoms", []))
+    d = [np.hypot(q.x - p.x, q.y - p.y) for q in pts
+         if getattr(q, "geom_type", "") == "Point"]
+    d = [v for v in d if v > folga]            # ignora o proprio cruzamento
+    if not d:
+        return hw
+    return max(min(d) - folga, 120.0)          # para antes, com folga minima
+
+
+def cortar(linha, s, dem, hw=HALFWIDTH, eixo=None):
     """Secao perpendicular ao eixo na posicao s, amostrada no DEM.
     A direcao usa uma janela de +-SMOOTH m: com +-1 m as cutlines se cruzam
     nas curvas (o RAS avisa 'edge lines have self intersections')."""
@@ -309,16 +343,21 @@ def cortar(linha, s, dem, hw=HALFWIDTH):
     n = np.hypot(tx, ty) or 1.0
     rx, ry = ty / n, -tx / n                  # normal a direita
     p = linha.interpolate(s)
-    off = np.linspace(-hw, hw, NPTS)
+    hw_e = hw_d = hw
+    if CORTAR_NO_REENCONTRO and eixo is not None:
+        hw_e = _ate_reencontro(p, -rx, -ry, hw, eixo, s, linha)
+        hw_d = _ate_reencontro(p,  rx,  ry, hw, eixo, s, linha)
+    off = np.concatenate([np.linspace(-hw_e, 0, NPTS // 2, endpoint=False),
+                          np.linspace(0, hw_d, NPTS - NPTS // 2)])
     z = dem.sample(p.x + off * rx, p.y + off * ry)
     if np.isnan(z).all():
         return None
     if np.isnan(z).any():                     # tapa buracos por interpolacao
         ok = ~np.isnan(z)
         z = np.interp(np.arange(len(z)), np.flatnonzero(ok), z[ok])
-    sta = off + hw                            # 0 .. 2*hw
-    cut = (p.x - hw * rx, p.y - hw * ry,
-           p.x + hw * rx, p.y + hw * ry)
+    sta = off + hw_e                          # 0 .. hw_e+hw_d
+    cut = (p.x - hw_e * rx, p.y - hw_e * ry,
+           p.x + hw_d * rx, p.y + hw_d * ry)
     return np.round(sta, 2), z, cut
 
 
@@ -394,6 +433,43 @@ def largura(area_km2):
     return float(np.clip(180.0 * np.sqrt(max(area_km2, 1.0) / 100.0), 500.0, HALFWIDTH))
 
 
+def estacoes(linha, dem):
+    """Estacas ao longo do eixo, com espacamento adaptado a declividade.
+
+    Faz uma varredura barata do talvegue (minimo numa janela de 100 m em
+    volta do eixo, sem montar cutline) so para saber ONDE o rio e ingreme,
+    e adensa as secoes ali. Sai de SPACING no vale plano para SPACING_MIN na
+    garganta, interpolando linearmente entre DECL_PLANO e DECL_INGREME.
+    """
+    L = linha.length
+    passo = min(SPACING / 4.0, 250.0)
+    d = np.arange(0.0, L + passo, passo)
+    P = [linha.interpolate(float(x)) for x in d]
+    xs, ys = [], []
+    for p in P:
+        for a in (-50.0, 0.0, 50.0):
+            for b in (-50.0, 0.0, 50.0):
+                xs.append(p.x + a)
+                ys.append(p.y + b)
+    z = dem.sample(np.array(xs), np.array(ys)).reshape(len(P), 9)
+    with np.errstate(all="ignore"):
+        zb = np.nanmin(z, axis=1)
+    ok = np.isfinite(zb)
+    if ok.sum() < 3:
+        return list(np.arange(0.0, L, SPACING))
+    zb = np.interp(d, d[ok], zb[ok])
+    S = np.abs(np.gradient(zb, d))
+    S = np.convolve(S, np.ones(5) / 5.0, mode="same")     # tira o ruido do DEM
+    f = np.clip((S - DECL_PLANO) / (DECL_INGREME - DECL_PLANO), 0.0, 1.0)
+    dx = SPACING + (SPACING_MIN - SPACING) * f
+    ss, s = [0.0], 0.0
+    while s < L:
+        s += float(np.interp(s, d, dx))
+        if s < L:
+            ss.append(s)
+    return ss
+
+
 def secoes(linha, dem, rs0, hw=HALFWIDTH, area=None):
     # hw pode ser um numero OU uma funcao da fracao percorrida (0=montante,
     # 1=jusante). A largura TEM de crescer rio abaixo: usar a largura da foz
@@ -401,15 +477,15 @@ def secoes(linha, dem, rs0, hw=HALFWIDTH, area=None):
     # o trecho vira lago estagnado (vazoes negativas) e o solver instabiliza.
     """Corta as secoes de um trecho. rs0 = RS do extremo de JUSANTE."""
     L = linha.length
-    ss = list(np.arange(0.0, L, SPACING))
+    ss = estacoes(linha, dem)
     # NAO cria secao colada no extremo: uma secao a 1 m da juncao conflita
     # com o comprimento declarado em 'Junc L&A' e trava o solver.
-    if L - ss[-1] > SPACING * 0.6:
-        ss.append(L - SPACING * 0.5)
+    if L - ss[-1] > SPACING_MIN * 0.6:
+        ss.append(L - SPACING_MIN * 0.5)
     xs = []
     for s in ss:
         hw_s = hw(s / max(L, 1.0)) if callable(hw) else hw
-        r = cortar(linha, s, dem, hw_s)
+        r = cortar(linha, s, dem, hw_s, linha)
         if r is None:
             continue
         sta, z, cut = r
@@ -677,7 +753,19 @@ def main():
         print(f"      {rede[c['k']]['nome']:<14} entra em {c['s']/1000:6.1f} km "
               f"({(acu.length-c['s'])/1000:5.1f} km da foz)")
 
-    dem = Dem(DEM)
+    dem = None
+    if USAR_SIGSC:
+        try:
+            from dem_sigsc import DemSIGSC, DemHibrido
+            # Reserva obrigatoria: os tiles do SIG-SC nao cobrem tudo. Sem
+            # ela o Itajai do Sul (5% coberto) fica com 5 secoes em 87 km.
+            dem = DemHibrido(DemSIGSC(), Dem(DEM))
+            print(f"      relevo: {dem.nome}")
+        except Exception as e:
+            print(f"      ! SIG-SC indisponivel ({e}); usando {DEM}")
+    if dem is None:
+        dem = Dem(DEM)
+        print(f"      relevo: Copernicus GLO-30 ({DEM})")
     print(f"\n[2/4] Cortando secoes do DEM (espacamento {SPACING:.0f} m, "
           f"largura {2*HALFWIDTH:.0f} m)...")
 
@@ -768,7 +856,12 @@ def main():
         acu_head["serie"] = q_ev["sul"] + q_ev["oeste"]
         acu_head["q_base"] = float(acu_head["serie"][0])
 
-    cabeceiras = [acu_head]
+    # Se Sul e Oeste sao TRECHOS, o Acu nasce da juncao Rio do Sul e NAO
+    # pode ter contorno proprio ali -- seria vazao contada duas vezes.
+    acu_nasce_de_juncao = any(abs(c["s"]) < 1.0 for c in conf)
+    cabeceiras = [] if acu_nasce_de_juncao else [acu_head]
+    if acu_nasce_de_juncao:
+        print("      cabeceira do Acu = juncao Sul+Oeste (sem contorno proprio)")
     for t in trechos:
         if t.get("k"):                         # afluente: area propria
             a = rede[t["k"]]["area"]
@@ -883,6 +976,38 @@ def main():
         else:
             for d in t["xs"]:
                 d["n"] = N_CANAL_PADRAO
+
+    # --- n de Manning nas GARGANTAS, por Jarrett (1984)
+    # Corredeira em rocha nao tem a rugosidade de rio de planicie. Usar
+    # n = 0,035 no trecho do Salto Pilao (8 m/km) da Froude ~0,9: o
+    # escoamento fica transcritico e o solver diverge no pico da cheia.
+    #
+    #     Jarrett (1984), para 0,002 <= S <= 0,052:   n = 0,39 S^0,38 R^-0,16
+    #
+    # que em S = 0,008 e R ~ 3 m da n ~ 0,052 -- o triplo do valor de
+    # planicie. Isso nao e um ajuste para estabilizar: e a rugosidade que a
+    # literatura mede nesses trechos, e ela por si so derruba o Froude para
+    # ~0,5, porque a lamina engrossa e a velocidade cai.
+    n_ajust = 0
+    for t in trechos:
+        xs = t["xs"]
+        for i, d in enumerate(xs):
+            viz = xs[min(i + 1, len(xs) - 1)]
+            dx = d["rs"] - viz["rs"]
+            if dx <= 0:
+                continue
+            S = abs(d["z"].min() - viz["z"].min()) / dx
+            if S < 0.002:                       # fora da faixa de Jarrett
+                continue
+            R = max(canal_geometria(d.get("area_km2", 1000.0))[0], 0.5)
+            n_j = 0.39 * S ** 0.38 * R ** -0.16
+            n_j = float(min(max(n_j, d["n"]), 0.10))   # nunca abaixa o n
+            if n_j > d["n"] + 1e-4:
+                d["n"] = round(n_j, 4)
+                n_ajust += 1
+    if n_ajust:
+        print(f"      Manning de garganta (Jarrett 1984): {n_ajust} secoes "
+              f"com S >= 0,002 -> n ate 0,10")
 
     escrever(trechos, juncoes)
     escrever_fluxo(trechos, cabeceiras, acu_reaches[-1], laterais, uniformes)

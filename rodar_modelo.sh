@@ -16,27 +16,75 @@
 set -u
 cd "$(dirname "$0")"
 
-# --- 1. Localiza o Python ---------------------------------------------------
-PY=""
-for c in "$HOME/miniforge3/python.exe" "$HOME/miniconda3/python.exe" \
-         "$HOME/anaconda3/python.exe" "$HOME/miniforge3/bin/python" \
-         "$HOME/miniconda3/bin/python"; do
-  [ -x "$c" ] && PY="$c" && break
+# --- 1. Blinda o PATH (ANTES de escolher o Python) ---------------------------
+# O MSYS2/Git Bash coloca /c/msys64/*/bin no PATH, e as DLLs de libpng e
+# freetype de la se sobrepoem as do conda: o matplotlib quebra ao salvar figura
+# e o rasterio derruba o processo.
+#
+# A limpeza tem de vir ANTES da deteccao, nao depois. Com o msys64 na frente, o
+# proprio teste de import do miniforge falha (rasterio nao carrega as DLLs
+# certas), o script conclui "esse Python nao serve" e cai no /ucrt64/bin/python3
+# -- que nao tem numpy nenhum. Limpando primeiro, o teste mede o Python, nao o
+# PATH; e de quebra o python do msys some da lista de candidatos.
+PATH="$(echo "$PATH" | tr ':' '\n' | grep -viE '^/c/msys64|^/mingw|^/ucrt64' | paste -sd: -)"
+export PATH
+
+# --- 2. Localiza o Python ----------------------------------------------------
+# Nao basta o interpretador EXISTIR: cada candidato e testado importando o que
+# o modelo usa, e o primeiro que passar vence.
+#
+# A raiz do perfil precisa de mais de uma via: num shell MSYS2, $HOME e
+# /home/haas (nao o perfil do Windows) e $USERPROFILE nem existe -- entao
+# procurar so por $HOME nao acha o miniforge e o script cai no python do
+# Store, que tambem nao tem numpy. Tenta todas e usa a primeira que servir.
+RAIZES="${HOME:-}"
+[ -n "${USERPROFILE:-}" ] && \
+  RAIZES="$RAIZES $(cygpath -u "$USERPROFILE" 2>/dev/null || echo "${USERPROFILE:-}")"
+QUEM="$(whoami 2>/dev/null | tr -d '\\r' | sed 's|.*\\\\||')"
+[ -n "$QUEM" ] && RAIZES="$RAIZES /c/Users/$QUEM $(cygpath -H 2>/dev/null)/$QUEM"
+
+CANDIDATOS=""
+for r in $RAIZES; do
+  [ -n "$r" ] || continue
+  for dist in miniforge3 miniconda3 anaconda3; do
+    CANDIDATOS="$CANDIDATOS $r/$dist/python.exe $r/$dist/bin/python"
+  done
 done
-[ -z "$PY" ] && PY="$(command -v python3 || command -v python || true)"
+CANDIDATOS="$CANDIDATOS $(command -v python3 || true) $(command -v python || true)"
+
+PY=""
+PY_FALLBACK=""
+for c in $CANDIDATOS; do
+  [ -n "$c" ] && [ -x "$c" ] || continue
+  if "$c" -c "import numpy, geopandas, rasterio, shapely, pyproj, h5py" 2>/dev/null; then
+    PY="$c"; break
+  fi
+  [ -z "$PY_FALLBACK" ] && PY_FALLBACK="$c"
+done
+if [ -z "$PY" ]; then
+  PY="${PY_FALLBACK:-}"
+  [ -n "$PY" ] && echo "  [aviso] nenhum Python com as dependencias; tentando $PY"
+fi
 if [ -z "$PY" ]; then
   echo "[ERRO] Python nao encontrado. Instale o Miniforge."
   exit 1
 fi
 echo "  Python: $PY"
 
-# --- 2. Blinda o PATH -------------------------------------------------------
-# O MSYS2/Git Bash coloca /c/msys64/*/bin no PATH, e as DLLs de libpng e
-# freetype de la se sobrepoem as do conda: o matplotlib quebra ao salvar
-# figura e o rasterio derruba o processo. Tirando o msys64 do PATH e pondo o
-# Python na frente, as bibliotecas corretas vencem.
+# --- 3. Garante %TEMP% -------------------------------------------------------
+# O win32com grava o cache do gen_py em %TEMP%. Num shell MSYS2 essa variavel
+# nao existe, ele cai no default C:\WINDOWS\gen_py e a simulacao morre com
+# PermissionError antes de abrir o HEC-RAS.
+if [ -z "${TEMP:-}" ] || [ -z "${TMP:-}" ]; then
+  T="/c/Users/$QUEM/AppData/Local/Temp"
+  [ -d "$T" ] || T="/tmp"
+  TEMP="$(cygpath -w "$T" 2>/dev/null || echo "$T")"
+  export TEMP TMP="$TEMP"
+  echo "  TEMP: $TEMP"
+fi
+
+# --- 4. Poe as bibliotecas do Python escolhido na frente ---------------------
 PYDIR="$(dirname "$PY")"
-PATH="$(echo "$PATH" | tr ':' '\n' | grep -viE '^/c/msys64|^/mingw|^/ucrt64' | paste -sd: -)"
 export PATH="$PYDIR:$PYDIR/Library/bin:$PYDIR/Library/mingw-w64/bin:$PYDIR/Scripts:$PATH"
 
 # --- 3. Dependencias --------------------------------------------------------
