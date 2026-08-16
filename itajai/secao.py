@@ -85,9 +85,9 @@ def estacas(linha, amostrador):
     return ss
 
 
-def indice_eixo(sta, z, janela):
+def indice_eixo(sta, z, janela, i_eixo=None):
     """Indice do talvegue PROXIMO AO EIXO -- nao o minimo global."""
-    i = len(sta) // 2
+    i = len(sta) // 2 if i_eixo is None else int(i_eixo)
     m = np.abs(np.asarray(sta) - sta[i]) <= janela
     idx = np.flatnonzero(m & np.isfinite(z))
     return int(idx[np.nanargmin(np.asarray(z)[idx])]) if len(idx) else i
@@ -202,8 +202,19 @@ def cortar(linha, s, amostrador, meia_largura, area_km2, hw_esq=None,
     p = linha.interpolate(s)
     he = float(hw_esq if hw_esq is not None else meia_largura)
     hd = float(hw_dir if hw_dir is not None else meia_largura)
-    off = np.concatenate([np.linspace(-he, 0, N_PONTOS // 2, endpoint=False),
-                          np.linspace(0, hd, N_PONTOS - N_PONTOS // 2)])
+    # ESPACAMENTO UNIFORME. Dividir os pontos ao meio entre os dois lados so
+    # funciona se eles tiverem a mesma largura -- e desde o limitador de
+    # curvatura nao tem: com he=200 m e hd=700 m saia 1,4 m de espacamento a
+    # esquerda e 5,0 m a direita. Conducao calculada sobre pontos desigualmente
+    # espacados fica enviesada para o lado denso, e o proprio talvegue e
+    # procurado num indice que nao corresponde ao eixo. Aqui os pontos sao
+    # repartidos na PROPORCAO das larguras, e o eixo continua sendo um ponto da
+    # tabela.
+    n_e = int(round(N_PONTOS * he / max(he + hd, 1e-6)))
+    n_e = min(max(n_e, 2), N_PONTOS - 2)
+    off = np.concatenate([np.linspace(-he, 0, n_e, endpoint=False),
+                          np.linspace(0, hd, N_PONTOS - n_e)])
+    i_eixo = n_e
     z = amostrador.cota(p.x + off * rx, p.y + off * ry)
     if np.isnan(z).all():
         return None
@@ -218,7 +229,7 @@ def cortar(linha, s, amostrador, meia_largura, area_km2, hw_esq=None,
     # perfil ja modificado, e o que sobrava era um pico isolado: uma fenda de
     # 3,4 m num rio de calha de 106 m, que nao conduz nada.
     prof, larg = canal(area_km2)
-    i0 = indice_eixo(sta, z, max(larg, 150.0))
+    i0 = indice_eixo(sta, z, max(larg, 150.0), i_eixo)
     # UMA calha por secao: sobe o que estiver mais fundo que o talvegue do eixo
     # (o leito antigo, um meandro que o corte cruzou)
     z = np.maximum(z, z[i0])
@@ -240,15 +251,26 @@ def escavar(d):
     larg = d["larg_canal"]
     i0 = d["i_thal"]
     alvo = d.get("z_alvo", z[i0] - d["prof_canal"])
-    fundo = z[i0] - alvo                      # o quanto descer no eixo
     dist = np.abs(sta - sta[i0])
     meia = larg / 2.0
     talude = max(larg * 0.25, 30.0)
-    frac = np.clip(1.0 - (dist - meia) / talude, 0.0, 1.0)
-    frac[dist <= meia] = 1.0
-    z = z - fundo * frac
+
+    # A calha e IMPOSTA, nao subtraida. Subtrair uma profundidade constante
+    # preserva a forma do terreno: vale em V da calha em V, vale em U da calha
+    # em U, e a area molhada salta entre secoes vizinhas -- eram 121 pares com
+    # mais de 3x de diferenca a 1 m de lamina, contra 31 a 8 m, ou seja o
+    # defeito estava na CALHA e nao na planicie.
+    # Imposta, ela e um trapezio de fundo plano em z_alvo e largura larg, com
+    # talude subindo ate encontrar o terreno. Como larg e z_alvo variam
+    # suavemente ao longo do rio (area de drenagem e perfil condicionado), a
+    # conducao de estiagem passa a ser continua por construcao.
+    # O minimo garante que a calha so CORTA o terreno, nunca o preenche.
+    subida = np.clip((dist - meia) / talude, 0.0, 1.0)
+    z_canal = alvo + subida * np.maximum(z - alvo, 0.0)
+    z = np.minimum(z, z_canal)
+
     d["z"] = z
-    d["lb"], d["rb"] = margens(sta, z, i0, max(fundo, 0.5))
+    d["lb"], d["rb"] = margens(sta, z, i0, max(z[i0 - 1] - alvo, 0.5))
     return d
 
 
