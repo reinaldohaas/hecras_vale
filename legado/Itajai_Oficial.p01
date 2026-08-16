@@ -1,0 +1,17 @@
+Plan Title=Plano_Simulacao_Inundacao
+Program Version=7.01
+Short Identifier=01
+Geom File=g01
+Flow File=u01
+Unsteady File=u01
+Simulation Date=01AUG2026,0000,03AUG2026,0000
+Subcritical Flow
+Computation Interval=1MIN
+Output Interval=1HOUR
+Instantaneous Interval=1HOUR
+Mapping Interval=1HOUR
+Run HTab=-1
+Run UNet=-1
+Run Sediment= 0 
+Run PostProcess=-1
+Run RASMapper=0

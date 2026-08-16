@@ -1,0 +1,14 @@
+Flow Title=Cheia_Sintetica_Itajai
+Program Version=7.01
+Use Restart= 0 
+Initial Flow Loc=ITAJAI          ,CALHA_PRINCIPAL ,89310.7 ,281
+Boundary Location=ITAJAI          ,CALHA_PRINCIPAL ,89310.7 ,        ,                ,                
+Interval=1HOUR
+Flow Hydrograph= 49 
+  281.02  303.51  332.94  370.56  417.53  474.81  542.92  621.89  710.99  808.74
+  912.74 1019.80 1125.98 1226.82 1317.67 1393.99 1451.75 1487.76 1500.00 1487.76
+ 1451.75 1393.99 1317.67 1226.82 1125.98 1019.80  912.74  808.74  710.99  621.89
+  542.92  474.81  417.53  370.56  332.94  303.51  281.02  264.21  251.91  243.12
+  236.97  232.76  229.93  228.07  226.88  226.13  225.66  225.38  225.22
+Boundary Location=ITAJAI          ,CALHA_PRINCIPAL ,0.0     ,        ,                ,                
+Friction Slope=0.001
