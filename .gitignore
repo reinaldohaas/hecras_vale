@@ -16,3 +16,7 @@
 *.computeMsgs.txt
 01/
 eixos_do_relevo.geojson
+
+# projeto gerado (regeneravel por construir.py)
+Tajai.*
+!Tajai.prj
