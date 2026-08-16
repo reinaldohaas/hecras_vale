@@ -639,6 +639,32 @@ def secoes(linha, dem, rs0, hw=HALFWIDTH, area=None):
     return fin
 
 
+def ajustar_talvegue(d, delta):
+    """Move o TALVEGUE em 'delta', deixando a planicie onde o DEM a pos.
+
+    O condicionamento deslocava a secao INTEIRA (z = z - delta) para impor o
+    perfil longitudinal. Como delta chega a 5,8 m no baixo Itajai, a planicie e
+    as margens desciam junto: a margem em Itajai ficava a -2,75 m e a de Ilhota
+    a -0,60 m, ou seja, abaixo do nivel do mar -- e isso nao veio do relevo,
+    veio do deslocamento. Aqui so a calha se move, com o mesmo perfil
+    trapezoidal da escavacao, e o terreno fora dela fica intacto.
+    """
+    if abs(delta) < 1e-6:
+        return
+    sta, z = d["sta"], d["z"]
+    _, w = canal_geometria(d.get("area_km2", 1000.0))
+    centro = sta[d.get("i_thal", len(sta) // 2)]
+    dist = np.abs(sta - centro)
+    meia = w / 2.0
+    talude = max(w * 0.25, 30.0)
+    frac = np.clip(1.0 - (dist - meia) / talude, 0.0, 1.0)
+    frac[dist <= meia] = 1.0
+    z = z + delta * frac
+    if delta > 0:            # ao SUBIR a calha, nao pode passar do terreno
+        z = np.minimum(z, d["z"] + np.maximum(delta, 0.0) * frac)
+    d["z"] = z
+
+
 def condicionar(xs, rotulo=""):
     """Prepara o talvegue para o solver unsteady, em tres passos:
 
@@ -670,14 +696,14 @@ def condicionar(xs, rotulo=""):
         teto = zt(xs[i - 1]) - MIN_SLOPE * dx
         atual = zt(xs[i])
         if atual > teto:
-            xs[i]["z"] = xs[i]["z"] - (atual - teto)
+            ajustar_talvegue(xs[i], teto - atual)
     # -- 3. limita declividade ancorando a JUSANTE
     for i in range(len(xs) - 2, -1, -1):
         dx = xs[i]["rs"] - xs[i + 1]["rs"]
         lim = zt(xs[i + 1]) + MAX_SLOPE * dx
         atual = zt(xs[i])
         if atual > lim:
-            xs[i]["z"] = xs[i]["z"] - (atual - lim)
+            ajustar_talvegue(xs[i], lim - atual)
     return xs
 
 
@@ -943,13 +969,14 @@ def escrever_plano_prj():
             '<?xml version="1.0" encoding="utf-8"?>\n<RASMapper>\n'
             '  <Version>2.00</Version>\n'
             f'  <RASProjectionFilename Filename=".\\{PROJECT}.projection" />\n'
-            '  <Geometries Checked="True" Expanded="True">\n'
-            f'    <Layer Name="{PROJECT}" Type="RASGeometry" Checked="True" '
-            f'Expanded="True" Filename=".\\{PROJECT}.g01.hdf">\n'
-            '      <Layer Type="RASXS" Checked="True" '
-            'UnitsRiverStation="Meters" RiverStationDecimalPlaces="0" />\n'
-            '    </Layer>\n'
-            '  </Geometries>\n'
+            # A geometria NAO e declarada aqui. O RAS Mapper ja a descobre pelo
+            # projeto, com a arvore completa (Rivers, Junctions, Bank Lines,
+            # Cross Sections...) e usando o Geom Title como nome. Declarar
+            # tambem, com outro nome, fazia aparecerem DUAS entradas apontando
+            # para o mesmo .g01.hdf -- uma com sub-camadas e a minha vazia, o
+            # que so confundia. O que faltava para ela desenhar era o
+            # Viewing Rectangle, nao esta declaracao.
+            '  <Geometries Checked="True" Expanded="True" />\n'
             '  <Results Checked="True" Expanded="True">\n'
             f'    <Layer Name="REDE" Type="RASResults" Checked="True" '
             f'Expanded="True" Filename=".\\{PROJECT}.p01.hdf">\n'
