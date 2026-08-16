@@ -270,7 +270,13 @@ def escavar(d):
     z = np.minimum(z, z_canal)
 
     d["z"] = z
-    d["lb"], d["rb"] = margens(sta, z, i0, max(z[i0 - 1] - alvo, 0.5))
+    # A profundidade que a margem enxerga e a ESCAVACAO -- terreno menos o
+    # fundo --, nao a diferenca para o ponto vizinho. Com o fundo agora plano o
+    # vizinho tambem esta em z_alvo, isso dava zero, e as margens eram
+    # procuradas DENTRO da propria calha: o Rio Benedito saia com profundidade
+    # de calha 0,00 m e area zero em todas as secoes.
+    d["lb"], d["rb"] = margens(sta, z, i0,
+                               max(d.get("z_terreno", z[i0]) - alvo, 0.5))
     return d
 
 

@@ -20,7 +20,32 @@ canais diferentes quando a secao cruzava outro leito.
 import numpy as np
 
 DECL_MINIMA = 1e-4       # m/m; abaixo disso o trecho vira lago e o solver oscila
-DECL_MAXIMA = 0.008      # m/m; acima disso o escoamento fica transcritico
+DECL_MAXIMA = 0.008      # m/m; teto de PARTIDA, valido para rio de planicie
+DECL_TETO = 0.05         # m/m; teto absoluto (limite de validade de Jarrett)
+ESCAVACAO_MAXIMA = 12.0  # m; o quanto o talvegue pode se afastar do terreno
+
+
+def teto_declividade(xs):
+    """Teto de declividade do PROPRIO rio, tirado do terreno.
+
+    Um teto unico para rio de planicie e rio de serra e a origem do pior
+    defeito desta reescrita. O Rio Benedito cai 515,5 -> 53,0 m em 43,7 km:
+    1,06% de media, 1,33% de mediana local, 13,6% de maxima. Forcando 0,8%,
+    ancorado na foz e subindo, o alvo se afasta do terreno em 128,6 m de
+    mediana e 279,2 m no pior ponto -- o modelo cavava um canion ficticio sob
+    a serra. Dai vinham o erro de volume astronomico, a falha no assentamento
+    (nao ha como estabelecer lamina num canal de 280 m) e a falha mudando de
+    rio a cada correcao: cada rio de serra tinha o seu canion.
+
+    O teto sai do percentil 90 da declividade real, com folga. Rio de planicie
+    continua em 0,008; rio de serra ganha o que o relevo dele pede, e a
+    rugosidade de Jarrett e o refino de espacamento ja acompanham.
+    """
+    S = np.array([d.get("S_terreno", 0.0) for d in xs], float)
+    S = S[np.isfinite(S)]
+    if not len(S):
+        return DECL_MAXIMA
+    return float(np.clip(np.percentile(S, 90) * 1.2, DECL_MAXIMA, DECL_TETO))
 
 
 def cota_talvegue(d):
@@ -62,6 +87,10 @@ def condicionar(xs, rotulo=""):
     """
     if len(xs) < 3:
         return xs
+    dmax = teto_declividade(xs)
+    if dmax > DECL_MAXIMA * 1.05:
+        print(f"        {rotulo}: rio de serra, teto de declividade "
+              f"{100*dmax:.2f}% (padrao {100*DECL_MAXIMA:.1f}%)")
     # o alvo parte do terreno menos a profundidade da calha
     for d in xs:
         d.setdefault("z_alvo", float(d["z"][d["i_thal"]]) - d.get("prof_canal", 0.0))
@@ -69,14 +98,14 @@ def condicionar(xs, rotulo=""):
     while corte < len(xs) - 2:
         dx = xs[corte]["rs"] - xs[corte + 1]["rs"]
         dz = cota_talvegue(xs[corte]) - cota_talvegue(xs[corte + 1])
-        if dx > 0 and abs(dz) / dx > DECL_MAXIMA:
+        if dx > 0 and abs(dz) / dx > dmax:
             corte += 1
         else:
             break
     if corte:
         print(f"        {rotulo}: aparadas {corte} secoes de cabeceira "
               f"({(xs[0]['rs']-xs[corte]['rs'])/1000:.1f} km acima de "
-              f"{100*DECL_MAXIMA:.1f}%)")
+              f"{100*dmax:.1f}%)")
         xs = xs[corte:]
 
     for i in range(1, len(xs)):
@@ -86,12 +115,26 @@ def condicionar(xs, rotulo=""):
         if atual > teto:
             mover_calha(xs[i], teto - atual)
 
+    # Limite de declividade e piso de escavacao no MESMO laco. Aplicar o piso
+    # depois, como passe separado, sobrescreve z_alvo sem que as secoes
+    # vizinhas saibam, e o perfil ganha degraus que ele proprio acabou de
+    # remover -- o Itajai-Mirim saiu com 17,5% de degrau local sendo um rio de
+    # teto 0,8%. Dentro do laco, cada secao ja enxerga a vizinha corrigida.
+    fundo = 0
     for i in range(len(xs) - 2, -1, -1):
         dx = xs[i]["rs"] - xs[i + 1]["rs"]
-        lim = cota_talvegue(xs[i + 1]) + DECL_MAXIMA * dx
+        lim = cota_talvegue(xs[i + 1]) + dmax * dx
+        piso = float(xs[i]["z"][xs[i]["i_thal"]]) - ESCAVACAO_MAXIMA
         atual = cota_talvegue(xs[i])
-        if atual > lim:
-            mover_calha(xs[i], lim - atual)
+        novo = min(atual, lim)              # nao mais ingreme que o teto
+        if novo < piso:                     # nem mais fundo que o terreno
+            novo = piso
+            fundo += 1
+        if abs(novo - atual) > 1e-9:
+            xs[i]["z_alvo"] = novo
+    if fundo:
+        print(f"        {rotulo}: {fundo} secoes no piso de "
+              f"{ESCAVACAO_MAXIMA:.0f} m de escavacao")
     return xs
 
 

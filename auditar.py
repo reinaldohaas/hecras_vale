@@ -83,6 +83,18 @@ def auditar(projeto):
     for k in por:
         por[k].sort(key=lambda d: -d["rs"])
 
+    from itajai import perfil
+    teto = {}
+    for (rio, _), v in por.items():
+        S = []
+        for x, y in zip(v, v[1:]):
+            dx = x["rs"] - y["rs"]
+            if dx > 0:
+                S.append(abs(float(x["z"].min()) - float(y["z"].min())) / dx)
+        if S:
+            teto[rio] = max(teto.get(rio, 0.0),
+                            float(np.clip(np.percentile(S, 90) * 1.2,
+                                          perfil.DECL_MAXIMA, perfil.DECL_TETO)))
     baixa, salto_a, salto_z = [], [], []
     for (rio, rea), v in por.items():
         for i, d in enumerate(v):
@@ -102,9 +114,12 @@ def auditar(projeto):
                     r = max(a1, a2) / min(a1, a2)
                     if r > 3.0:
                         salto_a.append((r, rio, rea, d["rs"]))
+                # contra o teto DO RIO, nao um valor fixo: com teto por rio
+                # (perfil.teto_declividade) um afluente de serra desce 5% por
+                # projeto, e um limite unico de 2% acusaria 198 falsos.
                 dx = d["rs"] - e["rs"]
                 dz = z0 - float(e["z"].min())
-                if dx > 0 and dz / dx > 0.02:
+                if dx > 0 and dz / dx > teto.get(rio, 0.008) * 1.25:
                     salto_z.append((dz / dx, rio, rea, d["rs"]))
 
     print("=" * 72)
