@@ -212,17 +212,44 @@ def cortar(linha, s, amostrador, meia_largura, area_km2, hw_esq=None,
         z = np.interp(np.arange(len(z)), np.flatnonzero(ok), z[ok])
     sta = off + he
 
+    # A secao sai do TERRENO. A calha e escavada depois, uma unica vez, com o
+    # perfil longitudinal ja definido -- ver escavar(). Escavar aqui e depois
+    # reajustar a cada passo do condicionamento reaplicava o trapezio sobre um
+    # perfil ja modificado, e o que sobrava era um pico isolado: uma fenda de
+    # 3,4 m num rio de calha de 106 m, que nao conduz nada.
     prof, larg = canal(area_km2)
     i0 = indice_eixo(sta, z, max(larg, 150.0))
-    z, _ = _escavar(sta, z, prof, larg, i0)
-    # UMA calha: sobe o que ficou mais fundo que ela (outro canal cruzado)
-    i0 = indice_eixo(sta, z, max(larg, 150.0))
+    # UMA calha por secao: sobe o que estiver mais fundo que o talvegue do eixo
+    # (o leito antigo, um meandro que o corte cruzou)
     z = np.maximum(z, z[i0])
-    lb, rb = margens(sta, z, i0, prof)
     cut = (p.x - he * rx, p.y - he * ry, p.x + hd * rx, p.y + hd * ry)
-    return {"sta": sta, "z": z, "i_thal": i0, "lb": lb, "rb": rb,
-            "cut": cut, "area_km2": area_km2, "prof_canal": prof,
-            "larg_canal": larg}
+    return {"sta": sta, "z": z, "i_thal": i0, "cut": cut,
+            "area_km2": area_km2, "prof_canal": prof, "larg_canal": larg,
+            "z_terreno": float(z[i0])}
+
+
+def escavar(d):
+    """Escava a calha UMA vez, com o fundo na cota que o perfil definiu.
+
+    Chamada depois do condicionamento e da ancoragem, quando d["z_alvo"] ja
+    tem a cota final do talvegue. O trapezio e aplicado sobre o TERRENO, entao
+    e sempre integro -- largura cheia, taludes suaves -- em vez de resultar da
+    soma de varios ajustes parciais.
+    """
+    sta, z = d["sta"], np.array(d["z"], float)
+    larg = d["larg_canal"]
+    i0 = d["i_thal"]
+    alvo = d.get("z_alvo", z[i0] - d["prof_canal"])
+    fundo = z[i0] - alvo                      # o quanto descer no eixo
+    dist = np.abs(sta - sta[i0])
+    meia = larg / 2.0
+    talude = max(larg * 0.25, 30.0)
+    frac = np.clip(1.0 - (dist - meia) / talude, 0.0, 1.0)
+    frac[dist <= meia] = 1.0
+    z = z - fundo * frac
+    d["z"] = z
+    d["lb"], d["rb"] = margens(sta, z, i0, max(fundo, 0.5))
+    return d
 
 
 def cortar_trecho(linha, amostrador, area_foz, rs0=0.0, area_cabeceira=None):

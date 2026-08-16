@@ -126,6 +126,14 @@ def main():
             alvo = leito[min(leito, key=lambda r: abs(r - rs_alvo))]
             desl = perfil.ancorar(v["xs"], alvo)
             extra = f"   ancorado em {alvo:7.1f} m ({desl:+.1f})"
+        # ESCAVA POR ULTIMO, com o perfil ja definido. Escavar no corte e
+        # reajustar a cada passo do condicionamento reaplicava o trapezio sobre
+        # um perfil ja alterado: a calha degenerava num pico de um ponto so
+        # (uma fenda de 3,4 m num rio de calha de 106 m) e a secao deixava de
+        # conduzir. Era a causa comum dos saltos de area de ate 18x entre
+        # vizinhas, e do erro de balanco que o solver acusava.
+        for d in v["xs"]:
+            secao.escavar(d)
         n_j = perfil.manning(v["xs"])
         print(f"    {v['nome']:<14} {len(v['xs']):4d} secoes"
               f"   Jarrett em {n_j:3d}{extra}")

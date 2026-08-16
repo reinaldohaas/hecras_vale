@@ -24,24 +24,31 @@ DECL_MAXIMA = 0.008      # m/m; acima disso o escoamento fica transcritico
 
 
 def cota_talvegue(d):
-    """Cota da calha junto ao eixo. Sobrevive aos ajustes, porque e por indice."""
+    """Cota ALVO do talvegue -- a que o perfil longitudinal definiu.
+
+    Enquanto o condicionamento roda, a secao ainda e o terreno cru: quem carrega
+    a decisao e z_alvo, um escalar. A geometria so muda no fim, quando
+    secao.escavar() aplica o trapezio uma unica vez. Antes disso cada passo
+    reescavava sobre o resultado do anterior e a calha degenerava num pico.
+    """
+    if "z_alvo" in d:
+        return float(d["z_alvo"])
     i = d.get("i_thal")
-    return float(d["z"][i]) if i is not None else float(np.nanmin(d["z"]))
+    base = float(d["z"][i]) if i is not None else float(np.nanmin(d["z"]))
+    return base - d.get("prof_canal", 0.0)
 
 
 def mover_calha(d, delta):
-    """Move so a calha em 'delta'; o terreno em volta fica onde o DEM o pos."""
+    """Ajusta a cota ALVO do talvegue. Nao toca na geometria.
+
+    Antes isto reaplicava o trapezio da escavacao a cada chamada. Como o
+    condicionamento chama tres vezes (monotonia, limite de declividade,
+    ancoragem) e cada uma incidia sobre o perfil ja alterado, os deslocamentos
+    se acumulavam em pontos diferentes e a calha virava um pico de um ponto so.
+    """
     if abs(delta) < 1e-6:
         return
-    sta = d["sta"]
-    larg = d.get("larg_canal", 150.0)
-    centro = sta[d["i_thal"]]
-    dist = np.abs(sta - centro)
-    meia = larg / 2.0
-    talude = max(larg * 0.25, 30.0)
-    frac = np.clip(1.0 - (dist - meia) / talude, 0.0, 1.0)
-    frac[dist <= meia] = 1.0
-    d["z"] = d["z"] + delta * frac
+    d["z_alvo"] = cota_talvegue(d) + delta
 
 
 def condicionar(xs, rotulo=""):
@@ -55,6 +62,9 @@ def condicionar(xs, rotulo=""):
     """
     if len(xs) < 3:
         return xs
+    # o alvo parte do terreno menos a profundidade da calha
+    for d in xs:
+        d.setdefault("z_alvo", float(d["z"][d["i_thal"]]) - d.get("prof_canal", 0.0))
     corte = 0
     while corte < len(xs) - 2:
         dx = xs[corte]["rs"] - xs[corte + 1]["rs"]
@@ -109,6 +119,8 @@ def ancorar(xs, cota_alvo, degrau=0.5):
         cabeceira. O desencontro esta na confluencia; nao ha razao para
         propaga-lo 114 km rio acima.
     """
+    for d in xs:                       # garante z_alvo em todas
+        d.setdefault("z_alvo", cota_talvegue(d))
     desl = (cota_alvo + degrau) - cota_talvegue(xs[-1])
     if abs(desl) < 1e-6 or len(xs) < 2:
         return desl
