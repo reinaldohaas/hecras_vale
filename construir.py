@@ -92,7 +92,19 @@ def main():
     # a arvore veio da ANA; a ESTACA da confluencia sai do eixo em uso
     conf = {m: [] for m in rede}
     for k, m in receptor.items():
+        L = rede[m]["linha"].length
         s = rede[m]["linha"].project(Point(rede[k]["linha"].coords[-1]))
+        # Uma confluencia na CABECEIRA do receptor nao deixa trecho a montante,
+        # e a juncao fica com uma entrada e uma saida -- o HEC-RAS recusa:
+        #   "Junction ... has only one reach flowing in and one flowing out.
+        #    Junctions are for flow confluences and splits."
+        # e aborta a simulacao na validacao, antes de calcular. Acontece com o
+        # Taio (entra no Oeste) e o Iraputa (no Norte), porque a cadeia da ANA
+        # para o receptor comeca exatamente ali. Afastar a confluencia de um
+        # espacamento cria o trecho de montante que falta; o deslocamento e da
+        # ordem do proprio espacamento das secoes.
+        s = float(np.clip(s, secao.ESPACAMENTO, max(L - secao.ESPACAMENTO,
+                                                    secao.ESPACAMENTO)))
         conf[m].append({"k": k, "s": s, "pt": rede[m]["linha"].interpolate(s)})
     for m in conf:
         conf[m].sort(key=lambda c: c["s"])
