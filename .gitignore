@@ -12,3 +12,7 @@ eraveis a partir do .g01/.u01/.p01)
 *.dss
 *.p0*.hdf
 *.computeMsgs.txt
+
+# KML/KMZ exportados (regeneraveis)
+*.kml
+*.kmz

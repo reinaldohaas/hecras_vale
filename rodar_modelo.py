@@ -152,6 +152,18 @@ def validar(projeto, evento):
         print(f"  {nome:<12}{sim:>10.0f}{obs:>11}{100*(sim-obs)/obs:>8.1f}%")
 
 
+def kml(projeto):
+    r = subprocess.run([sys.executable, os.path.join(AQUI, "exportar_kml.py"),
+                        projeto], cwd=AQUI)
+    return r.returncode == 0
+
+
+def secoes_app(projeto):
+    r = subprocess.run([sys.executable, os.path.join(AQUI, "gerar_secoes_app.py"),
+                        projeto], cwd=AQUI)
+    return r.returncode == 0
+
+
 def mancha(projeto):
     r = subprocess.run([sys.executable, os.path.join(AQUI, "gerar_mancha_hecras.py"),
                         projeto], cwd=AQUI)
@@ -166,17 +178,21 @@ def rodar(evento, barragens=True, so_mancha=False):
     if so_mancha:
         projeto = f"Itajai_Rede_{evento}" if evento else "Itajai_Rede"
     else:
-        log("[1/3] gerando geometria e condicoes de contorno...")
+        log("[1/5] gerando geometria e condicoes de contorno...")
         projeto = gerar(evento, barragens)
-        log("[2/3] simulando no HEC-RAS...")
+        log("[2/5] simulando no HEC-RAS...")
         if not simular(projeto):
             log("simulacao nao concluiu; a mancha nao sera gerada", "erro")
             return False
         validar(projeto, evento)
-    log("[3/3] gerando a mancha de inundacao...")
+    log("[3/5] gerando a mancha de inundacao...")
     if not mancha(projeto):
         log("falha ao gerar a mancha", "erro")
         return False
+    log("[4/5] exportando as secoes para o app...")
+    secoes_app(projeto)
+    log("[5/5] exportando KMZ para o Google Earth...")
+    kml(projeto)
     log(f"concluido: {projeto}", "ok")
     return True
 
