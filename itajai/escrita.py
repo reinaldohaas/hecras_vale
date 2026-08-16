@@ -64,6 +64,73 @@ def contorno(rio, reach, rs):
 
 
 # ------------------------------------------------------------------ GEOMETRIA
+def _secao_manual(rio, reach, d, dx):
+    """Formatacao propria da secao. Reserva, se o ras-commander faltar."""
+    c = d["cut"]
+    linhas = [f"Type RM Length L Ch R = 1 ,{d['rs']:<8.2f},{dx},{dx},{dx}",
+              "XS GIS Cut Line=2",
+              f"{c[0]:16.4f}{c[1]:16.4f}{c[2]:16.4f}{c[3]:16.4f}",
+              EDITADO,
+              f"#Sta/Elev= {len(d['sta'])} "]
+    linhas += serie8([v for p in zip(d["sta"], d["z"]) for v in p])
+    linhas += ["#Mann= 3 ,-1,0",
+               "".join(f"{v:>8}" for v in
+                       [f"{d['sta'][0]:.2f}", f"{d['n_planicie']:.3f}", "0",
+                        f"{d['lb']:.2f}", f"{d['n']:.3f}", "0",
+                        f"{d['rb']:.2f}", f"{d['n_planicie']:.3f}", "0"]),
+               f"Bank Sta={d['lb']:.2f},{d['rb']:.2f}",
+               "XS Rating Curve= 0 ,0",
+               "Exp/Cntr=0.3,0.1", ""]
+    return linhas
+
+
+def secao_texto(rio, reach, d, dx):
+    """Bloco da secao, montado pelo ras-commander quando disponivel.
+
+    Ganho concreto sobre a formatacao propria: o builder INSERE pontos nas
+    estacas das margens, garantindo que Bank Sta coincida com um sta da tabela.
+    Fazer isso a mao exige casar a precisao (.2f) dos dois lados, e foi fonte
+    de erro. Ele tambem resolve reach lengths e o bloco de Manning no formato
+    que o HEC-RAS espera.
+
+    A formatacao propria fica como reserva: sem o ras-commander instalado o
+    modelo continua sendo gerado.
+    """
+    try:
+        import pandas as pd
+        from ras_commander.geom import GeomCrossSection as G
+    except ImportError:
+        return _secao_manual(rio, reach, d, dx)
+    c = d["cut"]
+    try:
+        r = G.build_cross_section(
+            river=rio, reach=reach, rs=f"{d['rs']:.2f}",
+            station_elevation=pd.DataFrame({"Station": d["sta"],
+                                            "Elevation": d["z"]}),
+            cut_line=[(c[0], c[1]), (c[2], c[3])],
+            bank_left=float(d["lb"]), bank_right=float(d["rb"]),
+            n_lob=float(d["n_planicie"]), n_channel=float(d["n"]),
+            n_rob=float(d["n_planicie"]),
+            length_left=float(dx), length_channel=float(dx),
+            length_right=float(dx))
+        linhas = r.text.splitlines()
+        # O builder grava Manning com DUAS casas: 0,035 vira 0,04 (14% a mais
+        # de rugosidade em todo o modelo) e os valores de Jarrett -- 0,052,
+        # 0,066, 0,070 -- colapsam em tres niveis. Substitui-se so essa linha,
+        # preservando tudo o mais que ele resolve.
+        for k, l in enumerate(linhas):
+            if l.startswith("#Mann=") and k + 1 < len(linhas):
+                linhas[k + 1] = "".join(
+                    f"{v:>8}" for v in
+                    [f"{d['sta'][0]:.2f}", f"{d['n_planicie']:.3f}", "0",
+                     f"{d['lb']:.2f}", f"{d['n']:.3f}", "0",
+                     f"{d['rb']:.2f}", f"{d['n_planicie']:.3f}", "0"])
+                break
+        return linhas + ["XS Rating Curve= 0 ,0", "Exp/Cntr=0.3,0.1", ""]
+    except Exception:
+        return _secao_manual(rio, reach, d, dx)
+
+
 def geometria(projeto, trechos, juncoes, titulo=None):
     xs_all, ys_all = [], []
     for t in trechos:
@@ -106,23 +173,7 @@ def geometria(projeto, trechos, juncoes, titulo=None):
         for i, d in enumerate(t["xs"]):
             prox = t["xs"][i + 1] if i + 1 < len(t["xs"]) else None
             dx = round(d["rs"] - prox["rs"], 2) if prox else 0.0
-            g += [f"Type RM Length L Ch R = 1 ,{d['rs']:<8.2f},"
-                  f"{dx},{dx},{dx}",
-                  "XS GIS Cut Line=2"]
-            c = d["cut"]
-            g += [f"{c[0]:16.4f}{c[1]:16.4f}{c[2]:16.4f}{c[3]:16.4f}",
-                  EDITADO,
-                  f"#Sta/Elev= {len(d['sta'])} "]
-            par = [v for p in zip(d["sta"], d["z"]) for v in p]
-            g += serie8(par)
-            g += ["#Mann= 3 ,-1,0",
-                  "".join(f"{v:>8}" for v in
-                          [f"{d['sta'][0]:.2f}", f"{d['n_planicie']:.3f}", "0",
-                           f"{d['lb']:.2f}", f"{d['n']:.3f}", "0",
-                           f"{d['rb']:.2f}", f"{d['n_planicie']:.3f}", "0"]),
-                  f"Bank Sta={d['lb']:.2f},{d['rb']:.2f}",
-                  "XS Rating Curve= 0 ,0",
-                  "Exp/Cntr=0.3,0.1", ""]
+            g += secao_texto(t["rio"], t["reach"], d, dx)
 
     with open(f"{projeto}.g01", "w", encoding="ascii", errors="replace") as f:
         f.write("\n".join(g) + "\n")
