@@ -101,12 +101,20 @@ fi
 "$PY" rodar_modelo.py "$@"
 RC=$?
 
-if [ "$RC" -eq 0 ]; then
-  echo
-  echo "  Concluido. Para ver no navegador:"
-  echo "    $PY -m http.server 8050 --directory app"
-else
-  echo
-  echo "  [ERRO] O pipeline terminou com erro (codigo $RC)."
-fi
+[ "$RC" -eq 0 ] || echo "
+  [ERRO] O pipeline terminou com erro (codigo $RC)."
+
+# A dica vale mesmo quando o HEC-RAS nao fecha: o motor proprio roda sempre e as
+# paginas sao geradas de qualquer jeito. Ela so aparecia em caso de sucesso, e
+# apontava para app/ enquanto as paginas saiam na raiz -- ou seja, mandava
+# servir uma pasta onde nada do que fora gerado estava.
+echo "
+  Para ver no navegador:
+    $PY -m http.server 8050 --directory app
+
+  e abra:
+    http://localhost:8050/                              interface completa
+    http://localhost:8050/<PROJETO>_cheia_motor.html    perfil animado (motor)
+    http://localhost:8050/<PROJETO>_cheia_hecras.html   idem, pelo HEC-RAS
+"
 exit $RC

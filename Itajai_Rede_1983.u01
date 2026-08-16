@@ -1,16 +1,16 @@
 Flow Title=Cheia_Rede_Real
 Program Version=7.01
 Use Restart= 0 
-Initial Flow Loc=Itajai_Acu      ,R1              ,187612  ,119
+Initial Flow Loc=Itajai_Acu      ,R1              ,187537  ,119
 Initial Flow Loc=Itajai_Acu      ,R2              ,148258  ,329
 Initial Flow Loc=Itajai_Acu      ,R3              ,94121   ,384
 Initial Flow Loc=Itajai_Acu      ,R4              ,5889    ,455
-Initial Flow Loc=Itajai_Norte    ,R1              ,127808  ,76
-Initial Flow Loc=Itajai_Oeste    ,R1              ,67479   ,69
-Initial Flow Loc=Itajai_Sul      ,R1              ,87288   ,50
+Initial Flow Loc=Itajai_Norte    ,R1              ,128733  ,76
+Initial Flow Loc=Itajai_Oeste    ,R1              ,68404   ,69
+Initial Flow Loc=Itajai_Sul      ,R1              ,87213   ,50
 Initial Flow Loc=Itajai_Mirim    ,R1              ,146038  ,37
-Initial Flow Loc=Rio_Benedito    ,R1              ,50294   ,34
-Boundary Location=Itajai_Norte    ,R1              ,127808.3,        ,                ,                
+Initial Flow Loc=Rio_Benedito    ,R1              ,51219   ,34
+Boundary Location=Itajai_Norte    ,R1              ,128733.3,        ,                ,                
 Interval=1HOUR
 Flow Hydrograph= 192 
    75.90   75.90   75.90   75.90   75.90   75.90   75.90   75.90   75.90   75.90
@@ -33,7 +33,7 @@ Flow Hydrograph= 192
  1913.62 1872.63 1846.08 1827.11 1806.18 1770.25 1712.71 1636.21 1545.19 1440.46
  1325.01 1203.88 1082.34  964.41  852.79  751.14  661.96  584.40  515.52  454.66
   402.57  358.96
-Boundary Location=Itajai_Oeste    ,R1              ,67479.11,        ,                ,                
+Boundary Location=Itajai_Oeste    ,R1              ,68404.11,        ,                ,                
 Interval=1HOUR
 Flow Hydrograph= 192 
    68.64   68.64   68.64   68.64   68.64   68.64   68.64   68.64   68.64   68.64
@@ -56,7 +56,7 @@ Flow Hydrograph= 192
  1500.00 1500.00 1500.00 1500.00 1500.00 1500.00 1500.00 1500.00 1423.50 1187.93
  1115.63  894.91  846.61  655.99  639.26  478.84  487.13  346.80  374.15  252.35
   295.42  225.00
-Boundary Location=Itajai_Sul      ,R1              ,87288.23,        ,                ,                
+Boundary Location=Itajai_Sul      ,R1              ,87213.23,        ,                ,                
 Interval=1HOUR
 Flow Hydrograph= 192 
    50.16   50.16   50.16   50.16   50.16   50.16   50.16   50.16   50.16   50.16
@@ -102,7 +102,7 @@ Flow Hydrograph= 192
   451.88  485.37  516.09  540.31  554.69  557.85  549.57  532.20  508.85  479.77
   444.42  402.50  356.63  311.07  267.51  227.28  191.44  160.72  136.15  117.05
   101.87   89.81
-Boundary Location=Rio_Benedito    ,R1              ,50294.21,        ,                ,                
+Boundary Location=Rio_Benedito    ,R1              ,51219.21,        ,                ,                
 Interval=1HOUR
 Flow Hydrograph= 192 
    33.88   33.88   33.88   33.88   33.88   33.88   33.88   33.88   33.88   33.88

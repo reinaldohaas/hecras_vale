@@ -64,12 +64,19 @@ rem --- 5. Roda --------------------------------------------------------------
 "%PY%" rodar_modelo.py %*
 set "RC=%ERRORLEVEL%"
 
-if "%RC%"=="0" (
-  echo.
-  echo   Concluido. Para ver no navegador:
-  echo     "%PY%" -m http.server 8050 --directory app
-) else (
+if not "%RC%"=="0" (
   echo.
   echo   [ERRO] O pipeline terminou com erro ^(codigo %RC%^).
 )
+rem A dica vale mesmo quando o HEC-RAS nao fecha: o motor proprio roda sempre e
+rem as paginas sao geradas de qualquer jeito. Antes ela so aparecia em caso de
+rem sucesso, e mandava servir app/ enquanto as paginas saiam na raiz.
+echo.
+echo   Para ver no navegador:
+echo     "%PY%" -m http.server 8050 --directory app
+echo.
+echo   e abra:
+echo     http://localhost:8050/                              interface completa
+echo     http://localhost:8050/^<PROJETO^>_cheia_motor.html    perfil animado ^(motor^)
+echo     http://localhost:8050/^<PROJETO^>_cheia_hecras.html   idem, pelo HEC-RAS
 exit /b %RC%

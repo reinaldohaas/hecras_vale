@@ -212,13 +212,17 @@ def main():
     gdf = gpd.GeoDataFrame(feats, crs=f"EPSG:{UTM}")
     gdf["area_km2"] = (gdf.geometry.area / 1e6).round(3)
 
+    # shapefile na raiz, em UTM: e o caminho que o .rasmap referencia.
+    # GeoJSON em lat/lon dentro de app/, que e a pasta servida na porta 8050.
     shp = f"{a.projeto}_planicie.shp"
     gdf.to_file(shp)
-    gdf.to_crs(4326).to_file(f"{a.projeto}_planicie.geojson", driver="GeoJSON")
+    os.makedirs("app", exist_ok=True)
+    gjs = os.path.join("app", f"{a.projeto}_planicie.geojson")
+    gdf.to_crs(4326).to_file(gjs, driver="GeoJSON")
 
     area = float(unary_union(gdf.geometry).area / 1e6)
     print(f"\n[OK] {shp}  ({len(gdf)} poligonos, {rotulo})")
-    print(f"[OK] {a.projeto}_planicie.geojson")
+    print(f"[OK] {gjs}")
     print(f"     area inundada: {area:.1f} km2")
     print(f"     largura maxima: {gdf['larg_max'].max():.0f} m"
           f"   profundidade maxima: {gdf['prof_max'].max():.2f} m")

@@ -177,24 +177,65 @@ def rodar(evento, barragens=True, so_mancha=False):
     os.chdir(AQUI)
     if so_mancha:
         projeto = f"Itajai_Rede_{evento}" if evento else "Itajai_Rede"
+        ok_ras = True                     # reaproveita o que ja foi simulado
     else:
-        log("[1/5] gerando geometria e condicoes de contorno...")
+        log("[1/7] gerando geometria e condicoes de contorno...")
         projeto = gerar(evento, barragens)
-        log("[2/5] simulando no HEC-RAS...")
-        if not simular(projeto):
-            log("simulacao nao concluiu; a mancha nao sera gerada", "erro")
+        log("[2/7] simulando no HEC-RAS...")
+        ok_ras = simular(projeto)
+        if ok_ras:
+            validar(projeto, evento)
+
+    # O motor proprio roda SEMPRE, na mesma geometria. Enquanto o HEC-RAS nao
+    # fecha os 192 passos, e ele que sustenta mancha e visualizacao -- antes o
+    # pipeline abortava aqui e nao se produzia saida nenhuma.
+    log("[3/7] rodando o motor quasi-permanente...")
+    fonte = "hecras" if ok_ras else "motor"
+    try:
+        import motor_hidraulico as MH
+        import numpy as _np
+        r = MH.simular(projeto, verbose=False)
+        _np.savez_compressed(f"{projeto}_motor.npz", **r)
+        log(f"motor: {r['ws'].shape[0]} instantes x {r['ws'].shape[1]} secoes", "ok")
+    except Exception as e:
+        log(f"motor falhou: {e}", "erro")
+        if not ok_ras:
             return False
-        validar(projeto, evento)
-    log("[3/5] gerando a mancha de inundacao...")
-    if not mancha(projeto):
-        log("falha ao gerar a mancha", "erro")
+
+    log("[4/7] gerando a mancha de inundacao...")
+    if ok_ras and not mancha(projeto):
+        log("falha ao gerar a mancha pelo HEC-RAS", "erro")
+    log("[5/7] gerando os limites da planicie...")
+    _passo(["gerar_planicie.py", projeto, "--fonte", fonte])
+    log("[6/7] exportando secoes e KMZ...")
+    if ok_ras:
+        secoes_app(projeto)
+        kml(projeto)
+    log("[7/7] gerando as paginas de visualizacao...")
+    _passo(["visualizar_cheia.py", projeto, "--fonte", "motor"])
+    if ok_ras:
+        _passo(["visualizar_cheia.py", projeto, "--fonte", "hecras"])
+
+    if not ok_ras:
+        log(f"{projeto}: HEC-RAS instavel; saidas geradas pelo motor", "erro")
         return False
-    log("[4/5] exportando as secoes para o app...")
-    secoes_app(projeto)
-    log("[5/5] exportando KMZ para o Google Earth...")
-    kml(projeto)
     log(f"concluido: {projeto}", "ok")
     return True
+
+
+def _passo(argv):
+    """Roda um script do projeto no MESMO interpretador, sem abortar o resto."""
+    import subprocess
+    try:
+        r = subprocess.run([sys.executable] + argv, cwd=AQUI,
+                           capture_output=True, text=True, timeout=1800)
+        for l in (r.stdout or "").splitlines():
+            if l.strip().startswith("[OK]") or "km2" in l:
+                log(l.strip())
+        if r.returncode:
+            log(f"{argv[0]} terminou com codigo {r.returncode}", "erro")
+    except Exception as e:
+        log(f"{argv[0]}: {e}", "erro")
 
 
 def main():

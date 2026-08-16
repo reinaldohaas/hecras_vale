@@ -389,7 +389,12 @@ def main():
     meta = {"estado": d["estado"], "fonte": d["fonte"], "inicio": inicio,
             "n_saidas": d["ws"].shape[0], "n_previstas": n_prev}
 
-    saida = f"{a.projeto}_cheia_{a.fonte}.html"
+    # Grava DENTRO de app/, que e a pasta que rodar_modelo.sh sugere servir na
+    # porta 8050. Antes a pagina saia na raiz do repositorio e o servidor nao
+    # a enxergava -- a sugestao apontava para um lugar sem nada do que fora
+    # gerado.
+    os.makedirs("app", exist_ok=True)
+    saida = os.path.join("app", f"{a.projeto}_cheia_{a.fonte}.html")
     with open(saida, "w", encoding="utf-8") as f:
         f.write(pagina(dados, a.projeto, meta))
     print(f"[OK] {saida}  ({os.path.getsize(saida)/1024:.0f} kB)")
