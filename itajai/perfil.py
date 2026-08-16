@@ -114,11 +114,18 @@ def manning(xs, n_canal=0.035, razao_planicie=1.8, n_max=0.10):
     n_ajust = 0
     for i, d in enumerate(xs):
         d["n"] = n_canal
-        viz = xs[min(i + 1, len(xs) - 1)]
-        dx = d["rs"] - viz["rs"]
-        if dx <= 0:
-            continue
-        S = abs(cota_talvegue(d) - cota_talvegue(viz)) / dx
+        # a declividade do TERRENO, nao a do perfil ja condicionado. Tres
+        # afluentes de serra (dos Cedros, Taio, Benedito) saem do
+        # condicionamento com a declividade cravada em DECL_MAXIMA: derivar n
+        # dali da o mesmo valor para todos e subestima a rugosidade justamente
+        # onde o escoamento e mais rapido. O terreno guarda a queda real.
+        S = d.get("S_terreno")
+        if S is None:
+            viz = xs[min(i + 1, len(xs) - 1)]
+            dx = d["rs"] - viz["rs"]
+            if dx <= 0:
+                continue
+            S = abs(cota_talvegue(d) - cota_talvegue(viz)) / dx
         if S < 0.002:
             continue
         R = max(d.get("prof_canal", 3.0), 0.5)

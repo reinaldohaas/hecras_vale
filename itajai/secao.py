@@ -218,6 +218,22 @@ def cortar_trecho(linha, amostrador, area_foz, rs0=0.0, area_cabeceira=None):
     L = linha.length
     a0 = area_cabeceira if area_cabeceira is not None else area_foz * 0.05
     ss = estacas(linha, amostrador)
+    # declividade do terreno NAO condicionado, guardada por secao. E ela que
+    # deve alimentar o Manning de Jarrett: derivar n do perfil ja condicionado
+    # usa a declividade do CLAMP (0,008 cravado), nao a do relevo, e portanto
+    # subestima a rugosidade justamente nos afluentes de serra -- que sao os
+    # que saturam o clamp.
+    P = [linha.interpolate(float(s)) for s in ss]
+    zt = amostrador.talvegue([p.x for p in P], [p.y for p in P])
+    ok = np.isfinite(zt)
+    if ok.sum() >= 2:
+        zt = np.interp(np.arange(len(zt)), np.flatnonzero(ok), zt[ok])
+        s_arr = np.asarray(ss, float)
+        S_terr = np.abs(np.gradient(zt, s_arr))
+        S_terr = np.convolve(S_terr, np.ones(3) / 3.0, "same")
+    else:
+        S_terr = np.zeros(len(ss))
+
     areas = [a0 + (area_foz - a0) * (s / max(L, 1.0)) for s in ss]
     hw = [largura_secao(a) for a in areas]
     # apara o lado concavo de cada secao ANTES de cortar: e o que impede as
@@ -230,6 +246,7 @@ def cortar_trecho(linha, amostrador, area_foz, rs0=0.0, area_cabeceira=None):
         if r is None:
             continue
         r["rs"] = round(rs0 + (L - s), 2)
+        r["S_terreno"] = float(S_terr[i])
         xs.append(r)
     xs.sort(key=lambda d: -d["rs"])
     fin, visto = [], set()
