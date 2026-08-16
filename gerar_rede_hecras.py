@@ -504,10 +504,17 @@ def secoes(linha, dem, rs0, hw=HALFWIDTH, area=None):
     """Corta as secoes de um trecho. rs0 = RS do extremo de JUSANTE."""
     L = linha.length
     ss = estacoes(linha, dem)
-    # NAO cria secao colada no extremo: uma secao a 1 m da juncao conflita
-    # com o comprimento declarado em 'Junc L&A' e trava o solver.
+    # NAO cria secao colada em NENHUM dos extremos: uma secao em cima da
+    # juncao conflita com o comprimento declarado em 'Junc L&A' e trava o
+    # solver. O extremo de jusante ja era protegido; faltava o de MONTANTE --
+    # o Acu nasce da juncao de Rio do Sul e tinha a primeira secao em RS
+    # 187611,90 num rio de 187.611,9 m, ou seja, exatamente sobre ela.
+    recuo = SPACING_MIN * 0.5
+    ss = [s for s in ss if s >= recuo] or [recuo]
+    if ss[0] > recuo * 1.5:
+        ss.insert(0, recuo)
     if L - ss[-1] > SPACING_MIN * 0.6:
-        ss.append(L - SPACING_MIN * 0.5)
+        ss.append(L - recuo)
     xs = []
     for s in ss:
         hw_s = hw(s / max(L, 1.0)) if callable(hw) else hw
@@ -600,8 +607,8 @@ def escrever(trechos, juncoes):
         for r, rc in j["up"]:
             g.append(f"Up River,Reach={p16(r)},{p16(rc)}")
         g.append(f"Dn River,Reach={p16(j['dn'][0])},{p16(j['dn'][1])}")
-        for _ in j["up"]:
-            g.append("Junc L&A=500,0")
+        for d in j.get("dists") or [500.0] * len(j["up"]):
+            g.append(f"Junc L&A={d:.2f},0")
         g.append("")
 
     for t in trechos:
@@ -936,9 +943,26 @@ def main():
                 n_acu += 1
             else:
                 nome = f"Foz_{rede[entra[0]['k']]['nome']}"[:16].strip()
+            # 'Junc L&A' e o caminho que a agua percorre ATRAVES da juncao:
+            # da ultima secao do trecho de montante ate a primeira do de
+            # jusante. Estava gravado como 500 m fixo para todas, enquanto a
+            # geometria real da 75 m no Norte e 150 m no vao do Acu. Declarar
+            # comprimento errado desequilibra a continuidade exatamente na
+            # primeira secao abaixo da juncao -- que e onde o solver falhava
+            # ("Solution Solver Failed" em Itajai_Acu R2 148108.3).
+            rs_j = rede[m]["linha"].length - s        # estaca da juncao em m
+            dn_dist = max(rs_j - dn_m[0]["xs"][0]["rs"], 0.0)
+            dists = []
+            for t in ups + up_m:
+                if t["rio_k"] == m:                   # mesmo rio, a montante
+                    d_up = max(t["xs"][-1]["rs"] - rs_j, 0.0)
+                else:                                 # afluente: foz em RS 0
+                    d_up = max(t["xs"][-1]["rs"], 0.0)
+                dists.append(round(max(d_up + dn_dist, 1.0), 2))
             j = {"s": s, "nome": nome, "desc": "Confluencia",
                  "x": entra[0]["pt"].x, "y": entra[0]["pt"].y,
                  "up": [(t["rio"], t["reach"]) for t in ups + up_m],
+                 "dists": dists,
                  "dn": (dn_m[0]["rio"], dn_m[0]["reach"])}
             juncoes.append(j)
             print(f"      {j['nome']:<18} {[u[0] for u in j['up']]} -> "
