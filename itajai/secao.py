@@ -36,6 +36,15 @@ N_PONTOS = 280           # pontos por secao (limite do HEC-RAS: 450)
 #     aplicada a area de drenagem. Em Blumenau dao 6,8 m de escavacao abaixo da
 #     lamina que o DEM mostra, o que poe o leito a -4 m. Se houver batimetria
 #     real do Itajai-Acu, e aqui que ela entra.
+CALHA_SINTETICA = False  # escavar batimetria que o DEM nao mostra?
+                         # O Copernicus achata a lamina d'agua na cota da
+                         # SUPERFICIE, entao o leito real esta abaixo do que
+                         # ele mostra e a calha era escavada para compensar.
+                         # Mas com isso o modelo parte SECO e o assentamento
+                         # tem de encher 382 hm3 de canal inventado -- e onde
+                         # ele falha. Desligado, o leito e a lamina do DEM:
+                         # aproximacao grosseira, porem real, e o modelo parte
+                         # praticamente cheio.
 CANAL_KH, CANAL_EH = 0.277, 0.35     # profundidade = KH * A^EH
 CANAL_KW, CANAL_EW = 5.0, 0.40       # largura     = KW * A^EW
 ALTURA_MARGEM = 3.0                  # folga acima do topo da calha
@@ -53,9 +62,15 @@ def largura_secao(area_km2):
 
 
 def canal(area_km2):
-    """(profundidade, largura) da calha para a area de drenagem dada."""
+    """(profundidade, largura) da calha para a area de drenagem dada.
+
+    Com CALHA_SINTETICA desligado a profundidade e zero: o leito passa a ser a
+    lamina que o DEM mostra. A largura continua valendo, porque define a zona
+    de canal do Manning e a busca das margens.
+    """
     a = max(area_km2, 1.0)
-    return CANAL_KH * a ** CANAL_EH, CANAL_KW * a ** CANAL_EW
+    prof = CANAL_KH * a ** CANAL_EH if CALHA_SINTETICA else 0.0
+    return prof, CANAL_KW * a ** CANAL_EW
 
 
 def estacas(linha, amostrador):

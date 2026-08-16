@@ -103,9 +103,17 @@ def main():
         # para o receptor comeca exatamente ali. Afastar a confluencia de um
         # espacamento cria o trecho de montante que falta; o deslocamento e da
         # ordem do proprio espacamento das secoes.
+        s_bruto = s
         s = float(np.clip(s, secao.ESPACAMENTO, max(L - secao.ESPACAMENTO,
                                                     secao.ESPACAMENTO)))
-        conf[m].append({"k": k, "s": s, "pt": rede[m]["linha"].interpolate(s)})
+        # s_bruto guarda a estaca ANTES do afastamento. E ela que diz se o rio
+        # NASCE da juncao -- o teste feito sobre a estaca ja afastada nunca
+        # encontra nada abaixo de 1 m, e Acu, Oeste e Norte passavam a receber
+        # hidrograma de cabeceira ALEM da vazao que chega pela juncao. O leitor
+        # do ras-commander flagrou: 13 contornos, um por rio mais a mare,
+        # quando deveriam ser 10.
+        conf[m].append({"k": k, "s": s, "s_bruto": s_bruto,
+                        "pt": rede[m]["linha"].interpolate(s)})
     for m in conf:
         conf[m].sort(key=lambda c: c["s"])
 
@@ -211,7 +219,8 @@ def main():
     for k in ordem:
         # rio que NASCE de juncao nao pode ter contorno proprio: seria vazao
         # contada duas vezes
-        if any(abs(c["s"]) < 1.0 for c in conf[k]) or not por_rio[k]:
+        if any(abs(c.get("s_bruto", c["s"])) < 1.0 for c in conf[k])                 or not por_rio[k]:
+            print(f"    {rede[k]['nome']:<14} nasce de juncao (sem contorno)")
             continue
         t = por_rio[k][0]
         propria = rede[k]["area"] - sum(rede[c["k"]]["area"] for c in conf[k])
