@@ -344,19 +344,57 @@ def montar_rede():
 
 
 # --------------------------------------------------------------------- SECOES
+DS_ILHA = 400.0               # ate esta diferenca de estaca, o outro braco
+                               # ainda e "o mesmo lugar do rio" -> ilha
+
+
 def _ate_reencontro(p, rx, ry, hw, eixo, s, linha, folga=40.0):
-    """Ate onde a semi-secao pode ir sem reencontrar o rio."""
+    """Ate onde a semi-secao pode ir sem reencontrar o rio.
+
+    Nem todo reencontro e igual, e tratar os dois do mesmo jeito custava caro:
+
+    CURVA (meandro) -- o raio alcanca o MESMO rio muitas estacas adiante ou
+    atras. Aquela agua ja e contabilizada na secao de la; incluir aqui conta o
+    mesmo escoamento duas vezes e ainda cria cutlines cruzadas. Aqui a secao
+    para: e a barreira.
+
+    ILHA / BRACO SECUNDARIO -- o outro braco esta na MESMA altura do rio
+    (diferenca de estaca pequena) e corre no MESMO sentido. Ele conduz de
+    verdade: e por ele que parte da cheia passa, como no leito antigo do
+    Itajai-Mirim. Parar ali amputa a secao justamente onde a agua vai.
+    Entao a secao ATRAVESSA e segue.
+
+    A distincao e por estaca ao longo do eixo e pelo produto escalar das
+    direcoes locais -- nao por distancia em linha reta, que confunde as duas.
+    """
     raio = LineString([(p.x, p.y), (p.x + hw * rx, p.y + hw * ry)])
     it = raio.intersection(eixo)
     if it.is_empty:
         return hw
     pts = [it] if it.geom_type == "Point" else list(getattr(it, "geoms", []))
-    d = [np.hypot(q.x - p.x, q.y - p.y) for q in pts
-         if getattr(q, "geom_type", "") == "Point"]
-    d = [v for v in d if v > folga]            # ignora o proprio cruzamento
-    if not d:
+    pts = [q for q in pts if getattr(q, "geom_type", "") == "Point"]
+
+    def direcao(est):
+        a = linha.interpolate(max(0.0, est - SMOOTH))
+        b = linha.interpolate(min(linha.length, est + SMOOTH))
+        v = np.array([b.x - a.x, b.y - a.y])
+        return v / (np.linalg.norm(v) or 1.0)
+
+    u_aqui = direcao(s)
+    corte = []
+    for q in pts:
+        d = float(np.hypot(q.x - p.x, q.y - p.y))
+        if d <= folga:                     # o proprio cruzamento no eixo
+            continue
+        s_la = linha.project(q)
+        mesmo_lugar = abs(s_la - s) <= DS_ILHA
+        mesmo_sentido = float(np.dot(u_aqui, direcao(s_la))) > 0.5
+        if mesmo_lugar and mesmo_sentido:
+            continue                       # ilha/braco: conduz, pode atravessar
+        corte.append(d)                    # meandro: barreira
+    if not corte:
         return hw
-    return max(min(d) - folga, 120.0)          # para antes, com folga minima
+    return max(min(corte) - folga, 120.0)
 
 
 def cortar(linha, s, dem, hw=HALFWIDTH, eixo=None):
@@ -455,7 +493,16 @@ def margens(sta, z, h_canal=0.0, altura_margem=BANK_H):
 def largura(area_km2):
     """Meia-largura da secao proporcional ao porte do rio. Usar 700 m num
     afluente de montanha desperdicava quase todos os pontos na encosta e
-    deixava o canal com 1-3 pontos."""
+    deixava o canal com 1-3 pontos.
+
+    ALARGAR ISTO NAO E TRIVIAL. O leito antigo do Itajai-Mirim corre a 1.528 m
+    do canal retificado (mediana medida entre os dois tracados) e fica fora dos
+    737 m que esta escala da ao Mirim -- ou seja, o modelo ignora esse caminho
+    da agua. Mas subir o coeficiente para 440 derrubou a simulacao de 30 para
+    2 passos: a secao larga passa a atravessar meandros do proprio rio, e ai o
+    escoamento e contado duas vezes. Alargar so vai funcionar junto com area de
+    escoamento inefetivo, que precisa do formato #Ineffective do .g01.
+    """
     return float(np.clip(180.0 * np.sqrt(max(area_km2, 1.0) / 100.0), 500.0, HALFWIDTH))
 
 
