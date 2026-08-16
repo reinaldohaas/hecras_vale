@@ -42,6 +42,14 @@ from pyproj import Transformer
 # ------------------------------------------------------------------ PARAMETROS
 PROJECT   = "Itajai_Rede"      # recebe sufixo _<EVENTO> se houver evento
 GEOJSON   = "rios_itajai.geojson"
+EIXOS_RELEVO = "eixos_do_relevo.geojson"   # gerado por tracar_rio_do_relevo.py
+USAR_EIXO_RELEVO = True        # o eixo vem do RELEVO, nao do desenho da ANA.
+                               # O tracado da BHO e 1:100.000 e passa PERTO do
+                               # rio, nao no fundo do vale; secao perpendicular
+                               # a ele cruza a calha de esguelha e encontra o
+                               # leito antigo ou o meandro vizinho, que era o
+                               # que embaralhava as bank lines. Da ANA continua
+                               # vindo a TOPOLOGIA e a area de drenagem.
 DEM       = "dem_itajai.tif"
 # MDT do SIG-SC a 1 m (terreno, nao superficie). Cobre 100% dos rios
 # modelados no mesmo CRS. Contra o Copernicus GLO-30, nas encostas a
@@ -330,15 +338,37 @@ def montar_rede():
                 pts += cc if not pts else cc[1:]
         return LineString(pts)
 
+    # eixos derivados do relevo, se ja tracados
+    relevo = {}
+    if USAR_EIXO_RELEVO and os.path.exists(EIXOS_RELEVO):
+        g2 = gpd.read_file(EIXOS_RELEVO).to_crs(UTM_EPSG)
+        relevo = {r.rio: r.geometry for r in g2.itertuples()}
+    elif USAR_EIXO_RELEVO:
+        print(f"      ! {EIXOS_RELEVO} ausente; rode tracar_rio_do_relevo.py")
+
     rede = {}
     for k, (pat, nome) in RIOS.items():
         if k != MAIN and k not in ESCOPO and k not in LATERAIS:
             continue
         ch = cadeia(pat)
-        ln = eixo(ch)
+        ln_ana = eixo(ch)
+        ln = relevo.get(k)
+        if ln is None:
+            ln = ln_ana
+        else:
+            print(f"      {nome:<14} eixo do RELEVO: {ln.length/1000:6.1f} km "
+                  f"(ANA: {ln_ana.length/1000:.1f} km)")
+        # O canal retificado continua sendo enxertado POR CIMA: ele e obra, nao
+        # relevo, e o DEM de 2010-2015 ja o mostra parcialmente -- mas o
+        # tracado do canal e mais preciso que o D8 a 90 m.
         if k in CANAIS:
             ln = aplicar_canal(ln, CANAIS[k])
-        rede[k] = {"nome": nome, "linha": ln,
+        # linha_ana fica guardada: e ela que decide QUEM desagua em QUEM. A
+        # topologia tem de vir da ANA, nao da geometria -- com os tracados do
+        # relevo a foz do Sul ficou mais proxima da linha do Oeste do que do
+        # inicio do Acu (os tres se encontram no mesmo ponto, em Rio do Sul) e
+        # o Sul passou a ser pendurado no Oeste.
+        rede[k] = {"nome": nome, "linha": ln, "linha_ana": ln_ana,
                    "area": float(by[ch[-1]].NUAREAMONT)}
     return rede
 
@@ -1054,22 +1084,28 @@ def main():
     for k in ativos:
         if k == MAIN:
             continue
-        foz = Point(list(rede[k]["linha"].coords)[-1])
+        # QUEM desagua em QUEM sai das linhas da ANA, que carregam a topologia
+        # da BHO; a geometria (estaca da confluencia) sai das linhas em uso.
+        ana = lambda x: rede[x].get("linha_ana", rede[x]["linha"])
+        foz_ana = Point(list(ana(k).coords)[-1])
         # o receptor e sempre um rio MAIOR: assim um afluente nunca e
         # pendurado noutro afluente menor que por acaso passe perto da foz
         cand = [m for m in ativos
                 if m != k and rede[m]["area"] > rede[k]["area"]]
         if not cand:
             continue
-        alvo = min(cand, key=lambda m: rede[m]["linha"].distance(foz))
-        d = rede[alvo]["linha"].distance(foz)
+        alvo = min(cand, key=lambda m: ana(m).distance(foz_ana))
+        d = ana(alvo).distance(foz_ana)
         if d > 500.0:
             print(f"      ! {rede[k]['nome']}: foz a {d:.0f} m do rio mais "
                   f"proximo, fora da rede")
             continue
         receptor[k] = alvo
-        filhos[alvo].append({"k": k, "s": rede[alvo]["linha"].project(foz),
-                             "pt": foz})
+        # a estaca e o ponto do eixo EM USO mais proximo da foz real
+        foz = Point(list(rede[k]["linha"].coords)[-1])
+        s_conf = rede[alvo]["linha"].project(foz)
+        filhos[alvo].append({"k": k, "s": s_conf,
+                             "pt": rede[alvo]["linha"].interpolate(s_conf)})
     for m in filhos:
         filhos[m].sort(key=lambda d: d["s"])
     for m in sorted(filhos, key=lambda x: -rede[x]["area"]):

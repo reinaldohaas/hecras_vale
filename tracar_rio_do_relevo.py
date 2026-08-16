@@ -44,6 +44,18 @@ from rasterio.enums import Resampling
 import geopandas as gpd
 from shapely.geometry import LineString, Point
 
+# COPERNICUS, de proposito -- nunca o SIG-SC. A divisao de trabalho e:
+#
+#   eixo dos rios      Copernicus 30 m   (aqui)
+#   secoes e perfis    SIG-SC 1 m        (gerar_rede_hecras.py, USAR_SIGSC)
+#   planicie           idem, pelas secoes
+#
+# O SIG-SC nao serve para tracar: ele grava 0,00 sobre a lamina d'agua (o laser
+# nao retorna dela), e sao justamente as celulas do leito -- o roteamento D8
+# despencaria para esses zeros e o tracado seguiria o rio como uma vala de
+# 100 m de profundidade, ou pararia num pit a cada trecho sem cobertura. O
+# Copernicus e continuo e achata a agua na COTA da superficie, que e o que se
+# quer para achar o fundo do vale.
 DEM = os.path.join("Terrain", "Terreno_Copernicus.tif")
 SAIDA = "eixos_do_relevo.geojson"
 RES = 90.0          # m; o eixo e suavizado depois, entao isto basta
