@@ -11,7 +11,7 @@ desalinhado.
 # Nome dos projetos HEC-RAS gerados por esta reescrita. Os projetos antigos
 # chamavam-se Itajai_* e estao em legado/; o prefixo diferente deixa claro, no
 # disco e no RAS Mapper, o que veio de qual geracao do modelo.
-PROJETO = "Tajai"
+PROJETO = "taha_ai"
 
 EPSG = 31982                   # SIRGAS 2000 / UTM 22S
 

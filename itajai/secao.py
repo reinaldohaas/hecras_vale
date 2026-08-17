@@ -295,6 +295,38 @@ def escavar(d):
     return d
 
 
+ALTURA_ALVO = 15.0    # m de desnivel que a secao deve ter acima do talvegue
+FATOR_MAX = 3.0       # ate quantas vezes a largura base pode ser esticada
+
+
+def alargar_ate_conter(linha, s, amostrador, he, hd, area_km2,
+                       alvo=ALTURA_ALVO):
+    """Estica a secao ate encontrar terreno 'alvo' metros acima do talvegue.
+
+    A largura vinha so da area de drenagem. Onde o vale e raso isso nao alcanca
+    terreno alto: no Taio, no Trombudo, no Benedito e no Mirim a secao tinha
+    menos de 8 m de desnivel util, e na cheia de 1983 -- 2,4x maior que a
+    sintetica -- o HEC-RAS extrapolava a tabela de conducao justamente nessas
+    secoes ("Extrapolated above Cross Section Table"), com erro chegando a
+    21 m. Sao os mesmos rios que a auditoria ja marcava por altura util.
+
+    Estica em passos, so ate conseguir a altura ou atingir FATOR_MAX. Nao e
+    parede vertical: e ir buscar o terreno que existe mais longe.
+    """
+    tx, ty = direcao(linha, s)
+    rx, ry = ty, -tx
+    p = linha.interpolate(s)
+    for f in (1.0, 1.5, 2.0, FATOR_MAX):
+        e, d = he * f, hd * f
+        off = np.linspace(-e, d, 60)
+        z = amostrador.cota(p.x + off * rx, p.y + off * ry)
+        if not np.isfinite(z).any():
+            break
+        if float(np.nanmax(z) - np.nanmin(z)) >= alvo:
+            return he * f, hd * f
+    return he * FATOR_MAX, hd * FATOR_MAX
+
+
 def cortar_trecho(linha, amostrador, area_foz, rs0=0.0, area_cabeceira=None):
     """Todas as secoes de um rio, de montante para jusante.
 
@@ -325,6 +357,14 @@ def cortar_trecho(linha, amostrador, area_foz, rs0=0.0, area_cabeceira=None):
     # apara o lado concavo de cada secao ANTES de cortar: e o que impede as
     # cutlines de se cruzarem nas curvas
     hw_e, hw_d = limites_por_curvatura(linha, ss, hw)
+    # alarga onde o vale e raso, ANTES do corte definitivo
+    for i, s in enumerate(ss):
+        hw_e[i], hw_d[i] = alargar_ate_conter(linha, s, amostrador,
+                                              hw_e[i], hw_d[i], areas[i])
+    # e volta a limitar por curvatura, agora com as larguras novas
+    hw_e2, hw_d2 = limites_por_curvatura(linha, ss, np.maximum(hw_e, hw_d))
+    hw_e = np.minimum(hw_e, hw_e2)
+    hw_d = np.minimum(hw_d, hw_d2)
     xs = []
     for i, s in enumerate(ss):
         r = cortar(linha, s, amostrador, hw[i], areas[i],

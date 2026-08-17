@@ -35,6 +35,7 @@ N_HORAS = 97
 INICIO = datetime.datetime(2026, 8, 1)
 MARE_MEDIA, MARE_AMP, MARE_PERIODO = 0.30, 0.50, 12.42
 NOME_JUNCAO = {0: "Rio_do_Sul", 1: "Ibirama", 2: "Indaial", 3: "Itajai"}
+FRACAO_CABECEIRA = 0.05   # da area propria; o resto entra como vazao lateral
 
 
 def hidrograma(pico, base=None, n=N_HORAS, tp=26, te=46):
@@ -54,12 +55,55 @@ def mare(n=N_HORAS):
     return np.round(MARE_MEDIA + MARE_AMP * np.sin(2 * np.pi * t / MARE_PERIODO), 3)
 
 
+def series_evento(evento, barragens):
+    """Hidrogramas reais do evento, por sub-bacia. None = cheia sintetica."""
+    if not evento:
+        return None, N_HORAS
+    from itajai import hidrologia
+    q, n = hidrologia.hidrogramas(evento, barragens=barragens)
+    print(f"    evento {evento}, barragens "
+          f"{'ATIVAS' if barragens else 'ABERTAS (sem obras)'}: {n} h")
+    for k, v in q.items():
+        print(f"      {k:<10} pico {v.max():8.1f} m3/s na hora {int(v.argmax()):3d}")
+    return q, n
+
+
+def fatia(q_ev, rede, receptor, k, area_km2, a_ref):
+    """Serie do evento para uma area, tirada da fonte que cobre o rio k.
+
+    Os afluentes de 2a ordem nao tem serie propria -- a area deles ja esta
+    dentro da do rio que os recebe. Cada um leva a fatia proporcional a area, e
+    o receptor fica com o resto: o volume do evento nao muda ao detalhar a rede.
+    """
+    if q_ev is None:
+        return None
+    alvo, base = k, rede[k]["area"]
+    while alvo is not None and alvo not in q_ev:
+        alvo = receptor.get(alvo)
+        if alvo is not None:
+            base = rede[alvo]["area"]
+    if alvo is None:
+        alvo, base = "acu_incr", a_ref
+    if alvo not in q_ev:
+        return None
+    return q_ev[alvo] * (area_km2 / max(base, 1.0))
+
+
 def main():
     t0 = time.time()
     projeto = config.PROJETO
+    evento = next((a for a in sys.argv[1:] if a.isdigit()), None)
+    barragens = "--sem-barragens" not in sys.argv
+    if evento:
+        projeto = f"{config.PROJETO}_{evento}"
+        if not barragens:
+            projeto += "_sb"
     print("=" * 70)
     print(f"{projeto}  |  construcao a partir do relevo")
     print("=" * 70)
+    print()
+    q_ev, n_horas = series_evento(evento, barragens)
+    a_ref = None
 
     # ------------------------------------------------------------ topologia
     print("\n[1] topologia (ANA BHO 2017)")
@@ -223,6 +267,8 @@ def main():
     # 1 km rio abaixo CRIA um trecho de 1 km acima dela, que fica sem fonte.
     # Marcar o rio inteiro como alimentado pela juncao deixava esse trecho orfao.
     alimentados = {(j["dn"][0], j["dn"][1]) for j in juncoes}
+    a_ref = area_total - sum(rede[c["k"]]["area"] for c in conf[topologia.PRINCIPAL]
+                             if q_ev and c["k"] in q_ev)
     cabeceiras = []
     for k in ordem:
         if not por_rio[k]:
@@ -234,13 +280,14 @@ def main():
         # area que chega ao INICIO deste trecho: a propria do rio ate ali,
         # mais os afluentes ja incorporados. Num trecho de cabeceira curto
         # (o vao acima de uma confluencia afastada) isso e pequeno, e deve ser.
-        propria = rede[k]["area"] - sum(rede[c["k"]]["area"] for c in conf[k])
-        propria = propria * max(t["b"] - t["a"], 1.0) / max(
-            rede[k]["linha"].length, 1.0) if len(por_rio[k]) > 1 else propria
+        # a cabeceira leva so a fracao que NAO vai para a lateral
+        propria = (rede[k]["area"] - sum(rede[c["k"]]["area"] for c in conf[k]))                   * FRACAO_CABECEIRA
         propria += sum(rede[c["k"]]["area"] for c in conf[k]
                        if c["s"] <= t["a"] + 1.0)
         t["q_pico"] = Q_REF_FOZ * max(propria, 1.0) / area_total
-        t["serie"] = hidrograma(t["q_pico"])
+        s_ev = fatia(q_ev, rede, receptor, k, propria, a_ref)
+        t["serie"] = s_ev if s_ev is not None else hidrograma(t["q_pico"])
+        t["q_pico"] = float(np.max(t["serie"]))
         t["q_base"] = float(t["serie"][0])
         cabeceiras.append(t)
         print(f"    {t['rio']:<14} Q pico {t['q_pico']:7.1f} m3/s")
@@ -257,13 +304,41 @@ def main():
           f"({min(t['q_base'] for t in trechos):.0f} a "
           f"{max(t['q_base'] for t in trechos):.0f} m3/s)")
 
+    # --- area propria de cada rio, distribuida ao longo dele
+    laterais = []
+    for k in ordem:
+        # 95% da area propria vai para a lateral; os 5% restantes ficam na
+        # cabeceira (ver FRACAO_CABECEIRA). Sem essa divisao a mesma area entra
+        # duas vezes -- no contorno de montante E na lateral -- e o total
+        # injetado passava de 5.700 para 8.468 m3/s.
+        propria = (rede[k]["area"] - sum(rede[c["k"]]["area"] for c in conf[k]))                   * (1.0 - FRACAO_CABECEIRA)
+        if propria < 1.0 or not por_rio[k]:
+            continue
+        L = sum(t["b"] - t["a"] for t in por_rio[k]) or 1.0
+        for t in por_rio[k]:
+            a = propria * (t["b"] - t["a"]) / L
+            rss = sorted((d["rs"] for d in t["xs"]), reverse=True)
+            if len(rss) < 4:          # a faixa nao pode tocar as extremas
+                continue
+            pico = Q_REF_FOZ * a / area_total
+            s_ev = fatia(q_ev, rede, receptor, k, a, a_ref)
+            laterais.append({"rio": t["rio"], "reach": t["reach"],
+                             "rs_hi": rss[1], "rs_lo": rss[-2],
+                             "serie": s_ev if s_ev is not None
+                                      else hidrograma(pico)})
+    q_lat = sum(float(np.max(l["serie"])) for l in laterais)
+    q_cab = sum(t["q_pico"] for t in cabeceiras)
+    print(f"    lateral em {len(laterais)} trechos: Q pico {q_lat:7.1f} m3/s")
+    print(f"    TOTAL injetado: {q_cab + q_lat:7.1f} de {Q_REF_FOZ:.0f} m3/s")
+
     # -------------------------------------------------------------- escrita
     print("\n[6] escrita")
     saida = por_rio[topologia.PRINCIPAL][-1]
     print("   ", escrita.geometria(projeto, trechos, juncoes,
                                    f"{projeto} - eixo do relevo Copernicus"))
-    print("   ", escrita.fluxo(projeto, trechos, cabeceiras, saida, mare(), N_HORAS))
-    print("   ", escrita.plano(projeto, INICIO, N_HORAS))
+    print("   ", escrita.fluxo(projeto, trechos, cabeceiras, saida, mare(n_horas),
+                                n_horas, laterais))
+    print("   ", escrita.plano(projeto, INICIO, n_horas))
     if "--terreno" in sys.argv:
         hdf = terreno.preparar_hdf(config.WKT)
     else:

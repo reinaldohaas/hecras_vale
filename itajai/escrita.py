@@ -181,7 +181,14 @@ def geometria(projeto, trechos, juncoes, titulo=None):
 
 
 # --------------------------------------------------------------------- FLUXO
-def fluxo(projeto, trechos, cabeceiras, saida, mare, n_horas):
+def contorno_faixa(rio, reach, rs_hi, rs_lo):
+    """Boundary Location com FAIXA de estacas, para vazao lateral uniforme."""
+    return (f"Boundary Location={p16(rio)},{p16(reach)},"
+            f"{f'{rs_hi:.2f}'[:8]:<8},{f'{rs_lo:.2f}'[:8]:<8},"
+            f"                ,                ")
+
+
+def fluxo(projeto, trechos, cabeceiras, saida, mare, n_horas, laterais=()):
     """Contornos e condicao inicial.
 
     'Initial RS' vai para TODOS os trechos, nao so para as cabeceiras. Um
@@ -207,6 +214,20 @@ def fluxo(projeto, trechos, cabeceiras, saida, mare, n_horas):
         u += ["DSS Path=", "Use DSS=False", "Use Fixed Start Time=False",
               "Fixed Start Date/Time=,", "Is Critical Boundary=False",
               "Critical Boundary Flow=", ""]
+    # Vazao lateral uniforme: a area de drenagem PROPRIA de cada rio, a que
+    # nao pertence a nenhum afluente nomeado. Sem isto so 2.788 dos 5.700 m3/s
+    # entravam no modelo, e a condicao inicial ficava inconsistente com os
+    # contornos: o Acu R1 partia com 466 m3/s calculados da area, enquanto pela
+    # juncao chegavam 136. O modelo comecava cheio demais e DRENAVA -- volume
+    # caindo de 204.777 para 179.238 com apenas 493 de entrada liquida.
+    for lt in laterais:
+        u += [contorno_faixa(lt["rio"], lt["reach"], lt["rs_hi"], lt["rs_lo"]),
+              "Interval=1HOUR",
+              f"Uniform Lateral Inflow Hydrograph= {len(lt['serie'])} "]
+        u += serie8(lt["serie"])
+        u += ["DSS Path=", "Use DSS=False", "Use Fixed Start Time=False",
+              "Fixed Start Date/Time=,", ""]
+
     u += [contorno(saida["rio"], saida["reach"], f"{saida['xs'][-1]['rs']:.2f}"),
           "Interval=1HOUR",
           f"Stage Hydrograph= {len(mare)} "]
@@ -224,22 +245,26 @@ def plano(projeto, inicio, n_horas):
     p = ["Plan Title=Rede_do_Relevo", "Program Version=7.01",
          "Short Identifier=TAJAI", "Geom File=g01", "Flow File=u01",
          f"Simulation Date={data_ras(inicio)},{data_ras(fim)}",
-         "Mixed Flow Regime",
-         # 'Mixed Flow Regime' e o LPI sao coisas distintas: o primeiro so
-         # permite regime misto; o amortecimento dos termos de inercia perto do
-         # critico e o Froude Reduction, que vem DESLIGADO de fabrica.
-         "UNET Froude Reduction=True",
-         "UNET Froude Limit= 0.8 ",
-         "UNET Froude Power= 4 ",
+         # PLANO MINIMO, de proposito. Eu havia empilhado quinze opcoes do
+         # UNET -- Froude Reduction, MxIter 40, ZTol, 200 passos de
+         # assentamento, Flow Smoothing -- todas escolhidas para os sintomas do
+         # gerador ANTIGO. Carregar isso para um modelo novo e adivinhar: cada
+         # uma muda o comportamento do solver e eu perdi a capacidade de saber
+         # qual agia. Voltando ao padrao do HEC-RAS, o que falhar falha por
+         # causa da geometria, nao das minhas opcoes.
+         # DUAS opcoes, cada uma com razao propria e medida -- nao o bloco de
+         # quinze que eu havia carregado do modelo antigo sem testar.
+         #
+         # ZTol: o padrao e 0,006 m. Exigir convergencia a SEIS MILIMETROS num
+         # modelo construido sobre DEM de 30 m e pedir precisao muito abaixo da
+         # que o dado tem. O log mostrava o solver batendo o teto de iteracoes
+         # em TODO passo com erro de 0,06 a 0,50 m, e o erro crescendo ate
+         # abortar. 2 cm continua apertado para esta escala.
+         "UNET ZTol= 0.02 ",
+         "UNET ZSATol= 0.02 ",
+         # MxIter: 20 e o padrao, e o log mostrava 20 em todas as linhas, ou
+         # seja o teto sendo atingido sempre, nunca a convergencia.
          "UNET MxIter= 40 ",
-         "UNET Max Iter WO Improvement= 20 ",
-         "UNET Theta= 1 ", "UNET Theta Warmup= 1 ",
-         "UNET ZTol= 0.01 ", "UNET ZSATol= 0.01 ",
-         "UNET DZMax Abort= 30 ",
-         "UNET MaxInSteps= 200 ", "UNET DtIC= 0 ",
-         "Flow Smoothing Iterations=10",
-         "Unsteady Friction Slope Method= 2 ",
-         "UNET 1D Methodology=Finite Difference",
          "Computation Interval=1MIN", "Output Interval=1HOUR",
          "Instantaneous Interval=1HOUR", "Mapping Interval=1HOUR",
          "Run HTab=-1", "Run UNet=-1", "Run PostProcess=-1",
