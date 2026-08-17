@@ -83,7 +83,7 @@ def estacas(linha, amostrador):
     ok = np.isfinite(zb)
     if ok.sum() < 3:
         return list(np.arange(0.0, L, ESPACAMENTO))
-    zb = np.interp(d, d[ok], zb[ok])
+    zb = tirar_picos(np.interp(d, d[ok], zb[ok]))
     S = np.abs(np.gradient(zb, d))
     S = np.convolve(S, np.ones(5) / 5.0, "same")          # tira ruido do DEM
     f = np.clip((S - DECL_PLANO) / (DECL_INGREME - DECL_PLANO), 0.0, 1.0)
@@ -284,6 +284,23 @@ def escavar(d):
     z_canal = alvo + subida * np.maximum(z - alvo, 0.0)
     z = np.minimum(z, z_canal)
 
+    # SECAO RASA: onde o vale e plano de verdade, nem 10x a largura acha
+    # terreno alto -- no Taio havia secoes de 1.000 m com 2,25 m de desnivel
+    # TOTAL, e qualquer lamina extrapolava a tabela de conducao. O log do
+    # solver as lista nominalmente ("Extrapolated above Cross Section Table").
+    #
+    # Nesse caso a saida e fechar a secao com parede vertical nas pontas, que
+    # e o recurso padrao do proprio HEC-RAS ("glass wall"): a agua fica contida
+    # e a tabela cobre a faixa toda. So entra em jogo se a lamina chegar la;
+    # onde o terreno ja e alto, nada muda. Diferente da tentativa anterior,
+    # aqui e aplicado APENAS as secoes que precisam, nao a todas.
+    util = float(z.max() - z[i0])
+    if util < ALTURA_MINIMA_SECAO:
+        alvo_topo = z[i0] + ALTURA_MINIMA_SECAO
+        z[0] = max(z[0], alvo_topo)
+        z[-1] = max(z[-1], alvo_topo)
+        d["parede"] = round(ALTURA_MINIMA_SECAO - util, 2)
+
     d["z"] = z
     # A profundidade que a margem enxerga e a ESCAVACAO -- terreno menos o
     # fundo --, nao a diferenca para o ponto vizinho. Com o fundo agora plano o
@@ -296,7 +313,36 @@ def escavar(d):
 
 
 ALTURA_ALVO = 15.0    # m de desnivel que a secao deve ter acima do talvegue
-FATOR_MAX = 3.0       # ate quantas vezes a largura base pode ser esticada
+ALTURA_MINIMA_SECAO = 12.0   # abaixo disso, fecha com parede vertical
+FATOR_MAX = 10.0      # ate quantas vezes a largura base pode ser esticada
+
+
+def tirar_picos(z, janela=5, limite=3.0):
+    """Remove picos isolados do talvegue amostrado no DEM.
+
+    O condicionamento impoe decrescimento PAR A PAR, e um pico para cima
+    seguido de descida satisfaz esse teste em cada par. No Itajai-Mirim
+    sobrava um degrau de 19 m entre secoes a 150 m uma da outra:
+
+        RS 91807   leito 126,99
+        RS 91657   leito 146,01   <- sobe 19 m
+        RS 91507   leito 123,48   <- desce 22 m
+
+    e era exatamente ali que o solver reportava erro maximo em 19 das 63
+    linhas do log. Aqui o valor e trocado pela mediana da vizinhanca sempre
+    que se afasta dela mais que 'limite' metros -- filtro de mediana classico,
+    que preserva o degrau REAL (uma queda sustentada) e remove o isolado.
+    """
+    z = np.asarray(z, float).copy()
+    n = len(z)
+    if n < janela:
+        return z
+    m = janela // 2
+    med = np.array([np.median(z[max(0, i - m):min(n, i + m + 1)])
+                    for i in range(n)])
+    fora = np.abs(z - med) > limite
+    z[fora] = med[fora]
+    return z
 
 
 def alargar_ate_conter(linha, s, amostrador, he, hd, area_km2,
@@ -316,7 +362,7 @@ def alargar_ate_conter(linha, s, amostrador, he, hd, area_km2,
     tx, ty = direcao(linha, s)
     rx, ry = ty, -tx
     p = linha.interpolate(s)
-    for f in (1.0, 1.5, 2.0, FATOR_MAX):
+    for f in (1.0, 1.5, 2.0, 3.0, 5.0, 7.0, FATOR_MAX):
         e, d = he * f, hd * f
         off = np.linspace(-e, d, 60)
         z = amostrador.cota(p.x + off * rx, p.y + off * ry)
@@ -345,7 +391,7 @@ def cortar_trecho(linha, amostrador, area_foz, rs0=0.0, area_cabeceira=None):
     zt = amostrador.talvegue([p.x for p in P], [p.y for p in P])
     ok = np.isfinite(zt)
     if ok.sum() >= 2:
-        zt = np.interp(np.arange(len(zt)), np.flatnonzero(ok), zt[ok])
+        zt = tirar_picos(np.interp(np.arange(len(zt)), np.flatnonzero(ok), zt[ok]))
         s_arr = np.asarray(ss, float)
         S_terr = np.abs(np.gradient(zt, s_arr))
         S_terr = np.convolve(S_terr, np.ones(3) / 3.0, "same")

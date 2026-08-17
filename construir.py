@@ -186,6 +186,16 @@ def main():
         # vizinhas, e do erro de balanco que o solver acusava.
         for d in v["xs"]:
             secao.escavar(d)
+        # CONFERE o talvegue final, depois de escavar. O condicionamento
+        # trabalha sobre z_alvo; se a geometria resultante ainda tiver degrau,
+        # e porque algo entre uma coisa e outra o reintroduziu. Medir aqui e
+        # barato e evita descobrir isso no log do solver.
+        zt = np.array([d["z"].min() for d in v["xs"]])
+        rs_v = np.array([d["rs"] for d in v["xs"]])
+        subida = np.diff(zt) > 0.5           # leito subindo rio abaixo
+        if subida.any():
+            print(f"        ! {v['nome']}: {int(subida.sum())} degraus de "
+                  f"subida no leito (max {np.diff(zt).max():.1f} m)")
         n_j = perfil.manning(v["xs"])
         print(f"    {v['nome']:<14} {len(v['xs']):4d} secoes"
               f"   Jarrett em {n_j:3d}{extra}")

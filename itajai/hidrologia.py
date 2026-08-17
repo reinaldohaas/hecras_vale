@@ -157,8 +157,12 @@ def puls_barragem(q_in, cap_hm3, q_fundo, q_vert_max, dt_h=1.0):
         entra = 0.5 * (q_in[t] + q_in[t + 1])
         v = vol[t] + (entra - 0.5 * (q_out[t] + q)) * dt
         if v > cap:                      # reservatorio cheio: verte
-            excedente = (v - cap) / dt
-            q = min(q + 2.0 * excedente, q_vert_max)
+            # Cheio, o reservatorio deixa PASSAR a vazao que entra -- nao pode
+            # liberar mais do que recebe. O fator "q + 2*excedente" da versao
+            # anterior ultrapassava a propria entrada: a Norte, com pico
+            # afluente de 2.649 m3/s, saia com 3.000, um AUMENTO de 13% do
+            # pico. Reservatorio nao cria agua; no maximo deixa de amortecer.
+            q = min(max(q, q_in[t + 1]), q_vert_max)
             v = vol[t] + (entra - 0.5 * (q_out[t] + q)) * dt
         vol[t + 1] = max(0.0, min(v, cap))
         q_out[t + 1] = q
