@@ -1,0 +1,80 @@
+{
+  "total_quadriculas_baixadas": 995,
+  "resolucao_m": 1.0,
+  "crs": "EPSG:31982 (SIRGAS 2000 / UTM 22S)",
+  "cobertura_rios": {},
+  "folhas_1_50k_analise": [
+    {
+      "sheet": "SG-22-Z-B-V-2",
+      "name": "Joinville / Jaraguá do Sul",
+      "regiao": "Norte / Baixo Vale",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-C-III-4",
+      "name": "Blumenau / Gaspar / Ilhota",
+      "regiao": "Médio Vale",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-C-VI-2",
+      "name": "Brusque / Botuverá / Nova Trento",
+      "regiao": "Vale do Itajaí-Mirim",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-D-IV-1",
+      "name": "Ibirama / Presidente Getúlio",
+      "regiao": "Médio Vale / Rio Hercílio",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-D-IV-2",
+      "name": "Timbó / Pomerode / Indaial",
+      "regiao": "Médio Vale / Benedito",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-D-V-1",
+      "name": "Rio do Sul / Lontras / Laurentino",
+      "regiao": "Alto Vale Central",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-D-V-2",
+      "name": "Ituporanga / Petrolândia / Aurora",
+      "regiao": "Alto Vale Sul / Perimbó",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-D-VI-1",
+      "name": "Itajaí / Navegantes / Foz",
+      "regiao": "Foz e Estuário",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-D-I-3",
+      "name": "Taió / Mirim Doce / Santa Terezinha",
+      "regiao": "Alto Vale Oeste (Cabeceira)",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-D-I-4",
+      "name": "Rio do Campo / Pouso Redondo",
+      "regiao": "Alto Vale Extremo Oeste",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-D-II-3",
+      "name": "José Boiteux / Doutor Pedrinho",
+      "regiao": "Alto Vale Norte (Barragem Norte)",
+      "presente": true
+    },
+    {
+      "sheet": "SG-22-Z-D-IV-3",
+      "name": "Vidal Ramos / Imbuia",
+      "regiao": "Cabeceira do Itajaí-Mirim",
+      "presente": true
+    }
+  ]
+}
