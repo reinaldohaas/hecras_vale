@@ -92,13 +92,58 @@ def estacas(linha, amostrador, op):
     # nao encosta nos extremos: secao em cima da juncao conflita com o
     # comprimento declarado em Junc L&A e trava o solver
     recuo = op.espacamento_min * 0.5
+    piso = float(getattr(op, "espacamento_piso", 25.0))
     ss, s = [recuo], recuo
     while s < L - recuo:
-        s += float(np.interp(s, d, dx))
+        s += _passo(s, d, dx, piso)
         if s < L - recuo:
             ss.append(s)
+    # trecho final minusculo e pior que trecho final ausente: dois cortes a
+    # poucos metros um do outro dao comprimento de trecho quase zero, e o
+    # solver divide por ele.
+    if ss and (L - recuo) - ss[-1] < 0.5 * piso:
+        ss.pop()
     ss.append(L - recuo)
     return ss
+
+
+def _minimo_no_intervalo(a, b, d, dx):
+    """Menor dx exigido em QUALQUER ponto de [a, b], e nao so nas pontas."""
+    i0 = int(np.searchsorted(d, a, "right"))
+    i1 = int(np.searchsorted(d, b, "left"))
+    v = [float(np.interp(a, d, dx)), float(np.interp(b, d, dx))]
+    if i1 > i0:
+        v.append(float(dx[i0:i1].min()))
+    return min(v)
+
+
+def _passo(s, d, dx, piso):
+    """Maior passo que respeita dx em TODO o intervalo que ele cobre.
+
+    O laco antigo fazia `s += interp(s, d, dx)`: media o espacamento exigido no
+    ponto de partida e depois andava as cegas ate o fim do passo. Onde a
+    declividade cresce DENTRO do passo, o corte seguinte cai muito alem do que
+    o criterio permitia -- e como o criterio so e reavaliado no proximo ponto
+    de partida, o trecho grande ja estava criado.
+
+    Nao e detalhe: no Itajai do Norte deixou 420 dos 2.069 trechos acima do
+    limite E acima do piso, o pior com 79 m onde o criterio pedia 4 m. Ou seja,
+    a regra estava escrita e nao valia justamente nas transicoes -- exatamente
+    onde ela importa, porque e ali que a declividade muda depressa.
+
+    Ponto fixo em vez de tentativa unica: encurtar o passo pode trazer para
+    dentro dele um trecho ainda mais ingreme. Converge porque `h` so diminui e
+    tem o piso por baixo.
+    """
+    h = float(np.interp(s, d, dx))
+    for _ in range(12):
+        if h <= piso + 1e-9:
+            return piso
+        m = _minimo_no_intervalo(s, s + h, d, dx)
+        if m >= h - 1e-6:
+            break
+        h = max(m, piso)
+    return h
 
 
 def desnivel(d):
