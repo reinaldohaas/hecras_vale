@@ -7,6 +7,11 @@ REM     rodar_vale.bat                 Copernicus, tudo, com autocorrecao
 REM     rodar_vale.bat 5-10            SO os passos 5 a 10 (reaproveita 1-4)
 REM     rodar_vale.bat 8               SO o passo 8
 REM     rodar_vale.bat passos          lista os passos e o que ja foi feito
+REM     rodar_vale.bat 1-10 selecao=Iraputa projeto=so_iraputa
+REM                                    UM RIO SO -- roda em minutos, e o que
+REM                                    quebrar quebra sozinho. Qualquer opcao
+REM                                    (chave=valor) vai adiante; veja-as em
+REM                                    "python -m vale opcoes".
 REM     rodar_vale.bat ambiente        so confere o ambiente e o que falta
 REM     rodar_vale.bat qaqc            qualifica o SIG-SC contra o Copernicus
 REM     rodar_vale.bat sigsc [passos]  roda com o MDT do SIG-SC a 10 m
@@ -78,6 +83,24 @@ if "%~1"=="sigsc" ( set "MODO=sigsc" & set "PASSOS=%~2" )
 if "%~1"=="1983"  ( set "MODO=1983"  & set "PASSOS=%~2" )
 if "%PASSOS%"=="" set "PASSOS=tudo"
 
+REM  Opcoes extras seguem adiante: "rodar_vale.bat 1-10 selecao=Iraputa
+REM  projeto=so_iraputa" roda um rio so, em projeto proprio, sem tocar no
+REM  modelo cheio. Rio isolado quebra sozinho e em minutos.
+REM  Reconstroi a linha em vez de iterar %1: o batch trata "=" como separador
+REM  de argumentos, entao "selecao=Iraputa" chegaria partido em dois e a opcao
+REM  se perderia calada. Consome o que ja foi lido (o modo, quando ha, e o
+REM  intervalo) e passa o resto adiante.
+set "TODOS=%*"
+set "RESTO="
+set "EXTRA="
+if defined TODOS for /f "tokens=1,* delims= " %%a in ("!TODOS!") do set "RESTO=%%b"
+if "%MODO%"=="copernicus" (
+    set "EXTRA=!RESTO!"
+) else (
+    if defined RESTO for /f "tokens=1,* delims= " %%a in ("!RESTO!") do set "EXTRA=%%b"
+)
+if defined EXTRA if not "!EXTRA!"=="" echo  opcoes: !EXTRA!
+
 echo.
 echo  passos: %PASSOS%
 if not "%PASSOS%"=="tudo" (
@@ -95,7 +118,7 @@ echo  COPERNICUS -- 30 m, cobre tudo, sem vazio
 echo  Modelo de SUPERFICIE: contem copa de mata e a lamina d'agua.
 echo  Por isso a escavacao da calha fica DESLIGADA (o programa avisa).
 echo ============================================================
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=copernicus 2>&1 | Tee-Object -FilePath modelo\execucao.log"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=copernicus !EXTRA! 2>&1 | Tee-Object -FilePath modelo\execucao.log"
 goto FIM
 
 :SIGSC
@@ -105,7 +128,7 @@ echo  SIG-SC -- MDT a 10 m, solo exposto
 echo  Qualifique ANTES:  rodar_vale.bat qaqc
 echo  O passo do terreno le 55 GB e leva cerca de duas horas.
 echo ============================================================
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=sigsc res_sigsc=10 terreno_hdf=false 2>&1 | Tee-Object -FilePath modelo\execucao.log"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=sigsc res_sigsc=10 terreno_hdf=false !EXTRA! 2>&1 | Tee-Object -FilePath modelo\execucao.log"
 goto FIM
 
 :EVENTO
@@ -113,7 +136,7 @@ echo.
 echo ============================================================
 echo  EVENTO DE 1983 -- so Sul e Norte operavam (Oeste em construcao)
 echo ============================================================
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=copernicus evento=1983 projeto=vale_1983 2>&1 | Tee-Object -FilePath modelo\execucao.log"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=copernicus evento=1983 projeto=vale_1983 !EXTRA! 2>&1 | Tee-Object -FilePath modelo\execucao.log"
 goto FIM
 
 :LISTA
