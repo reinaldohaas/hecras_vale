@@ -93,15 +93,75 @@ class Opcoes:
     res_fundo: float = 5.0
     fundo: str = "bacia"           # 'bacia' | 'mosaico' | 'nenhum'
 
+    # -------------------------------------------------------------- 2D
+    # O modelo bidimensional nao usa NADA do bloco de secoes abaixo: nao ha
+    # secao, nao ha entalhe piloto, nao ha vazao inicial. Ver vale/malha.py.
+    #
+    # ATENCAO ao corredor: `corredor_m` acima tem de ser >= `buffer_2d`, senao
+    # a borda da area 2D cai fora do terreno de 1 m e a malha assenta sobre o
+    # fundo grosseiro justamente onde a agua espalha. Com buffer de 1.500 m,
+    # corredor_m=1000 nao serve.
+    buffer_2d: float = 1500.0      # meia-largura da area 2D, a partir do eixo
+    perimetro_max_pontos: int = 1200
+
+    # Celula grossa sobre terreno fino e o ponto do 2D: as tabelas de
+    # sub-grade guardam a curva cota-volume do MDT de 1 m DENTRO de cada
+    # celula de 100 m. Quem representa a calha e a tabela, nao a celula.
+    celula: float = 100.0
+    refino_2d: float = 25.0        # celula na faixa da calha; 0 desliga
+    refino_largura: float = 300.0  # meia-largura da faixa refinada
+    face_minima: float = 0.05      # min_face_length_ratio do gerador
+    n_2d: float = 0.06             # Manning da planicie
+
+    # Contornos. Todos sao arcos DO PERIMETRO -- o HEC-RAS nao aceita contorno
+    # por dentro da area. A tampa inteira de um buffer de 1.500 m e um
+    # semicirculo de 4,7 km, e lancar a vazao nos 4,7 km poe agua na meia
+    # encosta dos dois lados; por isso o arco e recortado pelo meio.
+    bc_largura: float = 1000.0     # arco de montante e da foz
+    n_laterais: int = 8            # por lado; 0 concentra tudo na cabeceira
+    bc_lateral_largura: float = 300.0
+    bc_minima: float = 150.0       # arco menor que isto e descartado
+    decl_bc: float = 0.0010        # Flow Hydrograph Slope dos contornos
+
+    # DWE (onda difusiva) na primeira rodada, de proposito: SWE-ELM e mais
+    # fisico e muito menos tolerante, e se o modelo nao fecha volume em DWE
+    # nao ha por que atribuir a diferenca a fisica.
+    equacao_2d: str = "DWE"        # 'DWE' | 'SWE-ELM'
+    intervalo_2d: str = "1MIN"
+    courant_2d: float = 1.0        # 0 usa passo fixo
+    ztol_2d: float = 0.01
+    max_iter_2d: int = 20
+    ic_horas: float = 0.0          # aquecimento; 2D comeca SECO
+
     # ----------------------------------------------------------- secoes
     # O Acu cai 195 m em 13 km na garganta do Salto Pilao. A 1 km de
     # espacamento sao 8 m de queda ENTRE SECOES VIZINHAS e o solver falha no
     # primeiro passo; o criterio dx <~ 0,15*D/S da ~75 m ali. Por isso o
     # espacamento sai da declividade local, e nao de um numero fixo.
+    #
+    # E DEPOIS O CRITERIO FICOU SO NO COMENTARIO. Estas quatro linhas
+    # interpolavam entre 1.000 m e 150 m conforme a declividade, e 150 m e o
+    # DOBRO dos 75 m que o proprio comentario acima calcula. No Benedito o
+    # resultado foi 134 dos 147 trechos (91%) fora do criterio, com dx exigido
+    # mediano de 18 m contra os 150 m usados -- oito vezes grosso demais, ao
+    # longo de um rio que nunca terminou de rodar. Agora `samuels` faz valer o
+    # que estava escrito: a interpolacao continua sendo o alvo, e o criterio e
+    # um TETO por cima dela.
     espacamento: float = 1000.0
     espacamento_min: float = 150.0
     decl_plano: float = 0.0010
     decl_ingreme: float = 0.0060
+
+    # Samuels (1989), dx <= k*D/S. D e a profundidade caracteristica de calha
+    # cheia; k=0,15 e o valor classico. O PISO existe porque o criterio nao
+    # tem fundo: a 5% ele pede 4,5 m, o que daria mais de 10 mil secoes no
+    # Benedito. O piso e a linha onde se admite que 1D nao alcanca -- quem
+    # bate nele e candidato a 2D, e a checagem de resolucao diz quanto do rio
+    # ficou assim.
+    samuels: bool = True
+    samuels_k: float = 0.15
+    samuels_D: float = 1.5         # m; profundidade de calha cheia tipica
+    espacamento_piso: float = 25.0  # m; abaixo disto o modelo 1D nao vale
     n_pontos: int = 280            # limite do HEC-RAS e 450
     # Espacamento ALVO entre pontos da secao. Numero fixo de pontos numa
     # secao estreita da espacamento menor que o pixel do terreno (0,62 m

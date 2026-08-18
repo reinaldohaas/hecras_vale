@@ -81,6 +81,14 @@ def estacas(linha, amostrador, op):
     S = np.convolve(S, np.ones(5) / 5.0, "same")
     f = np.clip((S - op.decl_plano) / (op.decl_ingreme - op.decl_plano), 0.0, 1.0)
     dx = op.espacamento + (op.espacamento_min - op.espacamento) * f
+
+    # TETO DE SAMUELS (1989), dx <= k*D/S. A interpolacao acima satura em
+    # `espacamento_min` e para de responder: de 0,6% para cima ela devolve
+    # 150 m tanto para 0,6% quanto para 5%, e o criterio pede 37 m e 4,5 m.
+    # Era o mesmo espacamento para uma encosta oito vezes mais ingreme.
+    if getattr(op, "samuels", False):
+        lim = op.samuels_k * op.samuels_D / np.maximum(S, 1e-6)
+        dx = np.maximum(np.minimum(dx, lim), op.espacamento_piso)
     # nao encosta nos extremos: secao em cima da juncao conflita com o
     # comprimento declarado em Junc L&A e trava o solver
     recuo = op.espacamento_min * 0.5

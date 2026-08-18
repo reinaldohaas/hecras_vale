@@ -444,3 +444,63 @@ def do_solver(estado, pasta, avisos, log=print):
     if feitas:
         log("      %d figura(s) do solver em %s" % (len(feitas), pasta))
     return feitas
+
+
+# ------------------------------------------------------------ planta do 2D
+def planta_2d(est, destino, titulo="", log=print):
+    """Vista em planta da area 2D, do eixo e dos contornos.
+
+    E a unica figura em que a ESCALA DOS DOIS EIXOS TEM DE SER IGUAL. Um
+    painel que estica x e y de forma independente mostra o buffer de 1.500 m
+    como uma faixa de larguras diferentes ao longo do rio, e o erro que se
+    procura numa planta -- tampa torta, contorno em cima do outro, area
+    partida em dois -- e justamente de forma.
+    """
+    pol, eixo, bcs = est["area"], est["eixo"], est["bcs"]
+    px, py = np.array(pol.exterior.coords).T
+    W, H = 1180, 900
+    p = ["<svg xmlns='http://www.w3.org/2000/svg' width='%d' height='%d' "
+         "viewBox='0 0 %d %d'><rect width='%d' height='%d' fill='#fff'/>"
+         % (W, H, W, H, W, H)]
+    p.append(_txt(70, 34, titulo or ("area 2D %s" % est.get("nome_area", "")),
+                  17, "#111", peso="700"))
+    p.append(_txt(70, 56, "%.0f km2   |   %d vertices no perimetro   |   "
+                  "%d contornos   |   eixo %.0f km"
+                  % (pol.area / 1e6, len(px), len(bcs), eixo.length / 1000.0),
+                  12, "#555"))
+
+    a = _Painel(80, 100, W - 60, H - 90, "", "leste (m, UTM 22S)",
+                "norte (m, UTM 22S)")
+    a.faixa(px, py)
+    # ESCALA IGUAL: alarga a faixa mais curta ate bater a razao do painel
+    razao = (a.x1 - a.x0) / (a.y1 - a.y0)
+    dx, dy = a.dx1 - a.dx0, a.dy1 - a.dy0
+    if dx / dy < razao:
+        f = (razao * dy - dx) / 2.0
+        a.dx0, a.dx1 = a.dx0 - f, a.dx1 + f
+    else:
+        f = (dx / razao - dy) / 2.0
+        a.dy0, a.dy1 = a.dy0 - f, a.dy1 + f
+
+    a.area(px, py, np.full_like(py, a.dy0), "#3b82c4", 0.10)
+    a.linha(px, py, "#2c6fbb", 1.4)
+    ex, ey = np.array(eixo.coords).T
+    a.linha(ex, ey, "#1b5e20", 1.8)
+    cor = {"montante": "#c0392b", "foz": "#8e44ad", "lateral": "#e67e22"}
+    for b in bcs:
+        bx, by = np.array(b["coords"]).T
+        a.linha(bx, by, cor[b["tipo"]], 3.4)
+    a.ponto(ex[0], ey[0], "#1b5e20", 5.0)
+    a.nota(ex[0], ey[0], "nascente", "#1b5e20")
+    a.ponto(ex[-1], ey[-1], "#8e44ad", 5.0)
+    a.nota(ex[-1], ey[-1], "foz", "#8e44ad")
+    p.append(a.svg())
+    p.append(_legenda(W - 300, 120, [
+        ("#2c6fbb", "perimetro da area 2D"), ("#1b5e20", "eixo do rio"),
+        ("#c0392b", "contorno de montante"), ("#8e44ad", "foz (mare)"),
+        ("#e67e22", "contornos laterais")]))
+    q = sum(float(b["serie"].max()) for b in bcs if "serie" in b)
+    p.append(_txt(70, H - 22, "vazao de pico somada nos contornos: %.0f m3/s"
+                  "   |   escala igual nos dois eixos" % q, 10, "#888"))
+    p.append("</svg>")
+    return _gravar(p, destino)

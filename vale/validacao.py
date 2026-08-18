@@ -160,6 +160,58 @@ def secoes_achatadas(estado, op):
     return achados
 
 
+def resolucao_insuficiente(estado, op):
+    """Secoes espacadas demais para a declividade -- criterio de Samuels (1989).
+
+    dx <= k*D/S. Nao e uma regra de gosto: em 1D nao permanente o termo de
+    inercia so fica representado se o passo espacial resolver a variacao da
+    linha d'agua, e num rio de 5% ela varia em dezenas de metros. O Benedito
+    rodava com 91% dos trechos fora do criterio -- dx exigido mediano de 18 m
+    contra os 150 m usados -- e nunca terminou uma simulacao.
+
+    NAO TEM CORRECAO AUTOMATICA, de proposito. Consertar isto e recortar as
+    secoes com outro espacamento, que e o passo 6 inteiro de novo, e nao um
+    remendo na geometria pronta. A checagem mede e nomeia; quem decide roda.
+
+    Quem bate no piso (`espacamento_piso`) esta pedindo mais do que 1D
+    entrega, e sai marcado: e o trecho candidato a 2D.
+    """
+    if not getattr(op, "samuels", False):
+        return []
+    achados = []
+    k, D = op.samuels_k, op.samuels_D
+    for rio, v in (estado.get("xs_cond") or {}).items():
+        w = sorted(v, key=lambda x: -x["rs"])
+        pior, n_fora, n_piso, total = None, 0, 0, 0
+        for a, b in zip(w, w[1:]):
+            dx = float(a["rs"]) - float(b["rs"])
+            dz = float(a.get("z_alvo", 0.0)) - float(b.get("z_alvo", 0.0))
+            if dx <= 0.0:
+                continue
+            total += 1
+            S = max(dz / dx, 1e-6)
+            lim = k * D / S
+            if dx > lim:
+                n_fora += 1
+                razao = dx / lim
+                if pior is None or razao > pior[0]:
+                    pior = (razao, b["rs"], dx, lim, S)
+            if lim < op.espacamento_piso:
+                n_piso += 1
+        if not total or not n_fora:
+            continue
+        frac = n_fora / total
+        achados.append(Problema(
+            "resolucao insuficiente", f"{rio} RS {pior[1]:.0f}", pior[0],
+            f"{n_fora}/{total} trechos ({100*frac:.0f}%) fora do criterio; "
+            f"pior: dx {pior[2]:.0f} m contra {pior[3]:.0f} m exigidos "
+            f"(S={100*pior[4]:.1f}%)"
+            + (f"; {n_piso} trecho(s) pedem menos que o piso de "
+               f"{op.espacamento_piso:.0f} m -- CANDIDATO A 2D"
+               if n_piso else "")))
+    return achados
+
+
 def juncao_invalida(estado, op):
     """Juncao com um trecho entrando e um saindo -- o HEC-RAS recusa."""
     achados = []
@@ -409,6 +461,7 @@ CHECAGENS = [
     (5, "leito abaixo do mar", cota_impossivel, corrigir_escavacao, 5),
     (5, "contrapendente", contrapendente, None, None),
     (6, "secao achatada", secoes_achatadas, corrigir_achatamento, 6),
+    (6, "resolucao insuficiente", resolucao_insuficiente, None, None),
     (7, "juncao invalida", juncao_invalida, corrigir_juncao, 7),
     (7, "rio desconectado", rio_desconectado, None, None),
     (7, "htab ausente", htab_ausente, corrigir_htab, 7),
