@@ -103,6 +103,13 @@ class Opcoes:
     decl_plano: float = 0.0010
     decl_ingreme: float = 0.0060
     n_pontos: int = 280            # limite do HEC-RAS e 450
+    # Espacamento ALVO entre pontos da secao. Numero fixo de pontos numa
+    # secao estreita da espacamento menor que o pixel do terreno (0,62 m
+    # numa secao de 175 m contra 30 m do Copernicus): sao pontos
+    # inventados, e foi um deles que colidiu com a estaca da margem e
+    # fez o HEC-RAS recusar a geometria por ponto duplicado.
+    espacamento_pontos: float = 5.0
+    n_pontos_min: int = 40
     # Numa curva de raio R as perpendiculares vizinhas se encontram a R do eixo
     # do lado concavo. Passar disso e o que cruza as cutlines -- 24% dos pares
     # na primeira tentativa -- e a mancha do RAS Mapper perde sentido.

@@ -221,10 +221,19 @@ def cortar(linha, s, amostrador, area_km2, he, hd, op):
     p = linha.interpolate(s)
     he, hd = float(he), float(hd)
 
-    n_e = int(round(op.n_pontos * he / max(he + hd, 1e-6)))
-    n_e = min(max(n_e, 2), op.n_pontos - 2)
+    # NUMERO DE PONTOS PELO TAMANHO DA SECAO, e nao fixo. Com 280 pontos numa
+    # secao de 175 m -- que e o que o recorte pela cota de cheia passou a
+    # produzir -- o espacamento cai para 0,62 m, mais fino que o pixel de 30 m
+    # do terreno: sao pontos inventados por interpolacao. E foi assim que o
+    # HEC-RAS recusou a geometria: a estaca da margem calhou exatamente sobre
+    # uma amostra, o construtor inseriu o ponto de novo e sobrou uma duplicata
+    # ("Station and elevation data contains duplicate points").
+    n_pts = int(np.clip(round((he + hd) / op.espacamento_pontos),
+                        op.n_pontos_min, op.n_pontos))
+    n_e = int(round(n_pts * he / max(he + hd, 1e-6)))
+    n_e = min(max(n_e, 2), n_pts - 2)
     off = np.concatenate([np.linspace(-he, 0.0, n_e, endpoint=False),
-                          np.linspace(0.0, hd, op.n_pontos - n_e)])
+                          np.linspace(0.0, hd, n_pts - n_e)])
     i_eixo = n_e
     z = amostrador.cota(p.x + off * rx, p.y + off * ry)
     if not np.isfinite(z).any():

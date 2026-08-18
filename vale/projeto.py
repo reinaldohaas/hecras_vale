@@ -66,6 +66,30 @@ def contorno_faixa(rio, reach, rs_hi, rs_lo):
 
 
 # ------------------------------------------------------------------ SECAO
+def sem_duplicatas(d):
+    """Tira estacas repetidas da secao. REDE DE PROTECAO, nao a correcao.
+
+    O HEC-RAS recusa a geometria inteira por causa de um par de pontos com a
+    mesma estaca -- "Station and elevation data contains duplicate points" --
+    e nao computa nada. A causa foi resolvida no corte (espacamento de pontos
+    proporcional a largura), mas o construtor tambem INSERE pontos nas estacas
+    das margens, e uma insercao sobre uma amostra existente reintroduz o
+    problema. Uma checagem de duas linhas aqui vale mais que um dia perdido
+    procurando por que o solver nao roda.
+    """
+    sta = np.asarray(d["sta"], float)
+    if len(sta) < 2:
+        return d
+    manter = np.concatenate([[True], np.diff(sta) > 1e-4])
+    if manter.all():
+        return d
+    d = dict(d)
+    d["sta"] = sta[manter]
+    d["z"] = np.asarray(d["z"], float)[manter]
+    d["i_thal"] = int(np.argmin(d["z"]))
+    return d
+
+
 def _secao_manual(d, dx):
     linhas = [f"Type RM Length L Ch R = 1 ,{d['rs']:<8.2f},{dx},{dx},{dx}",
               "XS GIS Cut Line=2",
@@ -126,6 +150,7 @@ def secao(rio, reach, d, dx, usar_builder=True, usar_htab=True):
     casas, entao 0,035 vira 0,04 (14% a mais de rugosidade no modelo inteiro) e
     os valores de Jarrett -- 0,052, 0,066, 0,070 -- colapsam em tres niveis.
     """
+    d = sem_duplicatas(d)
     if not usar_builder:
         return _secao_manual(d, dx)
     try:
