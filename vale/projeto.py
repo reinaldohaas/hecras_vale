@@ -221,7 +221,8 @@ def geometria(op, trechos, juncoes, titulo=None):
 
 
 # ------------------------------------------------------------------ FLUXO
-def fluxo(op, trechos, cabeceiras, saida, mare, laterais, inicio):
+def fluxo(op, trechos, cabeceiras, saida, mare, laterais, inicio,
+          decl_saida=None):
     u = [f"Flow Title={op.projeto}", "Program Version=7.01",
          f"Use Restart= 0 ", ""]
 
@@ -256,11 +257,21 @@ def fluxo(op, trechos, cabeceiras, saida, mare, laterais, inicio):
         u += ["DSS Path=", "Use DSS=False", "Use Fixed Start Time=True",
               f"Fixed Start Date/Time={data_ras(inicio)}", ""]
 
-    u += [contorno(saida["rio"], saida["reach"], f"{saida['xs'][-1]['rs']:.2f}"),
-          "Interval=1HOUR", f"Stage Hydrograph= {len(mare)} "]
-    u += serie8(mare)
-    u += ["DSS Path=", "Use DSS=False", "Use Fixed Start Time=True",
-          f"Fixed Start Date/Time={data_ras(inicio)}", ""]
+    # Contorno de jusante: mare SO quando a foz esta no mar. Rodando um rio
+    # isolado a foz dele vira a saida do modelo, e a mare de 0,3 m foi imposta
+    # a uma secao com fundo em 50 m -- o HEC-RAS recusou os dados antes de
+    # computar ("Stage(s) in time series data are below the cross section
+    # minimum") e a rodada terminou anunciando exito. Foz terra adentro usa
+    # profundidade normal, que e o contorno correto para trecho que continua.
+    u.append(contorno(saida["rio"], saida["reach"],
+                      f"{saida['xs'][-1]['rs']:.2f}"))
+    if mare is not None:
+        u += ["Interval=1HOUR", f"Stage Hydrograph= {len(mare)} "]
+        u += serie8(mare)
+        u += ["DSS Path=", "Use DSS=False", "Use Fixed Start Time=True",
+              f"Fixed Start Date/Time={data_ras(inicio)}", ""]
+    else:
+        u += [f"Friction Slope={max(float(decl_saida or 0.0), 1e-4):.6f},0", ""]
 
     caminho = op.caminho(f"{op.projeto}.u01")
     open(caminho, "w", encoding="ascii", errors="replace").write("\n".join(u) + "\n")

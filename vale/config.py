@@ -134,6 +134,12 @@ class Opcoes:
     # a 2x), e o RAS ja avisa de auto-interseccao na largura atual.
     desnivel_minimo: float = 3.0   # m
     fator_alargar: float = 2.0     # quantas vezes, so nas secoes sem desnivel
+    # Acima desta cota a foz NAO esta no mar, e o contorno de jusante tem de ser
+    # profundidade normal em vez de mare (que vai de -0,3 a +0,9 m). Rodando um
+    # rio isolado a foz dele vira a saida do modelo: no Benedito sozinho a mare
+    # foi imposta a uma secao com fundo em 50 m, o HEC-RAS recusou os dados
+    # antes de computar e a rodada anunciou "NENHUM PROBLEMA DETECTADO".
+    cota_mare: float = 3.0         # m
     # O aparo da cabeceira nao pode engolir a primeira confluencia: sem esse
     # limite o Itajai_Norte perdeu a cabeceira acima da foz do Iraputa, a
     # juncao ficou com um trecho entrando e um saindo, e o HEC-RAS recusou a

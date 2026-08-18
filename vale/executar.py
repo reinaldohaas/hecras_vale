@@ -64,8 +64,54 @@ def rodar(prj, ras_exe, log=print):
     return r, msgs, str(novo)
 
 
-def resumir(log_txt):
+def erros_de_dado(pasta):
+    """Le o *.data_errors.txt -- onde o HEC-RAS escreve por que NAO rodou.
+
+    Este arquivo tinha a resposta e o programa o ignorava. No Benedito isolado
+    dizia, em duas linhas: "Boundary at River: Benedito Reach: R1 RS: 75.00 /
+    Stage(s) in time series data are below the cross section minimum" -- a mare
+    de 0,3 m contra uma foz a 50 m de altitude. Em vez disso a rodada terminou
+    com "NENHUM PROBLEMA DETECTADO".
+    """
+    import glob
+    saida = []
+    for c in glob.glob(os.path.join(pasta or ".", "*.data_errors.txt")):
+        try:
+            t = open(c, encoding="latin-1", errors="replace").read().strip()
+        except OSError:
+            continue
+        if t:
+            saida.append(t)
+    return "\n".join(saida)
+
+
+def rodou_de_fato(log_txt):
+    """O solver produziu alguma coisa?
+
+    Sem isto, ausencia de log era lida como sucesso: resumir() dizia
+    "instavel em: nao (completou)" quando nao havia mensagem NENHUMA, e o
+    passo 9 terminava em 2 segundos declarando exito. Um solver que nao roda e
+    a pior das falhas para reportar como sucesso, porque todo o resto do
+    relatorio -- auditoria, figuras, resumo -- continua saindo bonito.
+    """
+    if not (log_txt or "").strip():
+        return False
+    return bool(re.search(r"Unsteady Flow Simulation|Finished|"
+                          r"Volume Accounting|went unstable", log_txt))
+
+
+def resumir(log_txt, pasta=None):
     """O essencial: ate onde chegou, onde doeu, quanto de erro de volume."""
+    if not rodou_de_fato(log_txt):
+        L = ["O SOLVER NAO RODOU -- nao ha mensagem de computacao nenhuma.",
+             "Isto NAO e sucesso: nao houve simulacao para dar certo."]
+        dados = erros_de_dado(pasta)
+        if dados:
+            L += ["", "o HEC-RAS recusou os dados:"]
+            L += ["   " + l for l in dados.splitlines()]
+        else:
+            L += ["", "sem *.data_errors.txt; procure o .p01.hdf e o log do RAS"]
+        return "\n".join(L)
     fim = re.search(r"went unstable at:\s*(\S+\s+\S+)", log_txt)
     onde = re.search(r"Minimum error exceeds allowable tolerance at\s+(\S+)\s+"
                      r"(\S+)\s*\n\s*\n(\S+)\s+(\S+)\s+([\d.]+)", log_txt)

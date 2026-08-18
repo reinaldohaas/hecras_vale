@@ -245,9 +245,28 @@ def passo_escrever(op):
 
     principal = max(eixos, key=lambda d: d["area"])["ras"]
     saida = por_rio[principal][-1]
+
+    # Mare so se a foz estiver no mar. Rodando um rio isolado a foz dele vira a
+    # saida do modelo, e impor mare de 0,3 m a uma secao com fundo em 50 m faz
+    # o HEC-RAS recusar os dados antes de computar.
+    import numpy as _np
+    ult = saida["xs"][-1]
+    cota_saida = float(_np.min(ult["z"]))
+    if cota_saida > op.cota_mare:
+        mare = None
+        v = saida["xs"][-4:]
+        dz = float(_np.min(v[0]["z"]) - _np.min(v[-1]["z"]))
+        dx = float(v[0]["rs"] - v[-1]["rs"])
+        decl = dz / dx if dx > 0 else op.decl_minima
+        _log(f"      foz em {cota_saida:.1f} m (acima de {op.cota_mare:.0f} m): "
+             f"contorno de jusante por profundidade normal, "
+             f"declividade {100*max(decl, op.decl_minima):.3f}%")
+    else:
+        mare = hidrologia.mare(op.horas)
+        decl = None
     g01 = projeto.geometria(op, trechos, juncoes)
-    u01 = projeto.fluxo(op, trechos, cabs, saida,
-                        hidrologia.mare(op.horas), lats, hidrologia.INICIO)
+    u01 = projeto.fluxo(op, trechos, cabs, saida, mare, lats,
+                        hidrologia.INICIO, decl)
     p01, prj = projeto.plano(op, hidrologia.INICIO)
     rmap = projeto.rasmap(op, carregar(op, "terreno_hdf", False))
     for c in (g01, u01, p01, prj, rmap):
@@ -298,9 +317,17 @@ def passo_rodar(op):
     r, msgs, pasta = executar.rodar(prj, op.ras_exe, _log)
     _log(f"   {r}")
     _log("")
-    _log(executar.resumir(msgs))
+    _log(executar.resumir(msgs, pasta))
     with open(op.caminho("compute.log"), "w", encoding="utf-8") as f:
         f.write(msgs)
+    # Falhar em rodar tem de FALHAR o passo. Sem isto o passo 9 terminava em
+    # 2 s, o passo 10 gerava a pagina de uma cheia que nunca foi computada, e a
+    # rodada fechava com "NENHUM PROBLEMA DETECTADO".
+    if not executar.rodou_de_fato(msgs):
+        dados = executar.erros_de_dado(pasta)
+        raise SystemExit(
+            "o solver nao rodou -- nenhuma mensagem de computacao.\n"
+            + (dados or "sem *.data_errors.txt para explicar"))
     # Uma figura por ponto que o solver acusou, COM A LAMINA que ele calculou.
     # E o que separa "geometria ruim" de "modelo rodando seco": as duas coisas
     # produzem o mesmo log, e so a figura mostra 2 cm de agua num entalhe.
