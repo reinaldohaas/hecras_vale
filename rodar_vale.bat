@@ -118,7 +118,8 @@ echo  COPERNICUS -- 30 m, cobre tudo, sem vazio
 echo  Modelo de SUPERFICIE: contem copa de mata e a lamina d'agua.
 echo  Por isso a escavacao da calha fica DESLIGADA (o programa avisa).
 echo ============================================================
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=copernicus !EXTRA! 2>&1 | Tee-Object -FilePath modelo\execucao.log"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=copernicus !EXTRA! 2>&1 | Tee-Object -FilePath modelo\execucao.log; exit $LASTEXITCODE"
+set RC=%ERRORLEVEL%
 goto FIM
 
 :SIGSC
@@ -128,7 +129,8 @@ echo  SIG-SC -- MDT a 10 m, solo exposto
 echo  Qualifique ANTES:  rodar_vale.bat qaqc
 echo  O passo do terreno le 55 GB e leva cerca de duas horas.
 echo ============================================================
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=sigsc res_sigsc=10 terreno_hdf=false !EXTRA! 2>&1 | Tee-Object -FilePath modelo\execucao.log"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=sigsc res_sigsc=10 terreno_hdf=false !EXTRA! 2>&1 | Tee-Object -FilePath modelo\execucao.log; exit $LASTEXITCODE"
+set RC=%ERRORLEVEL%
 goto FIM
 
 :EVENTO
@@ -136,7 +138,8 @@ echo.
 echo ============================================================
 echo  EVENTO DE 1983 -- so Sul e Norte operavam (Oeste em construcao)
 echo ============================================================
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=copernicus evento=1983 projeto=vale_1983 !EXTRA! 2>&1 | Tee-Object -FilePath modelo\execucao.log"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale %PASSOS% --auto fonte=copernicus evento=1983 projeto=vale_1983 !EXTRA! 2>&1 | Tee-Object -FilePath modelo\execucao.log; exit $LASTEXITCODE"
+set RC=%ERRORLEVEL%
 goto FIM
 
 :LISTA
@@ -149,7 +152,8 @@ echo.
 echo ============================================================
 echo  QA/QC do SIG-SC contra o Copernicus
 echo ============================================================
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale.qaqc 2>&1 | Tee-Object -FilePath modelo\qaqc.log"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PY%' -u -m vale.qaqc 2>&1 | Tee-Object -FilePath modelo\qaqc.log; exit $LASTEXITCODE"
+set RC=%ERRORLEVEL%
 goto FIM
 
 :FIM
@@ -160,4 +164,8 @@ echo  Passos e estado:   rodar_vale.bat passos
 echo  So um intervalo:   rodar_vale.bat 5-10
 echo  Opcoes:            "%PY%" -m vale opcoes
 echo ------------------------------------------------------------
-endlocal
+if defined RC if not "%RC%"=="0" (
+    echo.
+    echo  *** A EXECUCAO FALHOU -- codigo %RC%. Veja modelo\execucao.log ***
+)
+endlocal & exit /b %RC%

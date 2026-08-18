@@ -90,6 +90,54 @@ def sem_duplicatas(d):
     return d
 
 
+def sem_duplicatas_no_texto(linhas):
+    """Tira estacas repetidas do TEXTO ja gerado da secao.
+
+    O `sem_duplicatas` acima opera sobre os floats e nao alcanca este caso por
+    duas razoes, e o solver recusou o modelo inteiro pelas duas juntas:
+
+    PRECISAO. Ele compara com tolerancia de 1e-4, mas a estaca e GRAVADA com
+    duas casas. Dois pontos a 1 mm de distancia sao distintos na memoria e
+    identicos no arquivo -- e o HEC-RAS le o arquivo.
+
+    ORDEM. Ele roda ANTES do construtor, e e o construtor que insere as
+    estacas das margens. Uma insercao sobre uma amostra existente cria a
+    duplicata depois que a limpeza ja passou.
+
+    Aqui a checagem e no que o solver vai ler, campo a campo, entao nao ha
+    caminho que escape: construtor, secao manual ou insercao de margem. Custou
+    uma rodada dos 12 rios -- Benedito RS 34604.89, Cedros RS 27106.84,
+    Itajai_Sul RS 76808.17 e Pombas RS 513.28, quatro secoes de 11.251.
+    """
+    for i, l in enumerate(linhas):
+        if not l.startswith("#Sta/Elev="):
+            continue
+        try:
+            n = int(l.split("=", 1)[1].strip())
+        except ValueError:
+            return linhas
+        campos, j = [], i + 1
+        while j < len(linhas) and len(campos) < 2 * n:
+            campos += [linhas[j][k:k + 8] for k in range(0, len(linhas[j]), 8)]
+            j += 1
+        campos = campos[:2 * n]
+        if len(campos) < 2 * n:
+            return linhas                       # bloco truncado: nao mexe
+        pares, ultima = [], None
+        for k in range(0, len(campos), 2):
+            if campos[k] == ultima:             # estacas sao monotonicas:
+                continue                        # comparar com a anterior basta
+            ultima = campos[k]
+            pares.append((campos[k], campos[k + 1]))
+        if len(pares) == n:
+            return linhas
+        planos = [v for p in pares for v in p]
+        novas = ["".join(planos[k:k + 10]) for k in range(0, len(planos), 10)]
+        return (linhas[:i] + [f"#Sta/Elev= {len(pares)} "] + novas
+                + linhas[j:])
+    return linhas
+
+
 def _secao_manual(d, dx):
     linhas = [f"Type RM Length L Ch R = 1 ,{d['rs']:<8.2f},{dx},{dx},{dx}",
               "XS GIS Cut Line=2",
@@ -140,6 +188,17 @@ def htab(d, usar=True):
 
 
 def secao(rio, reach, d, dx, usar_builder=True, usar_htab=True):
+    """Bloco da secao, ja sem estacas repetidas.
+
+    A limpeza fica AQUI, no unico ponto por onde os tres caminhos passam
+    (construtor, secao manual e o recuo por excecao). Pendurada em cada
+    `return` de dentro, bastaria um caminho novo para reabrir o buraco.
+    """
+    return sem_duplicatas_no_texto(
+        _secao(rio, reach, d, dx, usar_builder, usar_htab))
+
+
+def _secao(rio, reach, d, dx, usar_builder=True, usar_htab=True):
     """Bloco da secao. Pelo ras-commander quando disponivel.
 
     Ganho concreto do builder: ele INSERE pontos nas estacas das margens,

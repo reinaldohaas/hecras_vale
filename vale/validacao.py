@@ -160,6 +160,21 @@ def secoes_achatadas(estado, op):
     return achados
 
 
+def geometria_recusavel(estado, op):
+    """O .g01 gravado tem defeito que faz o HEC-RAS recusar o modelo INTEIRO.
+
+    Vem de correcao.conferir_g01, que le o arquivo de volta. Uma unica secao
+    com estaca repetida derruba os 11.251 -- foi assim que a primeira rodada
+    dos 12 rios terminou sem simulacao nenhuma, por quatro secoes: Benedito RS
+    34604.89, Cedros RS 27106.84, Itajai_Sul RS 76808.17 e Pombas RS 513.28.
+
+    Sem correcao automatica: a correcao esta no passo 7, ao gravar. Se algo
+    chegou aqui, o remendo no arquivo pronto esconderia a causa.
+    """
+    return [Problema("geometria recusavel", f"{rio} RS {rs}", motivo, "")
+            for rio, rs, motivo in (estado.get("g01_problemas") or [])]
+
+
 def resolucao_insuficiente(estado, op):
     """Secoes espacadas demais para a declividade -- criterio de Samuels (1989).
 
@@ -466,6 +481,7 @@ CHECAGENS = [
     (7, "rio desconectado", rio_desconectado, None, None),
     (7, "htab ausente", htab_ausente, corrigir_htab, 7),
     (7, "sem contorno", sem_contorno, None, None),
+    (8, "geometria recusavel", geometria_recusavel, None, None),
     (8, "backups automaticos", backups_ocupando_disco, corrigir_backups, None),
     (9, "simulacao incompleta", simulacao_incompleta, None, None),
 ]

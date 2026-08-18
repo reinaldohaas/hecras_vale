@@ -282,6 +282,10 @@ def passo_corrigir(op):
     tifs = carregar(op, "geotiffs")
     correcao.aplicar(op, g01, _log)
     correcao.checar(op, prj, _log)
+    # Le de volta o que foi GRAVADO. Vem depois da correcao de proposito: as
+    # ferramentas do RasFixit editam o .g01, e conferir antes delas seria
+    # conferir um arquivo que ainda vai mudar.
+    salvar(op, g01_problemas=correcao.conferir_g01(g01, _log))
     eixo_geojson = op.caminho(f"{op.projeto}_eixos.geojson")
     if os.path.exists(eixo_geojson) and tifs:
         correcao.auditar_secoes(op, g01, tifs[0], eixo_geojson, _log)
