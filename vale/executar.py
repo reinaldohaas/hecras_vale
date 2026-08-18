@@ -100,6 +100,30 @@ def rodou_de_fato(log_txt):
                           r"Volume Accounting|went unstable", log_txt))
 
 
+def diagnostico(log_txt, pasta=None):
+    """O essencial em forma de dicionario, para a checagem automatica ver.
+
+    Sem isto o passo 9 podia abortar a simulacao e a rodada terminar com
+    "NENHUM PROBLEMA DETECTADO": o unico caso que falhava era o solver nao
+    rodar. Simulacao que roda e ABORTA no meio e falha igual -- so que mais
+    silenciosa, porque produz log, produz HDF e produz figura.
+    """
+    if not rodou_de_fato(log_txt):
+        return {"rodou": False, "completou": False, "volume": None,
+                "abortou_em": None, "dados": erros_de_dado(pasta)}
+    fim = re.search(r"went unstable at:\s*(\S+\s+\S+)", log_txt)
+    onde = re.search(r"Minimum error exceeds allowable tolerance at\s+(\S+)\s+"
+                     r"(\S+)\s*\n\s*\n(\S+)\s+(\S+)\s+([\d.]+)", log_txt)
+    vol = re.search(r"Volume Accounting Error as percentage:\s*([-\d.]+)", log_txt)
+    return {"rodou": True,
+            "completou": fim is None and onde is None,
+            "volume": float(vol.group(1)) if vol else None,
+            "abortou_em": (f"{onde.group(3)} {onde.group(4)} RS {onde.group(5)}"
+                           if onde else None),
+            "instavel_em": fim.group(1) if fim else None,
+            "dados": ""}
+
+
 def resumir(log_txt, pasta=None):
     """O essencial: ate onde chegou, onde doeu, quanto de erro de volume."""
     if not rodou_de_fato(log_txt):

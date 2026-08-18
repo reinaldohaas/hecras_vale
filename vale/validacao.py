@@ -194,6 +194,33 @@ def rio_desconectado(estado, op):
     return achados
 
 
+def simulacao_incompleta(estado, op):
+    """A simulacao chegou ao fim? Abortar no meio e falha, nao aviso.
+
+    A rodada de 18/08/2026 abortou em 01AUG 01:13 com 18,76% de erro de volume
+    e terminou anunciando "NENHUM PROBLEMA DETECTADO pelas checagens
+    automaticas". O unico caso coberto era o solver nao rodar; simulacao que
+    roda e para no meio produz log, produz HDF e produz figura -- e por isso
+    passa despercebida com mais facilidade que a que nao roda.
+    """
+    s = estado.get("solver") or {}
+    if not s:
+        return []
+    achados = []
+    if not s.get("rodou"):
+        achados.append(Problema("solver nao rodou", "plano", 0.0,
+                                s.get("dados") or "sem *.data_errors.txt"))
+    elif not s.get("completou"):
+        achados.append(Problema(
+            "simulacao abortou", s.get("abortou_em") or "?",
+            float(s.get("volume") or 0.0),
+            f"% de erro de volume; instavel em {s.get('instavel_em')}"))
+    elif s.get("volume") is not None and abs(s["volume"]) > 1.0:
+        achados.append(Problema("erro de volume alto", "plano",
+                                float(s["volume"]), "% -- acima de 1%"))
+    return achados
+
+
 def backups_ocupando_disco(estado, op):
     """Backups automaticos do RasFixit.
 
@@ -387,6 +414,7 @@ CHECAGENS = [
     (7, "htab ausente", htab_ausente, corrigir_htab, 7),
     (7, "sem contorno", sem_contorno, None, None),
     (8, "backups automaticos", backups_ocupando_disco, corrigir_backups, None),
+    (9, "simulacao incompleta", simulacao_incompleta, None, None),
 ]
 
 

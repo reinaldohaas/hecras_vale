@@ -337,7 +337,8 @@ def passo_rodar(op):
                          executar.pontos_criticos(msgs), _log)
     except Exception as e:                                   # noqa: BLE001
         _log(f"   figuras do solver nao geradas: {e}")
-    salvar(op, run_pasta=pasta)
+    salvar(op, run_pasta=pasta,
+           solver=executar.diagnostico(msgs, pasta))
     return "rodado (log em compute.log)"
 
 

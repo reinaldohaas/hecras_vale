@@ -198,7 +198,14 @@ class Opcoes:
     lpi: bool = True
     ztol: float = 0.02
     max_iter: int = 40
-    intervalo: str = "1MIN"
+    # INTERVALO DE CALCULO. Medido no Benedito com a geometria recortada:
+    # com 1MIN o numero de Courant fica em 1,07 de mediana e 3,29 no
+    # maximo -- 95 das 148 secoes acima de 1. Com 15SEC cai para 0,27 de
+    # mediana e 0,82 no maximo, NENHUMA acima de 1. O solver e implicito e
+    # tolera Courant acima de 1, mas nao em lamina rasa sobre leito
+    # inclinado, que e exatamente o regime aqui: a agua esvaziava o
+    # modelo na primeira hora e a vazao invertia de sinal.
+    intervalo: str = "15SEC"
 
     # ------------------------------------------------------- ferramentas
     # Ferramentas do proprio HEC-RAS, via ras-commander. Ligadas por padrao:
