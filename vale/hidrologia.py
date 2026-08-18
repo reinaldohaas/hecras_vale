@@ -115,15 +115,28 @@ def series(op, eixos, xs_por_rio, arvore, log=print):
         propria = max(propria, 1.0)
         pico_total = Q_REF_FOZ * propria / area_total
 
-        q_cab = hidrograma(pico_total * op.fracao_cabeceira, op.horas)
+        # A FRACAO DA CABECEIRA SAI DA AREA QUE A PRIMEIRA SECAO DRENA, e nao
+        # de uma constante. O aparo de cabeceira corta o trecho de torrente --
+        # 21,8 km no Benedito --, entao a secao que sobra NAO e mais a nascente:
+        # ela drena 542 km2, e nao os 75 km2 (5% de 1.501) que a constante lhe
+        # atribuia. Sete vezes menos agua entrando no alto do rio, e por isso a
+        # lamina la era de centimetros. A area nao se perde nos dois casos --
+        # ela entra como lateral --, mas entra no lugar errado: distribuida ao
+        # longo do rio em vez de chegar pela cabeceira, que e por onde ela
+        # realmente chega.
+        a_cab = float(xs[0].get("area_km2", d["area"] * op.fracao_cabeceira))
+        frac = float(np.clip(a_cab / max(d["area"], 1.0),
+                             op.fracao_cabeceira, 0.90))
+        bf = float(getattr(op, "base_frac", 0.02))
+        q_cab = hidrograma(pico_total * frac, op.horas, base_frac=bf)
         cab.append({"rio": ras, "reach": "R1", "serie": q_cab,
                     "q_pico": float(q_cab.max()), "xs": xs})
 
         rss = sorted((x["rs"] for x in xs), reverse=True)
         lat.append({"rio": ras, "reach": "R1",
                     "rs_hi": rss[1], "rs_lo": rss[-2],
-                    "serie": hidrograma(pico_total * (1.0 - op.fracao_cabeceira),
-                                        op.horas)})
+                    "serie": hidrograma(pico_total * (1.0 - frac), op.horas,
+                                        base_frac=bf)})
 
     if op.barragens and op.evento:
         alvo = BARRAGENS_POR_EVENTO.get(op.evento, set(BARRAGENS))

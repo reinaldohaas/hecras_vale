@@ -120,7 +120,20 @@ class Opcoes:
     canal_eh: float = 0.35
     canal_kw: float = 5.0          # largura = kw * A^ew
     canal_ew: float = 0.40
-    pilot_largura: float = 25.0    # entalhe de estabilidade
+    # ENTALHE DIMENSIONADO PELA VAZAO DE BASE, e nao por constante. Com 25 m
+    # fixos, a lamina de base na cabeceira do Benedito dava 6 cm: 0,58 m3/s
+    # espalhados por 25 m a 5% de declividade. E 25 m nao entalha nada ali --
+    # a calha de margens plenas por Leopold, com os 75 km2 da cabeceira, tem
+    # 28 m. O entalhe tinha a largura da calha inteira.
+    #
+    # Medido na cabeceira, com a vazao de base de 0,58 m3/s:
+    #     25 m -> 0,058 m     10 m -> 0,103 m      3 m -> 0,235 m
+    # Estreitar de 25 para 3 m rende o mesmo que multiplicar a vazao por
+    # QUINZE -- e multiplicar a vazao por quinze significa 115 L/s/km2, que
+    # nao e escoamento de base, e cheia.
+    pilot_largura: float = 25.0     # TETO da largura do entalhe
+    pilot_largura_min: float = 3.0  # piso
+    pilot_prof_alvo: float = 0.35   # profundidade que a vazao de base deve ter
     pilot_prof: float = 1.5
 
     # ----------------------------------------------------------- perfil
@@ -152,6 +165,11 @@ class Opcoes:
     barragens: bool = True
     horas: int = 192
     fracao_cabeceira: float = 0.05  # o resto da area entra como lateral
+    # Escoamento de base como fracao do pico. 2% dao 7,7 L/s/km2 na
+    # cabeceira do Benedito, que e o valor plausivel para a regiao; 30%
+    # dariam 115 L/s/km2, que e cheia. Nao e por aqui que se resolve
+    # lamina rasa -- ver pilot_largura.
+    base_frac: float = 0.02
 
     # ------------------------------------------------------------ plano
     # LPI ligado: a rede tem trechos de serra com 6 a 10% de declividade, onde

@@ -90,6 +90,33 @@ def margens(sta, z, i0, prof_canal, folga=3.0):
     return round(float(sta[e]), 2), round(float(sta[d]), 2)
 
 
+def largura_pilot(d, op, larg_calha):
+    """Largura do entalhe: a que da a profundidade-alvo com a VAZAO DE BASE.
+
+    O entalhe existe para dar um caminho bem condicionado a lamina baixa. Com
+    largura constante ele nao faz isso nos dois extremos do rio ao mesmo tempo:
+    25 m sao um entalhe de verdade numa secao de 3 km na foz do Acu, e sao a
+    calha INTEIRA na cabeceira do Benedito, onde a largura de margens plenas
+    por Leopold (75 km2) da 28 m. Resultado medido la: 0,58 m3/s espalhados por
+    25 m a 5% de declividade dao 6 CENTIMETROS de lamina, e o solver nao
+    resolve isso -- foi o que abortou a rodada com a vazao correta.
+
+    Manning para canal largo (R ~ h):  b = Q*n / (h^(5/3) * sqrt(S)).
+
+    Nao adianta compensar com vazao: para a mesma lamina seria preciso
+    multiplicar a vazao de base por quinze, o que da 115 L/s/km2 -- cheia, e
+    nao escoamento de base. A largura e a variavel certa.
+    """
+    from .hidrologia import AREA_REF_FOZ, Q_REF_FOZ
+    q = Q_REF_FOZ * (max(float(d.get("area_km2", 1.0)), 1.0) / AREA_REF_FOZ)
+    q *= op.base_frac
+    S = max(float(d.get("S_terreno") or 0.0), op.decl_minima)
+    n = float(d.get("n") or 0.05)
+    b = q * n / (op.pilot_prof_alvo ** (5.0 / 3.0) * np.sqrt(S))
+    teto = min(op.pilot_largura, max(larg_calha, op.pilot_largura_min))
+    return float(np.clip(b, op.pilot_largura_min, teto))
+
+
 def escavar(d, op, altura_minima=12.0, folga_altura=1.4, altura_max=30.0):
     """Aplica a calha, o pilot channel e -- so onde precisa -- a parede."""
     sta = d["sta"]
@@ -112,8 +139,10 @@ def escavar(d, op, altura_minima=12.0, folga_altura=1.4, altura_max=30.0):
     #    capacidade de cheia (25 m x 1,5 m sao 37 m2 num rio de milhares).
     if op.pilot_prof > 0:
         base_p = alvo - op.pilot_prof
-        meia_p = op.pilot_largura / 2.0
-        talude_p = max(op.pilot_largura * 0.6, 10.0)
+        larg_p = largura_pilot(d, op, larg)
+        d["pilot_largura"] = larg_p
+        meia_p = larg_p / 2.0
+        talude_p = max(larg_p * 0.6, 10.0)
         sobe_p = np.clip((dist - meia_p) / talude_p, 0.0, 1.0)
         z = np.minimum(z, base_p + sobe_p * np.maximum(z - base_p, 0.0))
     else:
