@@ -107,6 +107,18 @@ class Opcoes:
     # do lado concavo. Passar disso e o que cruza as cutlines -- 24% dos pares
     # na primeira tentativa -- e a mancha do RAS Mapper perde sentido.
     folga_curva: float = 0.70
+    # RECORTE PELA COTA DE CHEIA. A largura saia so do porte do rio
+    # (180*sqrt(A/100), com piso de 500 m de meia-largura), e o piso e que
+    # mandava: 129 das 148 secoes do Benedito estavam nele. Medido, a cheia de
+    # pico molhava 13% da largura na mediana e 6% na cabeceira -- 62 m de agua
+    # numa secao de 966 m. O resto e encosta de vale, e ela ESTRAGA: a secao
+    # vira bacia fechada (40 m de profundidade mediana) e a conducao entre
+    # vizinhas chegou a variar 2.809 vezes, com a vazao invertendo de sinal no
+    # primeiro passo do solver.
+    recortar_secao: bool = True
+    folga_secao: float = 3.0       # m acima da cota de cheia de projeto
+    margem_secao: float = 1.5      # multiplica a meia-largura necessaria
+    meia_largura_min: float = 60.0  # piso, para nao estrangular a planicie
     razao_lados: float = 2.5       # um lado no maximo 2,5x o outro
     minimo_lado: float = 120.0
 

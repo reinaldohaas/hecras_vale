@@ -105,6 +105,45 @@ def desnivel(d):
     return float(z.max() - z.min()) if z.size else 0.0
 
 
+def meias_para_cheia(d, op):
+    """Meia-largura de cada lado que a CHEIA precisa, e nao a que a area sugere.
+
+    O criterio antigo era so o porte do rio -- 180*sqrt(A/100), com piso de
+    500 m de meia-largura --, e o piso e que mandava: 129 das 148 secoes do
+    Benedito estavam nele. Medido, a cheia de pico molhava 13% da largura na
+    mediana e 6% na cabeceira: 62 m de agua dentro de uma secao de 966 m.
+
+    Os 87% restantes nao ficam so sobrando, eles ESTRAGAM. A secao sobe as duas
+    encostas do vale e vira bacia fechada -- 40 m de profundidade mediana,
+    206 m no pior caso --, e numa bacia a conducao depende brutalmente da cota:
+    entre duas vizinhas com fundos diferentes ela variava por um fator de
+    2.809, o momento nao fechava e a vazao invertia de sinal no primeiro passo.
+
+    Aqui a seccao vai ate onde o terreno passa da cota de cheia mais uma folga,
+    com margem, limitada abaixo por meia_largura_min. Onde o vale e largo e a
+    cheia espalha de verdade (a foz do Benedito usa 57% da secao) nao encolhe.
+    """
+    from .calha import altura_para_vazao, vazao_projeto
+    sta = np.asarray(d["sta"], float)
+    z = np.asarray(d["z"], float)
+    i = int(d["i_thal"])
+    h = altura_para_vazao(sta, z, 0.05, d.get("S_terreno"),
+                          vazao_projeto(d["area_km2"]))
+    alvo = float(z[i]) + h + op.folga_secao
+    # ate onde a agua chega ANDANDO a partir do talvegue: a primeira subida
+    # acima da cota fecha o lado. Procurar o minimo global pegaria uma
+    # depressao do outro lado do morro.
+    e = i
+    while e > 0 and z[e - 1] <= alvo:
+        e -= 1
+    r = i
+    while r < len(z) - 1 and z[r + 1] <= alvo:
+        r += 1
+    me = max((sta[i] - sta[e]) * op.margem_secao, op.meia_largura_min)
+    md = max((sta[r] - sta[i]) * op.margem_secao, op.meia_largura_min)
+    return float(me), float(md)
+
+
 def largura_base(area_km2):
     """Meia-largura conforme o porte do rio.
 
@@ -286,6 +325,34 @@ def cortar_rio(eixo, amostrador, op, log=print, prog=None):
     if largos:
         log(f"   {eixo['ras']}: {largos} secoes sem desnivel alargadas "
             f"{op.fator_alargar:.0f}x (vale plano, largura presa pelo meandro)")
+
+    # ------------------------------------------------- recorte pela cheia
+    # SEGUNDA PASSADA, e nao um criterio novo na primeira: a cota de cheia so
+    # se conhece depois de ter a secao. Corta-se generoso, mede-se, recorta-se.
+    if op.recortar_secao:
+        antes = np.array([float(d["sta"][-1]) for d in xs])
+        n_rec = 0
+        for k, d in enumerate(xs):
+            if d.get("_i") is None:
+                continue
+            i = d["_i"]
+            me, md = meias_para_cheia(d, op)
+            # so encolhe, e so se valer a pena -- recortar 10% nao paga o corte
+            if me > hw_e[i] * 0.9 and md > hw_d[i] * 0.9:
+                continue
+            r = cortar(linha, ss[i], amostrador, areas[i],
+                       min(me, hw_e[i]), min(md, hw_d[i]), op)
+            if r is None:
+                continue
+            r.update({"rs": d["rs"], "S_terreno": d["S_terreno"],
+                      "rio": d["rio"], "_i": i})
+            xs[k] = r
+            n_rec += 1
+        if n_rec:
+            dep = np.array([float(d["sta"][-1]) for d in xs])
+            log(f"   {eixo['ras']}: {n_rec} secoes recortadas pela cota de "
+                f"cheia (largura mediana {np.median(antes):.0f} -> "
+                f"{np.median(dep):.0f} m)")
     for d in xs:
         d.pop("_i", None)
     log(f"   {eixo['ras']:<16} {len(xs):>4} secoes   "
