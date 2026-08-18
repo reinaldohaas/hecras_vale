@@ -137,7 +137,26 @@ class Opcoes:
     escavar: bool = True
     canal_kh: float = 0.277        # profundidade = kh * A^eh  (Leopold)
     canal_eh: float = 0.35
-    canal_kw: float = 5.0          # largura = kw * A^ew
+    # LARGURA CALIBRADA CONTRA OBSERVACAO DE CAMPO, nao contra Leopold cru.
+    # Com kw = 5,0 (o valor original, ajustado para rios norte-americanos de
+    # planicie) o modelo escavava 62 m na cabeceira do Benedito e 93 m na foz.
+    # Quem conhece o rio observa 20 a 60 m, mesmo nas partes planas. Com
+    # kw = 2,5 sai 31 m na cabeceira e 47 m na foz -- dentro da faixa -- e o
+    # Itajai-Acu fica com 103 m em Blumenau e 117 m na foz, que tambem fecha.
+    #
+    # Ajustar uma potencia direta aos dois extremos observados daria expoente
+    # 1,08 -- largura crescendo mais que a area, o que nao e geometria
+    # hidraulica (os expoentes de Leopold ficam entre 0,4 e 0,5). Ou seja: os
+    # 20 a 60 m sao variacao LOCAL, de meandro e garganta, e o que se calibra e
+    # o coeficiente, mantendo o expoente.
+    #
+    # MEDIDO: isto NAO muda a hidraulica. A lamina de base e governada pelo
+    # pilot channel (0,41 m na cabeceira com kw de 5,0 ou 2,0), e a de pico e a
+    # mesma 2,69 m na foz em todos os casos, porque no pico a agua ocupa a
+    # secao inteira de qualquer jeito. O que muda e a FIDELIDADE: terreno
+    # preservado passa de 42% para 55%, e a escavacao mediana de 11,0 para
+    # 8,1 m. E correcao de representacao, nao de estabilidade.
+    canal_kw: float = 2.5          # largura = kw * A^ew
     canal_ew: float = 0.40
     # ENTALHE DIMENSIONADO PELA VAZAO DE BASE, e nao por constante. Com 25 m
     # fixos, a lamina de base na cabeceira do Benedito dava 6 cm: 0,58 m3/s
