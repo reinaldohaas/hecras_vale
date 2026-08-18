@@ -28,6 +28,13 @@ import datetime
 import numpy as np
 
 Q_REF_FOZ = 5700.0          # m3/s; pico de 1983 na foz, referencia do sintetico
+# Area da bacia A QUE o Q_REF_FOZ se refere: a do Itajai-Acu na foz. FIXA, e
+# nao tirada da selecao. Com "max(area dos eixos selecionados)" um rio rodado
+# sozinho virava o maior da selecao e herdava os 5.700 m3/s inteiros: o
+# Benedito isolado, com 1.501 km2, saiu com pico de 5.692 m3/s na foz --
+# 3,8 m3/s/km2, dez vezes o que lhe cabe. O modelo rodou bem (erro de volume
+# 0,009%) roteando a cheia do Itajai inteiro por um afluente, e nada acusou.
+AREA_REF_FOZ = 14871.0      # km2
 INICIO = datetime.datetime(2026, 8, 1, 0, 0)
 
 # (cota de espera em m, vazao maxima do vertedouro em m3/s)
@@ -89,7 +96,9 @@ def series(op, eixos, xs_por_rio, arvore, log=print):
     xs_por_rio: {ras -> lista de secoes}, ja condicionadas.
     arvore: {ras -> receptor_ras or None}, e {ras -> chainage da confluencia}.
     """
-    area_total = max(d["area"] for d in eixos)
+    # FIXA (ver AREA_REF_FOZ): a vazao especifica nao pode depender de
+    # quais rios foram selecionados para esta rodada.
+    area_total = AREA_REF_FOZ
     por_ras = {d["ras"]: d for d in eixos}
     filhos = {}
     for d in eixos:
