@@ -1,2 +1,0 @@
-River: ITAJAI           Reach: CALHA_PRINCIPAL  needs a upstream boundary condition.
-River: ITAJAI           Reach: CALHA_PRINCIPAL  needs an downstream boundary condition.

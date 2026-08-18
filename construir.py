@@ -165,10 +165,14 @@ def main():
     for k in ordem:                       # o maior primeiro: os afluentes
         v = rede[k]                       # ancoram no leito de quem os recebe
         a_cab = v["area"] - sum(rede[c["k"]]["area"] for c in conf[k])
+        # RS da confluencia mais de MONTANTE deste rio (conf ja vem ordenada
+        # por s crescente, e RS = comprimento - s): e ate onde o aparo da
+        # cabeceira pode ir sem destruir a juncao.
+        rs_lim = (v["linha"].length - conf[k][0]["s"]) if conf[k] else None
         v["xs"] = perfil.condicionar(
             secao.cortar_trecho(v["linha"], am, v["area"],
                                 area_cabeceira=max(a_cab, v["area"] * 0.05)),
-            v["nome"])
+            v["nome"], rs_limite=rs_lim)
         extra = ""
         if k in receptor:
             m = receptor[k]
@@ -340,6 +344,46 @@ def main():
     q_cab = sum(t["q_pico"] for t in cabeceiras)
     print(f"    lateral em {len(laterais)} trechos: Q pico {q_lat:7.1f} m3/s")
     print(f"    TOTAL injetado: {q_cab + q_lat:7.1f} de {Q_REF_FOZ:.0f} m3/s")
+
+    # --- vazao inicial ACUMULADA pela rede, nao chutada por trecho
+    # Havia duas regras, e nenhuma somava a vazao lateral -- que em t=0 e o
+    # termo dominante (10 a 60 m3/s por trecho, contra 1 a 3 das cabeceiras).
+    # Cabeceira usava serie[0]; os demais trechos, um max(0,15*pico, 20)
+    # inventado. Resultado: Itajai_Sul R1 partia com 3 m3/s recebendo 50, e
+    # Itajai_Acu R1 com 466 quando a bacia inteira injetava 333.
+    #
+    # O HEC-RAS monta o remanso inicial com esses numeros e no passo 1 recebe
+    # outros: o sistema inteiro leva um choque. Era isso que estourava depois
+    # de algumas dezenas de passos -- e explica por que diminuir o passo de
+    # tempo PIORAVA (falhou em 30 passos com 10 s e em 51 com 1 min): o defeito
+    # nao era temporal, era a condicao inicial nao ser solucao do problema.
+    #
+    # Acumular garante continuidade em toda juncao no instante inicial, que e
+    # exatamente o que o remanso pressupoe. 'ordem' vai do maior para o menor e
+    # o receptor tem sempre area maior que o afluente, entao percorre-se ao
+    # contrario para o afluente estar pronto antes.
+    lat0, cab0 = {}, {}
+    for l in laterais:
+        ch = (l["rio"], l["reach"])
+        lat0[ch] = lat0.get(ch, 0.0) + float(l["serie"][0])
+    for t in cabeceiras:
+        cab0[(t["rio"], t["reach"])] = float(t["serie"][0])
+
+    q0, saida_rio = {}, {}
+    for k in reversed(ordem):
+        corrente = 0.0
+        for t in sorted(por_rio[k], key=lambda x: x["a"]):
+            ch = (t["rio"], t["reach"])
+            corrente += cab0.get(ch, 0.0) + lat0.get(ch, 0.0)
+            corrente += sum(saida_rio.get(c["k"], 0.0) for c in conf[k]
+                            if abs(c["s"] - t["a"]) < 1.0)
+            q0[ch] = corrente
+        saida_rio[k] = corrente
+    for t in trechos:
+        t["q_base"] = max(q0.get((t["rio"], t["reach"]), 0.0), 1.0)
+    print(f"    vazao inicial acumulada: {min(t['q_base'] for t in trechos):.1f}"
+          f" a {max(t['q_base'] for t in trechos):.1f} m3/s"
+          f"  (foz {saida_rio[topologia.PRINCIPAL]:.1f})")
 
     # -------------------------------------------------------------- escrita
     print("\n[6] escrita")

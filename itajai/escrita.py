@@ -265,6 +265,19 @@ def plano(projeto, inicio, n_horas):
          # MxIter: 20 e o padrao, e o log mostrava 20 em todas as linhas, ou
          # seja o teto sendo atingido sempre, nunca a convergencia.
          "UNET MxIter= 40 ",
+         # LPI (Local Partial Inertia). O solver nao permanente do HEC-RAS
+         # resolve Saint-Venant completo, que so e estavel em regime FLUVIAL.
+         # Esta rede tem trechos de serra com 6 a 10% de declividade de fundo
+         # -- Benedito, dos Cedros, Taio --, onde o escoamento e torrencial por
+         # fisica, nao por defeito da geometria. Sem LPI o solver oscila ali
+         # desde o aquecimento: erros de 10 a 18 m de nivel batendo o teto de
+         # iteracoes aos 20 minutos de simulacao, com as vazoes ainda de base.
+         # O LPI atenua os termos de inercia conforme Froude se aproxima do
+         # limite, e e o recurso previsto do proprio HEC-RAS para isto.
+         "Mixed Flow Regime",
+         "UNET Froude Reduction=True",
+         "UNET Froude Limit= 0.8 ",
+         "UNET Froude Power= 4 ",
          "Computation Interval=1MIN", "Output Interval=1HOUR",
          "Instantaneous Interval=1HOUR", "Mapping Interval=1HOUR",
          "Run HTab=-1", "Run UNet=-1", "Run PostProcess=-1",

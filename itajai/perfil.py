@@ -22,7 +22,10 @@ import numpy as np
 DECL_MINIMA = 1e-4       # m/m; abaixo disso o trecho vira lago e o solver oscila
 DECL_MAXIMA = 0.008      # m/m; teto de PARTIDA, valido para rio de planicie
 DECL_TETO = 0.05         # m/m; teto absoluto (limite de validade de Jarrett)
-ESCAVACAO_MAXIMA = 12.0  # m; o quanto o talvegue pode se afastar do terreno
+ESCAVACAO_MAXIMA = 12.0   # m; o quanto o talvegue pode se afastar do terreno
+CORTE_MAX_FRACAO = 0.35   # ate quanto do trecho a cabeceira pode ser aparada
+JANELA_CORTE = 3          # secoes na janela que mede a queda da cabeceira
+SECOES_ACIMA_JUNCAO = 4   # secoes que sempre ficam acima da 1a confluencia
 
 
 def teto_declividade(xs):
@@ -76,7 +79,7 @@ def mover_calha(d, delta):
     d["z_alvo"] = cota_talvegue(d) + delta
 
 
-def condicionar(xs, rotulo=""):
+def condicionar(xs, rotulo="", rs_limite=None):
     """Talvegue monotonico, com declividade entre DECL_MINIMA e DECL_MAXIMA.
 
     1. apara a cabeceira enquanto a declividade passar do maximo (torrente de
@@ -94,14 +97,38 @@ def condicionar(xs, rotulo=""):
     # o alvo parte do terreno menos a profundidade da calha
     for d in xs:
         d.setdefault("z_alvo", float(d["z"][d["i_thal"]]) - d.get("prof_canal", 0.0))
+    # Aparar a cabeceira de torrente. O criterio antigo parava no PRIMEIRO par
+    # abaixo do teto, entao um patamar isolado tres secoes abaixo do topo
+    # interrompia o corte e deixava o resto da torrente dentro do modelo -- que
+    # e de onde vinham os degraus de 10,75% no Benedito e 10,37% no dos Cedros,
+    # e os erros de 20 a 25 m que o solver reportava no Taio e no alto Acu.
+    #
+    # Agora procura-se a secao mais a JUSANTE que ainda esta acima do teto,
+    # medindo a queda numa janela de algumas secoes para que um par plano no
+    # meio da descida nao mascare o conjunto, e corta-se tudo acima dela.
+    #
+    # Cortar nao perde agua: a area de drenagem do trecho aparado continua
+    # entrando como vazao lateral, distribuida nas secoes que sobram. O que se
+    # descarta e a pretensao de representar como rio 1D um trecho que desce 10%
+    # -- ali o escoamento nao e gradualmente variado, e o modelo so tem a
+    # perder tentando.
+    # Nunca aparar ate engolir a confluencia mais de montante. Aparando por
+    # fracao apenas, a cabeceira do Itajai_Norte acima da foz do Iraputa
+    # desapareceu inteira, e a juncao ficou com UM trecho entrando e um saindo
+    # -- o HEC-RAS recusa a geometria antes de computar ("Junctions are for
+    # flow confluences and splits"), e a rodada morre sem sequer gerar o HDF.
+    rs_v = np.array([x["rs"] for x in xs], float)
+    zt_v = np.array([cota_talvegue(x) for x in xs], float)
+    jan = JANELA_CORTE
     corte = 0
-    while corte < len(xs) - 2:
-        dx = xs[corte]["rs"] - xs[corte + 1]["rs"]
-        dz = cota_talvegue(xs[corte]) - cota_talvegue(xs[corte + 1])
-        if dx > 0 and abs(dz) / dx > dmax:
-            corte += 1
-        else:
-            break
+    lim_corte = max(int(CORTE_MAX_FRACAO * len(xs)), 0)
+    if rs_limite is not None:
+        acima = int(np.searchsorted(-rs_v, -float(rs_limite)))
+        lim_corte = min(lim_corte, max(acima - SECOES_ACIMA_JUNCAO, 0))
+    for i in range(min(lim_corte, len(xs) - jan - 1)):
+        dx = rs_v[i] - rs_v[i + jan]
+        if dx > 0 and (zt_v[i] - zt_v[i + jan]) / dx > dmax:
+            corte = i + 1
     if corte:
         print(f"        {rotulo}: aparadas {corte} secoes de cabeceira "
               f"({(xs[0]['rs']-xs[corte]['rs'])/1000:.1f} km acima de "
@@ -135,7 +162,119 @@ def condicionar(xs, rotulo=""):
     if fundo:
         print(f"        {rotulo}: {fundo} secoes no piso de "
               f"{ESCAVACAO_MAXIMA:.0f} m de escavacao")
+    alisar_perfil(xs, dmax, rotulo=rotulo)
     return xs
+
+
+def alisar_perfil(xs, dmax, n_iter=400, rotulo=""):
+    """Distribui a queda ao longo do trecho, em vez de empilhar degraus.
+
+    Os dois limites de condicionamento sao rigidos: um laco impoe a
+    declividade MINIMA indo rio abaixo, outro a MAXIMA voltando. Entre os dois
+    nao sobra valor intermediario, e o perfil sai alternando exatamente os
+    extremos. No Itajai-Mirim, com secoes de 150 m:
+
+        RS 110274,7   dz = -2,40      (= dmax, 1,6%)
+        RS 110124,7   dz = -0,02      (= dmin, 0,01%)
+        RS 109974,7   dz = -0,02
+        RS 109824,7   dz = -2,02
+        RS 109674,7   dz = -2,41
+
+    Isso e uma escada de pocos e quedas: dezenas de degraus seguidos, cada um
+    um salto transcritico. O solver nao permanente nao converge nisso -- as
+    iteracoes batiam o teto de 40 em TODA linha desde o aquecimento, com as
+    vazoes ainda de base, e o aborto vinha justamente aqui
+    (Itajai_Mirim R1 RS 104738,3).
+
+    A queda total do trecho e dada pelo terreno e nao muda; o que muda e como
+    ela se reparte. Alisar e reimpor os limites, alternadamente, espalha a
+    mesma queda de forma continua e so encosta nos limites onde e inevitavel.
+
+    Os dois limites viram acumulacoes de minimo, com a distancia rio abaixo
+    como variavel: para a declividade minima, z + dmin*t tem de ser nao
+    crescente; para a maxima, z + dmax*t tem de ser nao decrescente.
+    """
+    if len(xs) < 5:
+        return
+    rs = np.array([x["rs"] for x in xs], float)
+    t = rs[0] - rs                     # distancia rio abaixo, crescente
+    z = np.array([cota_talvegue(x) for x in xs], float)
+    terreno = np.array([float(x["z"][x["i_thal"]]) for x in xs], float)
+    piso = terreno - ESCAVACAO_MAXIMA
+    z_foz = z[-1]                      # amarra o trecho a rede: nao se mexe
+
+    for _ in range(n_iter):
+        m = z.copy()
+        m[1:-1] = 0.25 * z[:-2] + 0.5 * z[1:-1] + 0.25 * z[2:]
+        z = np.clip(m, piso, terreno)
+        z[-1] = z_foz
+        v = np.minimum.accumulate(z + DECL_MINIMA * t)      # declividade minima
+        z = v - DECL_MINIMA * t
+        u = np.minimum.accumulate((z + dmax * t)[::-1])[::-1]   # maxima
+        z = u - dmax * t
+        z = np.maximum(z, piso)
+        z[-1] = z_foz
+    # ------ e agora no dominio da DECLIVIDADE, nao da cota.
+    # Limitar a declividade entre um minimo e um maximo nao impede o JOELHO: o
+    # perfil pode respeitar os dois limites e mesmo assim passar de 0,07% para
+    # 0,70% num vao de 150 m. Foi o que sobrou no Itajai-Acu na garganta do
+    # Salto Pilao -- remanso quase plano ate RS 92.115, depois 0,70% em uma
+    # secao, plano de novo, e 0,86% sustentado de RS 86.352 a 84.852. Fator de
+    # doze, com as transicoes numa secao so.
+    #
+    # Hidraulicamente isso e o escoamento saindo de remanso profundo e lento
+    # para quase-critico e voltando, dezenas de vezes seguidas, que e onde um
+    # solver 1D nao permanente nao converge. O log do HEC-RAS reclama
+    # exatamente ai (Itajai_Acu R3 82.796 a 86.883 e R2 91.117 a 105.042).
+    #
+    # A queda total do trecho nao muda: suaviza-se a declividade com media
+    # movel ponderada pelo vao e reintegra-se a partir da FOZ, que e a cota
+    # amarrada a rede. O desnivel se redistribui, a garganta continua sendo
+    # garganta, mas a transicao para ela passa a ocupar varias secoes.
+    dt = np.diff(t)
+    ok = dt > 0
+    if ok.sum() >= 5:
+        decl = np.zeros_like(dt)
+        decl[ok] = (z[:-1] - z[1:])[ok] / dt[ok]
+        jan = 7
+        k = np.ones(jan) / jan
+        peso = np.convolve(np.pad(dt, jan // 2, mode="edge"), k, "valid")
+        suave = np.convolve(np.pad(decl * dt, jan // 2, mode="edge"), k, "valid")
+        decl = np.divide(suave, peso, out=decl.copy(), where=peso > 0)
+        decl = np.clip(decl, DECL_MINIMA, dmax)
+        zn = np.empty_like(z)
+        zn[-1] = z_foz
+        for i in range(len(z) - 2, -1, -1):
+            zn[i] = zn[i + 1] + decl[i] * dt[i]
+        z = np.minimum(zn, terreno)          # nunca acima do terreno
+        z = np.maximum(z, piso)
+        z[-1] = z_foz
+        z = np.maximum(z, piso)
+        z[-1] = z_foz
+
+    # MONOTONIA POR ULTIMO, e sem reaplicar o piso depois dela.
+    # O piso de escavacao (12 m abaixo do terreno) e uma restricao boa, mas ela
+    # LEVANTA o leito onde o DEM tem um alto local -- e o Copernicus e modelo
+    # de SUPERFICIE, entao ponte, mata densa e soleira aparecem como alto. Ao
+    # ser aplicado depois da monotonia, o piso desfazia o que ela garantira:
+    # no Itajai_Sul R1 RS 41.340 o leito ficou em 375,09 m entre vizinhas em
+    # 366,18 e 365,36 -- um corcovo de 9 m em 300 m, isto e, uma barragem
+    # dentro do modelo, com o solver tendo de empurrar agua ladeira acima. Era
+    # a maior fonte de erro do run (4,83 m em RS 41.190).
+    #
+    # Entre respeitar o piso e nao ter contrapendente, nao ter contrapendente
+    # ganha: escavar 15 m num ponto e uma aproximacao; um degrau ao contrario
+    # e um erro de fisica.
+    v = np.minimum.accumulate(z + DECL_MINIMA * t)
+    z = v - DECL_MINIMA * t
+    z[-1] = z_foz
+    fundo_extra = int(np.sum(z < piso - 0.01))
+    if fundo_extra:
+        print(f"        {rotulo}: {fundo_extra} secoes abaixo do piso de "
+              f"escavacao, para nao criar contrapendente")
+
+    for x, zi in zip(xs, z):
+        x["z_alvo"] = float(zi)
 
 
 def ancorar(xs, cota_alvo, degrau=0.5):

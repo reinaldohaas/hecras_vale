@@ -1,9 +1,0 @@
-Plan Title=Plano_Simulacao
-Program Version=6.10
-Short Identifier=01
-Simulation Date=01AUG2026,0000,03AUG2026,0100
-Geom File=g01
-Flow File=u01
-Unsteady File=u01
-
-Write Detailed= 1

@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<RASMapper>
-  <Version>2.00</Version>
-  <RASProjectionFilename Filename="Itajai_Oficial.projection" />
-  <RASData>
-    <Layer Name="Terrain" Filename="dem_itajai.tif" />
-  </RASData>
-</RASMapper>
