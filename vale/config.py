@@ -162,6 +162,16 @@ class Opcoes:
     samuels_k: float = 0.15
     samuels_D: float = 1.5         # m; profundidade de calha cheia tipica
     samuels_leopold: bool = True   # D = kh*A^eh por posicao, e nao fixo
+
+    # AMOSTRAR o terreno e RESOLVER o escoamento sao coisas diferentes. O corte
+    # do terreno usa `espacamento`/`espacamento_min` (geometria: de quanto em
+    # quanto o vale muda); a densidade que o solver exige e obtida DEPOIS,
+    # interpolando entre secoes reais com o interpolador da propria biblioteca
+    # (GeomCrossSection.interpolate_station_elevation). Cortar do terreno na
+    # densidade numerica dava 1.553 secoes no Mirim -- e a declividade que
+    # pedia isso vinha do dossel do Copernicus, nao do rio.
+    interpolar: bool = True
+    interp_max: int = 40           # teto de intermediarias por par
     espacamento_piso: float = 25.0  # m; abaixo disto o modelo 1D nao vale
     n_pontos: int = 280            # limite do HEC-RAS e 450
     # Espacamento ALVO entre pontos da secao. Numero fixo de pontos numa

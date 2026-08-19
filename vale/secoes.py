@@ -431,7 +431,111 @@ def cortar_rio(eixo, amostrador, op, log=print, prog=None):
                 f"{np.median(dep):.0f} m)")
     for d in xs:
         d.pop("_i", None)
-    log(f"   {eixo['ras']:<16} {len(xs):>4} secoes   "
-        f"largura {min(d['sta'][-1] for d in xs):.0f} a "
-        f"{max(d['sta'][-1] for d in xs):.0f} m")
+    n_cort = len(xs)
+    xs = densificar(xs, op, eixo.get("area"), log)
+    log(f"   {eixo['ras']:<16} {n_cort:>4} secoes cortadas do terreno"
+        + (f" + {len(xs)-n_cort} interpoladas = {len(xs)}"
+           if len(xs) > n_cort else "")
+        + f"   largura {min(d['sta'][-1] for d in xs):.0f} a "
+          f"{max(d['sta'][-1] for d in xs):.0f} m")
     return xs
+
+
+def densificar(xs, op, area_foz=None, log=print):
+    """Insere secoes INTERPOLADAS onde o criterio numerico pede mais.
+
+    Duas coisas diferentes estavam sendo confundidas numa so:
+
+      GEOMETRIA -- de quantos em quantos metros o terreno precisa ser AMOSTRADO
+      para que o vale esteja representado. Num rio de planicie isso e cada
+      poucas centenas de metros; amostrar de 50 em 50 nao acrescenta terreno
+      nenhum, so repete o mesmo vale.
+
+      RESOLUCAO NUMERICA -- de quantos em quantos metros o solver precisa de um
+      no para resolver Saint-Venant (Samuels). Isso pode ser dezenas de metros.
+
+    Cortar do terreno na densidade NUMERICA e o que produzia 1.553 secoes no
+    Mirim, e a declividade que exigia isso vinha do Copernicus: modelo de
+    SUPERFICIE, com o dossel dentro. Medido no proprio Mirim -- o terreno
+    "sobe" rio abaixo em 34% dos trechos, e o p90 da declividade lida e 3,6
+    vezes a declividade media real do rio. O criterio respondia ao dossel.
+
+    O jeito do HEC-RAS e o outro: poucas secoes reais e as intermediarias
+    INTERPOLADAS. Quem interpola aqui e a biblioteca --
+    `GeomCrossSection.interpolate_station_elevation`, com posicao lateral
+    normalizada, estacas de margem interpoladas e o limite de 500 pontos.
+    Nao ha geometria inventada por nos: a intermediaria e combinacao das duas
+    vizinhas medidas.
+    """
+    if not getattr(op, "interpolar", True) or len(xs) < 2:
+        return xs
+    try:
+        import pandas as pd
+
+        from ras_commander.geom import GeomCrossSection as G
+    except ImportError:
+        log("      ras-commander indisponivel; sem interpolacao de secoes")
+        return xs
+
+    kh, eh = op.canal_kh, op.canal_eh
+    piso = float(getattr(op, "espacamento_piso", 25.0))
+    saida, n_novas = [], 0
+    for a, b in zip(xs, xs[1:]):                 # xs vem de montante p/ jusante
+        saida.append(a)
+        dxr = float(a["rs"]) - float(b["rs"])
+        if dxr <= 0:
+            continue
+        dz = abs(float(a.get("z_terreno", 0.0)) - float(b.get("z_terreno", 0.0)))
+        S = max(dz / dxr, 1e-6)
+        A = 0.5 * (float(a.get("area_km2", 1.0)) + float(b.get("area_km2", 1.0)))
+        D = kh * max(A, 1.0) ** eh if getattr(op, "samuels_leopold", True) \
+            else float(op.samuels_D)
+        lim = max(op.samuels_k * D / S, piso)
+        n = int(np.ceil(dxr / lim)) - 1
+        if n <= 0:
+            continue
+        n = min(n, int(getattr(op, "interp_max", 40)))
+        up = pd.DataFrame({"Station": a["sta"], "Elevation": a["z"]})
+        dn = pd.DataFrame({"Station": b["sta"], "Elevation": b["z"]})
+        for k in range(1, n + 1):
+            t = k / (n + 1.0)
+            # AS MARGENS AINDA NAO EXISTEM AQUI. lb/rb sao definidas ao escavar
+            # a calha, um passo depois; pedi-las incondicionalmente levantava
+            # KeyError, e o `except` mudo abaixo devolvia zero secoes
+            # interpoladas como se nada fosse preciso. Falha silenciosa que
+            # imita sucesso e o defeito mais caro deste projeto.
+            bl = br = None
+            if "lb" in a and "lb" in b:
+                bl = (1 - t) * float(a["lb"]) + t * float(b["lb"])
+                br = (1 - t) * float(a["rb"]) + t * float(b["rb"])
+            try:
+                df = G.interpolate_station_elevation(
+                    up, dn, ratio=t, bank_left=bl, bank_right=br,
+                    max_points=int(op.n_pontos))
+            except Exception as e:                           # noqa: BLE001
+                log(f"      interpolacao falhou entre RS {a['rs']:.0f} e "
+                    f"{b['rs']:.0f}: {type(e).__name__} {e}")
+                break
+            r = dict(a)
+            r["sta"] = np.asarray(df["Station"], float)
+            r["z"] = np.asarray(df["Elevation"], float)
+            r["i_thal"] = int(np.argmin(r["z"]))
+            r["rs"] = round(float(a["rs"]) - t * dxr, 2)
+            r["interpolada"] = True
+            for c in ("lb", "rb", "area_km2", "z_terreno", "S_terreno",
+                      "n", "n_planicie", "s"):
+                if c in a and c in b:
+                    try:
+                        r[c] = (1 - t) * float(a[c]) + t * float(b[c])
+                    except (TypeError, ValueError):
+                        pass
+            # a cutline tambem anda: sem isso a secao interpolada fica em cima
+            # da de montante no mapa, e o RAS acusa cutlines cruzadas
+            if "cut" in a and "cut" in b:
+                r["cut"] = tuple((1 - t) * np.asarray(a["cut"], float)
+                                 + t * np.asarray(b["cut"], float))
+            saida.append(r)
+            n_novas += 1
+    saida.append(xs[-1])
+    saida.sort(key=lambda d: -d["rs"])
+    return saida
