@@ -131,7 +131,13 @@ def checar(op, prj, log=print):
                 lambda: GeomMesh.compile_geometry(
                     "01", ras_object=init_ras_project(prj, op.ras_exe)), log)
 
-    r = _tentar("RasCheck.run_all", lambda: RasCheck.run_all(prj), log)
+    # o PLANO, e nao o projeto: passar o .prj faz o HdfXsec tentar abrir
+    # o .prj como HDF e concluir que nao ha secao nenhuma. Ver
+    # vale/checagem.py, que e onde esta a checagem de verdade.
+    from ras_commander import init_ras_project
+    _ras = init_ras_project(prj, op.ras_exe)
+    r = _tentar("RasCheck.run_all",
+                lambda: RasCheck.run_all("01", ras_object=_ras), log)
     if r is None:
         log("      AVISO: RasCheck nao rodou -- a geometria segue SEM conferir")
         return None
