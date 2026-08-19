@@ -225,15 +225,59 @@ def alisar(xs, dmax, op, rotulo="", log=print, n_iter=400):
     # patamares e, ao faze-lo, pode reabrir um degrau acima do teto. Medido
     # antes de alternar: Benedito com 11,43% contra teto de 5,00%, Taio com
     # 9,90% contra 3,74%. Sao conjuntos convexos, entao alternar converge.
+    # O TETO DO TERRENO ENTRA AQUI, e faltava. As duas projecoes acima fazem o
+    # que se pediu -- o perfil nao-crescente mais proximo do talvegue, dentro
+    # dos limites de declividade -- e nada nelas proibe SUBIR ACIMA DO
+    # TERRENO. Onde o talvegue medido oscila, e sobre modelo de superficie ele
+    # oscila sempre, a solucao mais proxima e uma reta por cima das
+    # depressoes: leito do modelo acima do chao, que e um dique inventado.
+    #
+    # Medido no Itajai do Norte da rodada dos 12 rios: 16% das secoes com o
+    # leito acima do terreno, o pior com 6,30 m, e 53% do rio abaixo de 2e-4
+    # de declividade. A simulacao morria aos NOVE MINUTOS em RS 130525,4 --
+    # onde o terreno desce 1,1 m numa depressao e o modelo passa reto por
+    # cima, aterrando 0,79 m.
+    #
+    # `minimo(z, terreno)` e projecao sobre um convexo, como as outras duas,
+    # entao alternar as tres continua convergindo.
     for _ in range(30):
         z = isotonica(z + dmin * t) - dmin * t
         z = -isotonica(-(z + dmax * t)) - dmax * t
+        z = np.minimum(z, terreno)
         dt_ = t[1:] - t[:-1]
         s_ = np.where(dt_ > 0, (z[:-1] - z[1:]) / np.maximum(dt_, 1e-9), 0.0)
         if s_.size == 0 or (s_.max() <= dmax * 1.001
-                            and s_.min() >= dmin * 0.999):
+                            and s_.min() >= dmin * 0.999
+                            and (z - terreno).max() <= 0.01):
             break
-    z = isotonica(z + dmin * t) - dmin * t      # monotonia garantida no fim
+    # ORDEM, E ELA ME CUSTOU UMA RODADA. A primeira versao disto era
+    #     z = isotonica(...)      # monotonia
+    #     z = np.minimum(z, terreno)
+    # e rebaixar pontos isolados DEPOIS da monotonia a desfaz: um ponto que
+    # desce abaixo do vizinho de jusante cria contrapendente, que e uma
+    # barragem dentro do modelo. O Itajai-Acu abortou em RS 96628,74 aos 50
+    # SEGUNDOS com 193% de erro de volume -- muito pior que o problema que eu
+    # estava consertando.
+    #
+    # O acumulado resolve as duas de uma vez: ele so BAIXA, entao nao pode
+    # subir acima do terreno, e o minimo corrente e nao-crescente por
+    # construcao. Nao e a solucao mais proxima -- e a viavel --, e por isso vem
+    # depois do laco alternado, quando o que falta corrigir ja e pequeno.
+    z = np.minimum(z, terreno)
+    z = np.minimum.accumulate(z)
+    baixou = float(np.max(np.array([cota(d) for d in xs]) - z))
+
+    # QUANDO AS TRES NAO CABEM JUNTAS, dizer. Terreno que sobe rio abaixo mais
+    # do que o teto de declividade permite nao admite perfil algum que respeite
+    # tudo. Achatar em silencio foi o que produziu o dique; o certo e entregar
+    # o melhor perfil possivel e ACUSAR onde ele nao serve.
+    aterro = terreno - z
+    n_aterro = int(np.sum(aterro < -0.01))
+    if n_aterro:
+        i = int(np.argmin(aterro))
+        log(f"      {rotulo}: {n_aterro} secoes com o leito ACIMA do terreno "
+            f"(pior {-aterro[i]:.2f} m em RS {rs[i]:.0f}) -- o terreno sobe "
+            f"mais que o teto de declividade permite")
     fundo = int(np.sum(z < piso - 0.01))
     if fundo:
         log(f"      {rotulo}: {fundo} secoes abaixo do piso de "
