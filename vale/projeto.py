@@ -182,7 +182,16 @@ def htab(d, usar=True):
     r = GeomHtabUtils.calculate_optimal_xs_htab(
         invert=float(z.min()), max_wse=float(z.max()))
     d["htab"] = r
-    return [f"XS HTab Starting El and Incr={r['starting_el']:.2f},"
+    # PISO CONTRA O FUNDO COMO ELE E GRAVADO. O otimizador devolve fundo+0,01,
+    # e 1 cm e da ordem do arredondamento das duas casas com que a estaca e
+    # escrita: qualquer diferenca entre o fundo que ele recebeu e o fundo que o
+    # HEC-RAS le no arquivo cabe dentro dessa folga. O sintoma e a advertencia
+    # de carregamento "XS Htab Starting Elevations ... below the XS invert",
+    # que apareceu em 2 secoes de 819 no Benedito -- o RAS repoe o padrao e
+    # segue, mas a tabela daquelas secoes deixa de ser a otimizada.
+    piso = round(float(z.min()), 2) + 0.02
+    inicial = max(float(r["starting_el"]), piso)
+    return [f"XS HTab Starting El and Incr={inicial:.2f},"
             f"{r['increment']:.3f}, {int(r['num_points'])} ",
             "XS HTab Horizontal Distribution=-1,-1,-1"]
 

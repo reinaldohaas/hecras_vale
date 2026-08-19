@@ -54,8 +54,36 @@ def _logs_para_stdout():
                 h.setStream(sys.stdout)
 
 
+def _caminho_estado(op):
+    """Um estado POR PROJETO.
+
+    Era um arquivo so, `modelo/estado.pkl`, e `salvar()` fazia update nele
+    qualquer que fosse o projeto. O resultado e um estado quimera: a geometria
+    dos 12 rios de uma rodada convivendo com o `run_pasta` de outra, do
+    Benedito isolado. Quem le depois -- figura, mancha, auditoria -- casa
+    resultado de uma rodada com geometria de outra e nao ha nada que acuse.
+    E a mesma familia de erro que ja custou uma sessao aqui: resultado velho
+    lido como novo.
+
+    O legado so e aceito quando o projeto bate, e o aviso sai no log.
+    """
+    novo = op.caminho(f"estado_{op.projeto}.pkl")
+    if os.path.exists(novo):
+        return novo
+    velho = op.caminho(ESTADO)
+    if os.path.exists(velho):
+        try:
+            with open(velho, "rb") as f:
+                d = pickle.load(f)
+            if d.get("projeto") == op.projeto:
+                return velho
+        except Exception:                                    # noqa: BLE001
+            pass
+    return novo
+
+
 def carregar(op, chave, obrigatorio=True):
-    caminho = op.caminho(ESTADO)
+    caminho = _caminho_estado(op)
     if not os.path.exists(caminho):
         if obrigatorio:
             raise SystemExit(
@@ -72,13 +100,18 @@ def carregar(op, chave, obrigatorio=True):
 
 
 def salvar(op, **kw):
-    caminho = op.caminho(ESTADO)
+    caminho = _caminho_estado(op)
     os.makedirs(op.saida, exist_ok=True)
     d = {}
     if os.path.exists(caminho):
         with open(caminho, "rb") as f:
             d = pickle.load(f)
+        # nunca herdar estado de OUTRO projeto: o arquivo legado e unico e
+        # acumulava as rodadas todas umas por cima das outras
+        if d.get("projeto") not in (None, op.projeto):
+            d = {}
     d.update(kw)
+    d["projeto"] = op.projeto
     d["_quando"] = time.strftime("%Y-%m-%d %H:%M:%S")
     with open(caminho, "wb") as f:
         pickle.dump(d, f)
@@ -412,7 +445,7 @@ def listar(op):
 
 
 def _estado(op):
-    cam = op.caminho(ESTADO)
+    cam = _caminho_estado(op)
     if not os.path.exists(cam):
         return {}
     with open(cam, "rb") as f:
