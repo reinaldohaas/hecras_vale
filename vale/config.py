@@ -291,7 +291,15 @@ class Opcoes:
     # sao o comportamento de referencia, e desligar e que precisa de motivo.
     usar_build_xs: bool = True     # GeomCrossSection.build_cross_section
     usar_htab: bool = True         # GeomHtabUtils.calculate_optimal_xs_htab
-    usar_fixit: bool = True        # RasFixit.fix_*
+    # DESLIGADO desde 18/08/2026, e o motivo e escala. O que sobrou aqui e o
+    # fix_htab_starting_elevations, e ele nao escala: com 2.077 secoes levava
+    # segundos; com 11.251 passou de 44 min, e com 11.684 travou a rodada de
+    # novo -- Python de thread unica, um nucleo de 20, sem uma linha de log no
+    # meio. Cresce MUITO acima do proporcional. E o passo 7 ja calcula a tabela
+    # hidraulica otima de cada secao pelo GeomHtabUtils, entao esta passagem
+    # corrige o que ja estava certo. Religue com usar_fixit=true se editar a
+    # geometria por fora do passo 7.
+    usar_fixit: bool = False       # RasFixit.fix_htab_starting_elevations
     # fix_bank_stations SEPARADO e DESLIGADO. Medido em 18/08/2026: 17,5 min e
     # 26,1 GB de .bak para nao mudar NENHUMA das 2.077 secoes -- toda linha do
     # log dizia "original: 280, interpolated: 0". Nao podia mudar: quem escreve
@@ -302,7 +310,12 @@ class Opcoes:
     # fora do builder, que e quando a invariante deixa de ser garantida.
     corrigir_margens: bool = False  # RasFixit.fix_bank_stations
     usar_check: bool = True        # RasCheck.run_all
-    usar_ineffective: bool = True  # RasFixit.fix_ineffective_flow
+    # DESLIGADO, e tem flag PROPRIA: usar_fixit=false NAO o desliga, o que ja
+    # custou uma rodada. Medido no Benedito: a geometria saiu com ZERO areas
+    # inefetivas depois de rodar -- gastou o tempo para nao mudar nada. Area
+    # inefetiva e remedio para secao larga que atravessa meandro; criar uma so
+    # porque o solver nao converge mascara a causa em vez de trata-la.
+    usar_ineffective: bool = False  # RasFixit.fix_ineffective_flow
 
     # --------------------------------------------------------- execucao
     ras_exe: str = RAS_EXE
