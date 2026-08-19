@@ -119,7 +119,13 @@ def detectar(sta, z, sta_eixo=None, proeminencia_min=PROEMINENCIA_MIN,
                     profundidade_relativa=profundidade_relativa(z, i_min_abs))
 
     i_principal = cand[0]["i"]
-    prom_max = cand[0]["proeminencia"]
+    # PROEMINENCIA ZERO E POSSIVEL, e derrubava a rodada inteira. Uma secao
+    # perfeitamente plana passa pelo filtro de candidatos com proeminencia 0,0
+    # (o limiar e ">=", nao ">"), e a divisao abaixo estourava com
+    # ZeroDivisionError no meio do passo 8 -- depois de 519 secoes auditadas,
+    # levando junto tudo que vinha depois. Sem proeminencia para comparar, o
+    # termo dela nao informa nada e o desempate fica com o eixo e a borda.
+    prom_max = float(cand[0]["proeminencia"]) or 1.0
 
     # pontuacao: proeminencia relativa + proximidade ao eixo - penalidade de
     # borda. Sem o eixo, a proeminencia decide praticamente sozinha.
