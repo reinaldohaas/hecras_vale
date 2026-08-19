@@ -27,7 +27,13 @@ GERADOS = (".p01.hdf", ".u01.hdf", ".g01.hdf", ".O01", ".O02", ".r01",
 
 
 def isolar(prj, destino=None):
-    prj = pathlib.Path(prj)
+    # ABSOLUTO, e nao como veio. O .bat passa "modelo\projeto.prj", relativo, e
+    # o symlink do terreno herdava esse caminho: o link em
+    # %TEMP%\vale_runs\<proj>\Terrain apontava para "modelo\Terrain", que
+    # resolve DENTRO da pasta temporaria e nao existe. O link existia, tinha 14
+    # bytes e nao levava a lugar nenhum -- e o RAS Mapper abria sem terreno,
+    # sem mancha de inundacao e sem dizer por que.
+    prj = pathlib.Path(prj).resolve()
     raiz, nome = prj.parent, prj.stem
     destino = pathlib.Path(destino or (pathlib.Path(
         os.environ.get("TEMP", ".")) / "vale_runs" / nome))
@@ -42,10 +48,27 @@ def isolar(prj, destino=None):
     if terreno.is_dir():
         # o terreno pode ter varios GB: liga-se por junction em vez de copiar
         alvo = destino / "Terrain"
+        # CONFERIR que o link RESOLVE, e nao so que a chamada nao levantou. No
+        # Windows sem modo desenvolvedor o symlink pode ser criado e nao levar
+        # a lugar nenhum -- e ai o RAS Mapper abre sem terreno, sem mancha de
+        # inundacao e sem dizer por que. Nao levantar excecao nao e prova de
+        # que funcionou.
+        ok = False
         try:
             os.symlink(terreno, alvo, target_is_directory=True)
+            ok = any(alvo.glob("*.hdf"))
         except (OSError, NotImplementedError):
-            shutil.copytree(terreno, alvo)
+            ok = False
+        if not ok:
+            if alvo.exists() or alvo.is_symlink():
+                try:
+                    alvo.unlink()
+                except OSError:
+                    shutil.rmtree(alvo, ignore_errors=True)
+            # so o terreno DESTE projeto: a pasta guarda o de todas as rodadas
+            alvo.mkdir(parents=True, exist_ok=True)
+            for f in terreno.glob(f"{prj.stem}*"):
+                shutil.copy2(f, alvo / f.name)
     return destino / prj.name
 
 
