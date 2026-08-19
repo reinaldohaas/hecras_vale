@@ -385,8 +385,36 @@ def ancorar(xs, cota_foz, log=print, rotulo="", op=None):
         w = np.ones(len(z))
         w[-1] = 1e6                       # a foz nao se move: e o no da rede
         z = isotonica(z + op.decl_minima * t, w) - op.decl_minima * t
+
+        # O TETO DO TERRENO TAMBEM AQUI. O alisar() ja garante que o leito nao
+        # sobe acima do chao, e esta funcao desfaz isso: quando o receptor esta
+        # MAIS ALTO que a foz do afluente, delta e positivo e o afunilamento
+        # LEVANTA o perfil inteiro, sem nada que o segure. Medido na geometria
+        # do vale_v2: aterro em 71% do Iraputa e 21% do Oeste, e ZERO no
+        # Itajai-Acu -- que e o unico sem receptor, e portanto o unico que nao
+        # passa por aqui. A assinatura nao deixa duvida sobre onde nasce.
+        #
+        # A foz continua presa: ela e o no da rede e nao pode se mover, mesmo
+        # que fique acima do terreno. Por isso o teto vale do penultimo ponto
+        # para tras.
+        #
+        # O ACUMULADO CORRE DA NASCENTE PARA A FOZ. Escrevi ao contrario na
+        # primeira versao -- minimum.accumulate no vetor invertido -- e isso
+        # rebaixa CADA ponto ate a menor cota que existe rio abaixo dele, ou
+        # seja, praticamente ate a foz: a escavacao mediana do Itajai do Norte
+        # saltou para 274 m. Um canion. O perfil e nao-crescente rio abaixo, o
+        # que significa minimo corrente na ordem natural (xs vem da cabeceira
+        # para a foz), e nao na invertida.
+        terreno = np.array([float(d.get("z_terreno", cota(d))) for d in xs],
+                           float)
+        z[:-1] = np.minimum.accumulate(np.minimum(z[:-1], terreno[:-1]))
+        z[:-1] = np.maximum(z[:-1], z[-1])       # nada abaixo da foz presa
         for d, zi in zip(xs, z):
             d["z_alvo"] = float(zi)
+        acima = int(np.sum(z > terreno + 0.01))
+        if acima:
+            log(f"      {rotulo}: {acima} secao(oes) ainda acima do terreno "
+                f"apos ancorar -- a foz presa em {cota_foz:.2f} m obriga")
     log(f"      {rotulo}: foz ancorada em {cota_foz:.2f} m "
         f"(deslocamento {delta:+.2f} m, afunilado ate a cabeceira)")
     return xs
