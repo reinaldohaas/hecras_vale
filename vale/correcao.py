@@ -220,6 +220,7 @@ def conferir_g01(g01, log=print):
                 if f"{float(val):.2f}" not in conj:
                     achados.append((rio, rs, f"Bank Sta {lado} ({val}) nao "
                                              f"coincide com nenhuma estaca"))
+    achados += _conferir_contra_a_biblioteca(g01, log)
     if achados:
         log(f"      conferencia do .g01: {len(achados)} problema(s)")
         for r_, rs_, motivo in achados[:12]:
@@ -228,6 +229,104 @@ def conferir_g01(g01, log=print):
         log("      conferencia do .g01: nenhuma estaca repetida, fora de "
             "ordem ou margem solta")
     return achados
+
+
+def _conferir_contra_a_biblioteca(g01, log=print, n=25, semente=20260818):
+    """A BIBLIOTECA COMO ORACULO: confere a nossa leitura numa amostra.
+
+    O contrato do ras-commander (`ras_commander/geom/AGENTS.md`) diz, com
+    todas as letras: "use existing parser and formatter helpers rather than
+    hand-rolling string slicing". A varredura acima e exatamente isso -- corta
+    o arquivo em campos de 8 caracteres a mao --, e a primeira versao dela
+    acusou 22.502 margens soltas num arquivo onde nao havia nenhuma, por
+    comparar "  277.15" com espacos contra valores sem espaco.
+
+    Mas o helper e POR SECAO e reanalisa os 18,5 MB a cada chamada: medido em
+    0,103 s, o que da 19 minutos para as 11.251 secoes -- a mesma patologia
+    que fez o passo 8 queimar 44 minutos em Python de thread unica.
+    `get_cross_sections`, que le o arquivo inteiro numa passada, leva 0,5 s.
+
+    Entao: varredura nossa para percorrer tudo, e o helper conferindo uma
+    AMOSTRA. Custa ~2,6 s e transforma "confio no meu fatiador" em "meu
+    fatiador concorda com o parser da biblioteca nestas 25 secoes". Divergiu,
+    e problema meu, e sai dito assim -- porque a referencia e ela.
+    """
+    try:
+        import random
+
+        import numpy as np
+
+        from ras_commander.geom import GeomCrossSection as G
+    except ImportError:
+        return []
+    try:
+        meta = G.get_cross_sections(g01)
+    except Exception as e:                                   # noqa: BLE001
+        log(f"      (oraculo indisponivel: {e})")
+        return []
+    if not len(meta):
+        return []
+    linhas = meta.sample(min(n, len(meta)),
+                         random_state=semente).itertuples()
+    txt = open(g01, encoding="latin-1", errors="replace").read()
+    fora = []
+    for r in linhas:
+        rio, reach, rs = str(r.River).strip(), str(r.Reach).strip(), str(r.RS).strip()
+        try:
+            df = G.get_station_elevation(g01, rio, reach, rs)
+        except Exception:                                    # noqa: BLE001
+            continue
+        if df is None or not len(df):
+            continue
+        nosso = _estacas_da_secao(txt, rio, rs)
+        if nosso is None:
+            fora.append((rio, rs, "a varredura nao achou a secao que a "
+                                  "biblioteca acha"))
+            continue
+        deles = [f"{v:.2f}" for v in df.iloc[:, 0].astype(float)]
+        if len(nosso) != len(deles):
+            fora.append((rio, rs, f"a varredura leu {len(nosso)} pontos e a "
+                                  f"biblioteca {len(deles)}"))
+        elif any(a != b for a, b in zip(nosso, deles)):
+            k = next(i for i, (a, b) in enumerate(zip(nosso, deles)) if a != b)
+            fora.append((rio, rs, f"estaca {k+1} difere da biblioteca: "
+                                  f"{nosso[k]} contra {deles[k]}"))
+    if fora:
+        log(f"      ORACULO: a varredura DIVERGE da biblioteca em "
+            f"{len(fora)} de {min(n, len(meta))} secoes -- o defeito e nosso")
+    else:
+        log(f"      oraculo: varredura confere com a biblioteca em "
+            f"{min(n, len(meta))} secoes")
+    return fora
+
+
+def _estacas_da_secao(txt, rio, rs):
+    """As estacas de UMA secao, pela mesma varredura usada em conferir_g01.
+
+    O RIO TAMBEM, e nao so a RS. Sem isso a busca devolvia a primeira secao do
+    ARQUIVO com aquela river station, e RS repete entre rios -- varios tem
+    secao na RS 75. O oraculo pegou isto na primeira vez que rodou, acusando
+    Itajai_Norte RS 75.00 com 280 pontos contra 59 da biblioteca: eram duas
+    secoes de rios diferentes sendo comparadas uma com a outra.
+    """
+    import re
+    atual = None
+    for bloco in re.split(r"(?=River Reach=|Type RM Length)", txt):
+        if bloco.startswith("River Reach="):
+            atual = bloco.split("\n", 1)[0][len("River Reach="):].split(",")[0].strip()
+            continue
+        if not bloco.startswith("Type RM Length") or atual != str(rio).strip():
+            continue
+        m = re.match(r"Type RM Length L Ch R = 1\s*,\s*([\d.]+)", bloco)
+        if not m or abs(float(m.group(1)) - float(rs)) > 0.005:
+            continue
+        q = re.search(r"#Sta/Elev=\s*(\d+)\s*\n(.*?)(?=\n[#A-Z])", bloco, re.S)
+        if not q:
+            return None
+        n = int(q.group(1))
+        cru = q.group(2).replace("\n", "")
+        return [cru[k:k + 8].strip() for k in range(0, 2 * n * 8, 16)]
+    return None
 
 
 def auditar_terreno(op, g01, geotiffs, log=print):
