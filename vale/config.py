@@ -161,6 +161,7 @@ class Opcoes:
     samuels: bool = True
     samuels_k: float = 0.15
     samuels_D: float = 1.5         # m; profundidade de calha cheia tipica
+    samuels_leopold: bool = True   # D = kh*A^eh por posicao, e nao fixo
     espacamento_piso: float = 25.0  # m; abaixo disto o modelo 1D nao vale
     n_pontos: int = 280            # limite do HEC-RAS e 450
     # Espacamento ALVO entre pontos da secao. Numero fixo de pontos numa

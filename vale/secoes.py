@@ -66,7 +66,7 @@ def direcao(linha, s, suaviza):
     return tx / n, ty / n
 
 
-def estacas(linha, amostrador, op):
+def estacas(linha, amostrador, op, area_foz=None):
     """Posicoes de corte, adensadas onde o leito e ingreme."""
     L = linha.length
     passo = min(op.espacamento / 4.0, 250.0)
@@ -87,7 +87,21 @@ def estacas(linha, amostrador, op):
     # 150 m tanto para 0,6% quanto para 5%, e o criterio pede 37 m e 4,5 m.
     # Era o mesmo espacamento para uma encosta oito vezes mais ingreme.
     if getattr(op, "samuels", False):
-        lim = op.samuels_k * op.samuels_D / np.maximum(S, 1e-6)
+        # D E A PROFUNDIDADE DE CALHA CHEIA, e ela nao e a mesma no Itajai-Acu
+        # e num ribeirao de cabeceira. Com D=1,5 m fixo o criterio ficava 5,3
+        # vezes severo demais no Acu (D real ~8 m) e o modelo saiu com uma
+        # secao a cada 100 m ou menos em rio de planicie -- 11.684 secoes nos
+        # 12 rios, contra ~5.000 com o D certo. D fixo tambem nao respondia a
+        # rio nenhum: o mesmo numero para 14.871 km2 e para 240 km2.
+        #
+        # Leopold, h = kh*A^eh, com a MESMA area de drenagem que o corte usa
+        # (rampa da cabeceira ate a foz). Sem area, cai no valor fixo.
+        D = np.full_like(S, float(op.samuels_D))
+        if area_foz and getattr(op, "samuels_leopold", True):
+            a_cab = max(float(area_foz) * op.fracao_cabeceira, 1.0)
+            a = a_cab + (float(area_foz) - a_cab) * (d / max(L, 1.0))
+            D = op.canal_kh * np.maximum(a, 1.0) ** op.canal_eh
+        lim = op.samuels_k * D / np.maximum(S, 1e-6)
         dx = np.maximum(np.minimum(dx, lim), op.espacamento_piso)
     # nao encosta nos extremos: secao em cima da juncao conflita com o
     # comprimento declarado em Junc L&A e trava o solver
@@ -318,7 +332,7 @@ def cortar_rio(eixo, amostrador, op, log=print, prog=None):
     """Todas as secoes de um rio, da cabeceira para a foz."""
     linha = eixo["linha"]
     L = linha.length
-    ss = estacas(linha, amostrador, op)
+    ss = estacas(linha, amostrador, op, eixo.get("area"))
 
     # declividade do terreno NAO condicionado, guardada por secao: e ela que
     # alimenta o Manning de Jarrett. Derivar n do perfil ja condicionado usa a
