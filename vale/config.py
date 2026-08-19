@@ -155,9 +155,12 @@ class Opcoes:
     # Samuels (1989), dx <= k*D/S. D e a profundidade caracteristica de calha
     # cheia; k=0,15 e o valor classico. O PISO existe porque o criterio nao
     # tem fundo: a 5% ele pede 4,5 m, o que daria mais de 10 mil secoes no
-    # Benedito. O piso e a linha onde se admite que 1D nao alcanca -- quem
-    # bate nele e candidato a 2D, e a checagem de resolucao diz quanto do rio
-    # ficou assim.
+    # Benedito. O piso e so um limite de custo.
+    #
+    # E NAO E CAUSA DE INSTABILIDADE, ao contrario do que este comentario
+    # afirmava. O Benedito tem 56% dos vaos abaixo do piso e, sozinho, completa
+    # as 192 h com 0,024% de erro -- com as MESMAS 819 secoes que ele tem
+    # dentro da rede, onde a simulacao cai. Mesmo espacamento, dois desfechos.
     samuels: bool = True
     samuels_k: float = 0.15
     samuels_D: float = 1.5         # m; profundidade de calha cheia tipica

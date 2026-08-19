@@ -188,8 +188,17 @@ def resolucao_insuficiente(estado, op):
     secoes com outro espacamento, que e o passo 6 inteiro de novo, e nao um
     remendo na geometria pronta. A checagem mede e nomeia; quem decide roda.
 
-    Quem bate no piso (`espacamento_piso`) esta pedindo mais do que 1D
-    entrega, e sai marcado: e o trecho candidato a 2D.
+    NAO CONFUNDA COM CAUSA DE INSTABILIDADE. Este check dizia que trecho
+    abaixo do piso "pede mais do que 1D entrega" e o marcava como candidato a
+    2D. Um contra-exemplo direto desmente: o Benedito tem 56% dos vaos abaixo
+    do piso de 25 m e, rodando SOZINHO, completa as 192 h com 0,024% de erro de
+    volume -- com exatamente as mesmas 819 secoes que ele tem dentro da rede,
+    onde a simulacao cai. Mesmo espacamento, dois desfechos: entao nao e o
+    espacamento que decide.
+
+    O que sobra e o que a medida realmente diz -- de quanto o espacamento
+    difere do que o criterio pede. Util para saber onde o modelo e mais grosso
+    do que a fisica pede; nao serve para explicar por que uma rodada morre.
     """
     if not getattr(op, "samuels", False):
         return []
@@ -222,7 +231,7 @@ def resolucao_insuficiente(estado, op):
             f"pior: dx {pior[2]:.0f} m contra {pior[3]:.0f} m exigidos "
             f"(S={100*pior[4]:.1f}%)"
             + (f"; {n_piso} trecho(s) pedem menos que o piso de "
-               f"{op.espacamento_piso:.0f} m -- CANDIDATO A 2D"
+               f"{op.espacamento_piso:.0f} m"
                if n_piso else "")))
     return achados
 
