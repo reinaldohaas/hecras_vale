@@ -118,9 +118,10 @@ def montar(eixos, xs_por_rio, log=print):
             "x": p_j.x, "y": p_j.y,
             "up": [(t["rio"], t["reach"]) for t in ups],
             "dn": (dn["rio"], dn["reach"]),
-            "dists": [max(float(np.hypot(t["linha"].coords[-1][0] - p_j.x,
-                                         t["linha"].coords[-1][1] - p_j.y)), 1.0)
-                      for t in ups]})
+            # mesma correcao da juncao de foz: a distancia geometrica do fim do
+            # eixo ate a juncao e ZERO, porque o eixo ja foi aparado ali. O que
+            # o HEC-RAS quer e da ultima SECAO ate a juncao, que e a RS dela.
+            "dists": [max(float(t["xs"][-1]["rs"]), 1.0) for t in ups]})
         for c in nasc:
             c["na_nascente"] = True
         log(f"      {ras} nasce da juncao de "
@@ -153,12 +154,27 @@ def montar(eixos, xs_por_rio, log=print):
             for t in ups:
                 # caminho ATRAVES da juncao: da ultima secao do trecho de
                 # montante ate a primeira do de jusante
-                s_ult = t["b"] - (t["b"] - t["a"]) * 0.0
+                # DO AFLUENTE, A RS DA ULTIMA SECAO -- e nao a distancia
+                # geometrica do fim do eixo ate a juncao. O eixo do afluente ja
+                # foi APARADO para terminar exatamente na confluencia
+                # (eixos.cortar_na_foz), entao essa distancia e zero e o
+                # max(...,1.0) a transformava em 1 METRO. Todas as dez juncoes
+                # gravavam "Junc L&A=1.00" para o afluente.
+                #
+                # Um trecho computacional de 1 m encostado em trechos de 25 a
+                # 150 m, com dt=5 s, da Courant da ordem de 10, e o solver
+                # implicito responde batendo o teto de iteracoes: o modelo
+                # integrado instabilizava aos 15 SEGUNDOS em Benedito R2,
+                # Norte R1/R2, Cedros e Acu R3 ao mesmo tempo, com erros de
+                # nivel de apenas 0,10 a 0,45 m. Rio isolado nao tem juncao e
+                # nunca exercitava este numero -- por isso todos completavam
+                # sozinhos e morriam juntos.
+                #
+                # A RS e medida da foz (rs = L - s), entao a RS da ultima secao
+                # E a distancia dela ate a confluencia.
                 dists.append(max(abs(t["xs"][-1]["rs"] - dn["xs"][0]["rs"]),
                                  1.0) if t is up_rec else
-                             max(float(np.hypot(
-                                 t["linha"].coords[-1][0] - p.x,
-                                 t["linha"].coords[-1][1] - p.y)), 1.0))
+                             max(float(t["xs"][-1]["rs"]), 1.0))
             juncoes.append({"nome": f"Foz_{c['de']}"[:16],
                             "x": p.x, "y": p.y,
                             "up": [(t["rio"], t["reach"]) for t in ups],
