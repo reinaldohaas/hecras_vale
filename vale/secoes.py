@@ -314,6 +314,14 @@ def cortar(linha, s, amostrador, area_km2, he, hd, op):
     # outro canal mais fundo (o leito antigo do Mirim, um meandro do proprio
     # rio) e a calha iria parar la, com as bank lines em estrela.
     janela = max(op.canal_kw * max(area_km2, 1.0) ** op.canal_ew, 150.0)
+    # E A JANELA NUNCA ALCANCA A BORDA. O piso de 150 m foi escrito pensando em
+    # secao larga, mas o recorte pela cota de cheia deixa secoes de 120 m de
+    # largura TOTAL -- e ai a janela cobre a secao inteira, a restricao ao eixo
+    # deixa de existir e vence o minimo global, que pode estar na ponta.
+    # Medido nos 12 rios: 3% das secoes com o talvegue na BORDA, e e onde a
+    # calha e cavada -- o canal ia parar fora do rio. No Trombudo RS 39925 o
+    # i_thal era 0, o primeiro ponto do corte.
+    janela = min(janela, 0.35 * float(sta[-1] - sta[0]))
     m = np.abs(sta - sta[i_eixo]) <= janela
     idx = np.flatnonzero(m)
     i0 = int(idx[np.argmin(z[idx])]) if len(idx) else i_eixo
@@ -519,7 +527,28 @@ def densificar(xs, op, area_foz=None, log=print):
             r = dict(a)
             r["sta"] = np.asarray(df["Station"], float)
             r["z"] = np.asarray(df["Elevation"], float)
-            r["i_thal"] = int(np.argmin(r["z"]))
+            # TALVEGUE NA JANELA DO EIXO, como o cortar() faz -- e nao o minimo
+            # global. Com argmin cru, um meandro do proprio rio cruzado pelo
+            # corte, ou uma clareira lida como depressao pelo MDS, rouba o
+            # talvegue: medido nos 12 rios, 3% das secoes ficaram com ele na
+            # BORDA e 41% fora do terco central. E o talvegue e onde a calha e
+            # cavada, entao o canal ia parar fora do rio.
+            #
+            # A posicao do eixo nao e guardada na secao, mas o talvegue das
+            # duas vizinhas ja esta dentro da janela dele (o cortar() garante),
+            # e a interpolacao aqui e por posicao lateral NORMALIZADA -- entao
+            # interpolar a posicao relativa das duas da uma referencia valida.
+            def _rel(x):
+                s = np.asarray(x["sta"], float)
+                larg = float(s[-1] - s[0]) or 1.0
+                return (float(s[int(x.get("i_thal", 0))]) - float(s[0])) / larg
+            s_ = r["sta"]
+            larg_ = float(s_[-1] - s_[0]) or 1.0
+            eixo_ = float(s_[0]) + ((1 - t) * _rel(a) + t * _rel(b)) * larg_
+            jan_ = max(op.canal_kw * max(A, 1.0) ** op.canal_ew, 150.0)
+            m_ = np.flatnonzero(np.abs(s_ - eixo_) <= jan_)
+            r["i_thal"] = int(m_[np.argmin(r["z"][m_])]) if len(m_) \
+                else int(np.argmin(np.abs(s_ - eixo_)))
             r["rs"] = round(float(a["rs"]) - t * dxr, 2)
             r["interpolada"] = True
             for c in ("lb", "rb", "area_km2", "z_terreno", "S_terreno",

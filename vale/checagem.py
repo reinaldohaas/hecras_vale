@@ -168,6 +168,83 @@ def relatorio(r, log=print, por_rio=False, limite=20):
     return n_err
 
 
+def geometria(op, log=print):
+    """O que o RasCheck NAO confere, e que ja parou este modelo.
+
+    Nao e desconfianca da ferramenta: e o limite declarado dela. Procurei em
+    todo o pacote `check/` por `adverse`, `reverse slope` e invert crescente --
+    nenhuma ocorrencia. E as checagens que existem (`_check_wse_slope`,
+    `_check_flow_regime_transitions`, `_check_energy_grade_line`) sao baseadas
+    em RESULTADO: sem simulacao elas nem rodam, e o que sobra em geometry_only
+    e so o `check_nt`, de Manning. Ou seja, a ferramenta pronta nao consegue
+    barrar o modelo ANTES de simular, que e exatamente o que se quer aqui.
+
+    Ela supoe uma geometria ja sa, vinda de um projetista. A nossa vem de um
+    DEM, e os defeitos sao outros:
+
+        leito subindo rio abaixo    barragem dentro do modelo
+        leito acima do terreno      dique inventado pelo condicionamento
+        talvegue na borda da secao  canal cavado fora do rio
+    """
+    import pickle
+
+    import numpy as np
+
+    from .correcao import conferir_g01
+
+    achados = []
+    g01 = op.caminho(f"{op.projeto}.g01")
+    achados += [(r, rs, m) for r, rs, m in conferir_g01(g01, lambda *a: None)]
+
+    perfis = {}
+    rio = None
+    txt = open(g01, encoding="latin-1", errors="replace").read()
+    for b in re.split(r"(?=River Reach=|Type RM Length)", txt):
+        if b.startswith("River Reach="):
+            rio = b.split("\n", 1)[0][12:].split(",")[0].strip()
+            continue
+        if not b.startswith("Type RM Length"):
+            continue
+        m = re.match(r"Type RM Length L Ch R = 1\s*,\s*([\d.]+)", b)
+        q = re.search(r"#Sta/Elev=\s*(\d+)\s*\n(.*?)(?=\n[#A-Z])", b, re.S)
+        if not (m and q):
+            continue
+        n = int(q.group(1))
+        cru = q.group(2).replace("\n", "")
+        z = [float(cru[k:k + 8]) for k in range(8, 2 * n * 8, 16)]
+        perfis.setdefault(rio, []).append((float(m.group(1)), min(z)))
+
+    for r, v in perfis.items():
+        v.sort(key=lambda x: -x[0])
+        z = np.array([x[1] for x in v])
+        rs = np.array([x[0] for x in v])
+        for i in np.flatnonzero(np.diff(z) > 0.01):
+            achados.append((r, f"{rs[i+1]:.0f}",
+                            f"leito SOBE {z[i+1]-z[i]:.2f} m rio abaixo "
+                            f"(vem de RS {rs[i]:.0f})"))
+
+    est = op.caminho(f"estado_{op.projeto}.pkl")
+    if os.path.exists(est):
+        e = pickle.load(open(est, "rb"))
+        for r, v in (e.get("xs_pronto") or {}).items():
+            borda = [d for d in v
+                     if int(d.get("i_thal", 0)) <= 1
+                     or int(d.get("i_thal", 0)) >= len(d["z"]) - 2]
+            if borda:
+                achados.append((r, f"{borda[0]['rs']:.0f}",
+                                f"talvegue na BORDA da secao em {len(borda)} "
+                                f"de {len(v)} secoes -- o canal e cavado fora "
+                                f"do rio"))
+        for r, v in (e.get("xs_cond") or {}).items():
+            za = np.array([d["z_alvo"] for d in v], float)
+            zt = np.array([d.get("z_terreno", np.nan) for d in v], float)
+            n = int(np.nansum(za > zt + 0.01))
+            if n:
+                achados.append((r, "-", f"leito ACIMA do terreno em {n} de "
+                                        f"{len(v)} secoes"))
+    return achados
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(
         description="confere o modelo antes de simular, como a GUI do HEC-RAS")
@@ -187,9 +264,24 @@ def main(argv=None):
     n = relatorio(r, print, por_rio=a.rios)
     if not a.manter:
         shutil.rmtree(os.path.dirname(prj), ignore_errors=True)
+
     print("")
-    if n:
-        print(f"REPROVADO: {n} erro(s). Nao integre antes de zerar isto.")
+    print("-" * 74)
+    print("GEOMETRIA -- o que o RasCheck nao confere")
+    print("-" * 74)
+    nossos = geometria(op, print)
+    for rio, rs, motivo in nossos[:25]:
+        print(f"   {rio:<16} RS {rs:<10} {motivo}")
+    if len(nossos) > 25:
+        print(f"   ... e mais {len(nossos) - 25}")
+    if not nossos:
+        print("   nada: sem contrapendente, sem leito acima do terreno, "
+              "sem talvegue na borda, sem estaca repetida")
+
+    print("")
+    if n or nossos:
+        print(f"REPROVADO: {n} erro(s) do RasCheck e {len(nossos)} da "
+              f"geometria. Nao integre antes de zerar isto.")
         return 1
     print("APROVADO: nenhum erro. O modelo pode ser simulado.")
     return 0

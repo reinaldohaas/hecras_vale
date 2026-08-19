@@ -159,6 +159,24 @@ def escavar(d, op, altura_minima=12.0, folga_altura=1.4, altura_max=30.0):
     #     -los e mais honesto que deixar o solver achar um poco no meio do rio.
     z = np.maximum(z, base_p)
 
+    # 2c) O TALVEGUE E EXATAMENTE base_p, e nao "o que calhou". O entalhe e
+    #     cortado por `minimum` sobre os PONTOS da secao, e o piso dele so e
+    #     alcancado por um ponto que caia DENTRO da meia-largura. Com o entalhe
+    #     no minimo de 3 m (meia-largura 1,5 m) e os pontos a cada 5 m
+    #     (espacamento_pontos), nenhum ponto cai la: a secao nunca chega a
+    #     base_p e o fundo dela fica onde a amostragem permitiu.
+    #
+    #     Isso quebra a monotonia que o passo 5 garantiu. O HEC-RAS toma o
+    #     MINIMO da secao como fundo, e o minimo passa a variar de secao para
+    #     secao: no Trombudo RS 39950 o alvo desce 0,25 m e o leito SOBE 0,29 m,
+    #     porque uma secao foi entalhada 1,50 m e a vizinha 0,96 m. Eram 11
+    #     contrapendentes nos 12 rios, todos nascidos aqui.
+    #
+    #     Com o ponto do talvegue cravado em base_p o fundo de toda secao passa
+    #     a ser alvo - pilot_prof, que e monotonico por construcao, porque alvo
+    #     e monotonico e a profundidade e a mesma.
+    z[i0] = base_p
+
     # 3) parede vertical, so onde o vale e plano demais para conter a cheia.
     #    E o recurso padrao do proprio HEC-RAS ("glass wall"). A altura vem da
     #    VAZAO que a secao conduz, nao de um numero igual para todos.
