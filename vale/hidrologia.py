@@ -143,9 +143,15 @@ def series(op, eixos, xs_por_rio, arvore, log=print):
         for c in cab:
             chave = c["rio"].lower().replace("itajai_", "")
             if chave in alvo and chave in BARRAGENS:
-                _, qmax = BARRAGENS[chave]
+                # O VOLUME VEM DA TABELA, e nao de um 100 fixo. O codigo
+                # descartava o volume de BARRAGENS ("_, qmax = ...") e passava
+                # 100.0 para todas -- e volume e exatamente o que amortece o
+                # pico. A Norte tem 357 hm3 e era roteada com 100: menos de um
+                # terco da capacidade real, num evento em que ela e a principal
+                # regulacao do alto Itajai.
+                vol_hm3, qmax = BARRAGENS[chave]
                 antes = float(c["serie"].max())
-                c["serie"] = puls_barragem(c["serie"], 100.0, qmax)
+                c["serie"] = puls_barragem(c["serie"], vol_hm3, qmax)
                 log(f"      barragem {chave}: pico {antes:.0f} -> "
                     f"{c['serie'].max():.0f} m3/s")
 
