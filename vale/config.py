@@ -17,13 +17,26 @@ from dataclasses import dataclass, asdict, field, fields
 
 EPSG = 31982                # SIRGAS 2000 / UTM 22S -- o CRS do SIG-SC
 
-WKT = ('PROJCS["SIRGAS 2000 / UTM zone 22S",GEOGCS["SIRGAS 2000",'
-       'DATUM["Sistema_de_Referencia_Geocentrico_para_las_Americas_2000",'
-       'SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],'
-       'UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],'
-       'PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",-51],'
-       'PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],'
-       'PARAMETER["false_northing",10000000],UNIT["metre",1]]')
+# WKT NO DIALETO ESRI, que e o que o HEC-RAS pede: o proprio dialogo diz
+# "the ESRI Projection file (*.prj)". Duas versoes anteriores falharam --
+# a escrita a mao (sem nos AUTHORITY) e a do GDAL (com eles). Nas duas o
+# RAS Mapper carregava o arquivo e mostrava a caixa "Definition" VAZIA, e
+# depois estourava com "Referencia de objeto nao definida".
+#
+# O ESRI e outro dialeto, nao um WKT melhor ou pior: "GCS_SIRGAS_2000" e
+# "D_SIRGAS_2000" com sublinhado, sem AUTHORITY, numeros com casa decimal
+# explicita. O GDAL gera com to_wkt("WKT1_ESRI").
+#
+# E O ARQUIVO NAO PODE SE CHAMAR "<projeto>.prj": esse nome ja e o do
+# arquivo de PROJETO do HEC-RAS. Ver NOME_SRS abaixo.
+WKT = ('PROJCS["SIRGAS_2000_UTM_Zone_22S",GEOGCS["GCS_SIRGAS_2000",'
+       'DATUM["D_SIRGAS_2000",SPHEROID["GRS_1980",6378137.0,'
+       '298.257222101]],PRIMEM["Greenwich",0.0],UNIT["Degree",'
+       '0.0174532925199433]],PROJECTION["Transverse_Mercator"],'
+       'PARAMETER["False_Easting",500000.0],'
+       'PARAMETER["False_Northing",10000000.0],'
+       'PARAMETER["Central_Meridian",-51.0],PARAMETER["Scale_Factor",'
+       '0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]')
 
 RAS_EXE = r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\Ras.exe"
 

@@ -423,7 +423,20 @@ def rasmap(op, terreno_hdf=None):
     open(caminho, "w", encoding="utf-8").write(
         '<?xml version="1.0" encoding="utf-8"?>\n<RASMapper>\n'
         f'  <Version>2.0.0</Version>\n'
-        f'  <RASProjectionFilename Filename=".{os.sep}{op.projeto}.prj" />\n'
+        # O ARQUIVO DE PROJECAO, e nao o de PROJETO. Isto apontava para
+        # "<projeto>.prj", que e o arquivo de PROJETO do HEC-RAS -- comeca com
+        # "Proj Title=..." e nao tem WKT nenhum. O RAS Mapper tenta ler aquilo
+        # como projecao e abre com "Corrupt Projection: GDAL issued a warning
+        # that this projection file is corrupted", e dali em diante nada que
+        # dependa de georreferencia funciona -- inclusive as modificacoes de
+        # terreno, que somem da arvore de camadas. O WKT esta no
+        # "<projeto>.projection", escrito logo abaixo nesta mesma funcao.
+        #
+        # Os dois arquivos terem extensao .prj no HEC-RAS (projeto e projecao)
+        # e a armadilha; o nome parecido escondeu isto por toda a
+        # reconstrucao, com o aviso aparecendo nos logs como ruido:
+        # "Could not parse WKT from HDF file: Invalid WKT string: Proj Title=".
+        f'  <RASProjectionFilename Filename=".{os.sep}{op.projeto}.projection" />\n'
         f'{t}'
         f'  <Geometries>\n    <Layer Name="{op.projeto}" Type="RASGeometry" '
         f'Filename=".{os.sep}{op.projeto}.g01.hdf" />\n  </Geometries>\n'

@@ -607,11 +607,40 @@ def densificar(xs, op, area_foz=None, log=print):
                         r[c] = (1 - t) * float(a[c]) + t * float(b[c])
                     except (TypeError, ValueError):
                         pass
-            # a cutline tambem anda: sem isso a secao interpolada fica em cima
-            # da de montante no mapa, e o RAS acusa cutlines cruzadas
+            # A CUTLINE SAI DA FAIXA DE ESTACAS, e nao da interpolacao dos
+            # quatro numeros das vizinhas. Interpolar as pontas linearmente
+            # parece obvio e esta errado: a biblioteca interpola as estacas por
+            # POSICAO LATERAL NORMALIZADA, e quando as vizinhas tem larguras
+            # diferentes -- 288 m e 658 m no Cedros -- os dois calculos
+            # divergem. A cutline fica com um comprimento e as estacas com
+            # outro.
+            #
+            # Isso importa porque o HEC-RAS mapeia estaca -> posicao ao longo
+            # da CUTLINE: se os comprimentos nao batem, a secao inteira e
+            # esticada ou comprimida no mapa. As edge lines e as bank lines,
+            # que saem dai, deixam de coincidir com a secao -- que e
+            # exatamente o que se ve no RAS Mapper.
+            #
+            # Medido: 284 secoes cortadas do terreno com descasamento ZERO,
+            # 1.030 interpoladas com 46% acima de 1 m e pior caso de 370 m.
+            #
+            # O centro e a direcao vem das vizinhas (interpolar ponto e vetor e
+            # legitimo); o COMPRIMENTO vem das estacas desta secao.
             if "cut" in a and "cut" in b:
-                r["cut"] = tuple((1 - t) * np.asarray(a["cut"], float)
-                                 + t * np.asarray(b["cut"], float))
+                ca = np.asarray(a["cut"], float)
+                cb = np.asarray(b["cut"], float)
+                mi = (1 - t) * np.array([(ca[0] + ca[2]) / 2,
+                                         (ca[1] + ca[3]) / 2]) \
+                    + t * np.array([(cb[0] + cb[2]) / 2, (cb[1] + cb[3]) / 2])
+                v = (1 - t) * np.array([ca[2] - ca[0], ca[3] - ca[1]]) \
+                    + t * np.array([cb[2] - cb[0], cb[3] - cb[1]])
+                n = float(np.hypot(v[0], v[1])) or 1.0
+                u = v / n
+                meia = 0.5 * float(r["sta"][-1] - r["sta"][0])
+                r["cut"] = (float(mi[0] - meia * u[0]),
+                            float(mi[1] - meia * u[1]),
+                            float(mi[0] + meia * u[0]),
+                            float(mi[1] + meia * u[1]))
             saida.append(r)
             n_novas += 1
     saida.append(xs[-1])
