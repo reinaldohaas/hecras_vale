@@ -194,6 +194,26 @@ class Opcoes:
     # par Benedito+Cedros instabilizou, com 2 cm de lamina.
     razao_dx: float = 2.0
 
+    # Janela em que a DIRECAO do eixo e medida, e com ela a perpendicular
+    # da secao. Era `espacamento_min * 1.7` = 255 m, herdado de quando as
+    # secoes eram cortadas a 150 m; hoje a mediana e 25 m e 255 m e a corda
+    # de um meandro inteiro, nao a tangente. Medido no Benedito com 255 m:
+    # mediana de 13,4 graus fora da perpendicular, p90 de 35,8 e MAXIMO DE
+    # 90 -- secao paralela ao rio. As bank lines e edge lines saem da secao,
+    # entao saem tortas junto, e foi assim que isto apareceu: olhando o
+    # RAS Mapper, nao o log.
+    #
+    # Medido por janela (mediana / p90 / max / fora de 30 graus):
+    #     255 m   11,8   32,2   86,9   12%
+    #     120 m    5,6   18,2   58,4    2%
+    #      60 m    2,5   10,4   27,6    0%
+    #      30 m    1,1    4,8   16,6    0%
+    #
+    # 60 m e o maior que zera o descontrole. Menor que isso comeca a pegar
+    # o serrilhado da digitalizacao da ANA, que e por que a suavizacao
+    # existe -- sem ela o RAS acusa "edge lines have self intersections".
+    janela_direcao: float = 60.0
+
     # ------------------------------------------------- calha no terreno
     # A calha passa a ser escrita NO TERRENO por
     # RasTerrainModWriter.add_channel_modification, e nao desenhada secao a

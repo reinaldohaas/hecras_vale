@@ -225,7 +225,7 @@ def largura_base(area_km2):
 def limites_curvatura(linha, ss, meia, op):
     """Ate onde cada semi-secao pode ir sem cruzar as vizinhas."""
     n = len(ss)
-    dirs = [direcao(linha, s, op.espacamento_min * 1.7) for s in ss]
+    dirs = [direcao(linha, s, op.janela_direcao) for s in ss]
     ang = np.unwrap([np.arctan2(t[1], t[0]) for t in dirs])
     esq = (np.full(n, float(meia)) if np.isscalar(meia)
            else np.asarray(meia, float).copy())
@@ -283,7 +283,7 @@ def equilibrar(hw_e, hw_d, cap_e, cap_d, op):
 
 def cortar(linha, s, amostrador, area_km2, he, hd, op):
     """Uma secao perpendicular ao eixo, so de terreno."""
-    tx, ty = direcao(linha, s, op.espacamento_min * 1.7)
+    tx, ty = direcao(linha, s, op.janela_direcao)
     rx, ry = ty, -tx                                # normal, para a direita
     p = linha.interpolate(s)
     he, hd = float(he), float(hd)
