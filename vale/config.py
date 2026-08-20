@@ -180,6 +180,17 @@ class Opcoes:
     # lado de 25 m -- razao de 14x. Foi no trecho plano e grosseiro que o
     # par Benedito+Cedros instabilizou, com 2 cm de lamina.
     razao_dx: float = 2.0
+
+    # ------------------------------------------------- calha no terreno
+    # A calha passa a ser escrita NO TERRENO por
+    # RasTerrainModWriter.add_channel_modification, e nao desenhada secao a
+    # secao. Ver vale/canal.py. Como a funcao recebe UM depth e UMA width por
+    # polilinha, o rio e partido em segmentos de profundidade quase constante.
+    calha_no_terreno: bool = True
+    tolerancia_prof: float = 0.5    # m; variacao aceita dentro de um segmento
+    passo_polilinha: float = 50.0   # m entre pontos da polilinha do canal
+    talude_canal: float = 3.0       # H:V
+    prof_minima_canal: float = 0.5  # m
     espacamento_piso: float = 25.0  # m; abaixo disto o modelo 1D nao vale
     n_pontos: int = 280            # limite do HEC-RAS e 450
     # Espacamento ALVO entre pontos da secao. Numero fixo de pontos numa
