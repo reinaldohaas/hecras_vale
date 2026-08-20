@@ -553,3 +553,96 @@ class Amostrador:
     def fechar(self):
         for f in self.fontes:
             f["ds"].close()
+
+
+# ======================================================== AMOSTRADOR DO RAS
+HECRAS_DIR = r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1"
+
+
+def registrar_hecras(caminho=HECRAS_DIR, log=print):
+    """Poe a nossa versao do HEC-RAS na lista que a biblioteca procura.
+
+    O `_find_hecras_path` do RasTerrainMod procura 7.0, 6.6 e 6.5 -- nesta
+    maquina o que existe e 7.0.1, e ele falha com "HEC-RAS 6.5+ installation
+    not found" listando pastas que nao existem. A lista e um `_RAS_INSTALL_PATHS`
+    de modulo, entao da para acrescentar em tempo de execucao sem tocar na
+    biblioteca.
+
+    Detalhe que custou uma tentativa: `ras_commander.terrain.RasTerrainMod` e a
+    CLASSE, nao o modulo -- o pacote reexporta as duas com o mesmo nome. O
+    modulo se alcanca por `sys.modules[Classe.__module__]`.
+    """
+    import sys
+    from pathlib import Path
+
+    from ras_commander.terrain import RasTerrainMod as M
+
+    mod = sys.modules[M.__module__]
+    p = Path(caminho)
+    if not (p / "RasMapperLib.dll").exists():
+        raise SystemExit(
+            f"nao achei RasMapperLib.dll em {p}. O amostrador do RAS Mapper "
+            f"precisa dele; ajuste vale.terreno.HECRAS_DIR.")
+    if p not in mod._RAS_INSTALL_PATHS:
+        mod._RAS_INSTALL_PATHS.insert(0, p)
+    M.setup_gdal_bridge(hecras_version=p.name)
+    return M
+
+
+class AmostradorRAS:
+    """Le o terreno pelo RAS Mapper, COM as modificacoes de calha aplicadas.
+
+    Por que trocar o Amostrador de rasterio por este:
+
+    ELE VE A CALHA. A calha passou a ser escrita no HDF do terreno
+    (vale/canal.py). O nosso amostrador le o GeoTIFF ORIGINAL e nao enxerga
+    modificacao nenhuma -- cortaria as secoes num vale sem rio, e a geometria
+    sairia sem canal enquanto o terreno tem um.
+
+    ELE NAO DERRUBA O INTERPRETADOR. O rasterio sobre estes GeoTIFF mata o
+    processo em codigo NATIVO, sem excecao e sem traceback (exit 127). Isso
+    matou o passo 8 duas vezes nesta reconstrucao, e o pipeline reportou codigo
+    0. O RasMapperLib e o mesmo motor que a GUI usa.
+
+    Custo medido: 0,047 s por secao, ~1 min para as 1.314 do par
+    Benedito+Cedros. O nosso e mais rapido e le a coisa errada.
+
+    A INTERFACE E A MESMA (`cota(xs, ys)`), com uma diferenca que importa: o
+    `get_terrain_profile` amostra ao longo de uma POLILINHA e devolve os
+    vertices FILTRADOS (28 de 60 pontos pedidos, com a tolerancia padrao).
+    Aqui o resultado e reinterpolado nas estacas pedidas, entao quem chama
+    recebe um valor por ponto, na ordem, como antes.
+    """
+
+    def __init__(self, rasmap, geom_hdf, log=print, tolerancia=0.0):
+        self.rasmap, self.geom_hdf = str(rasmap), str(geom_hdf)
+        self.tol, self.log, self.n_chamadas = tolerancia, log, 0
+        for c in (self.rasmap, self.geom_hdf):
+            if not os.path.exists(c):
+                raise SystemExit(f"o amostrador do RAS precisa de {c}")
+        self.M = registrar_hecras(log=log)
+        log(f"      amostrador: RAS Mapper sobre "
+            f"{os.path.basename(self.rasmap)}")
+
+    def cota(self, xs, ys):
+        xs = np.asarray(xs, float).ravel()
+        ys = np.asarray(ys, float).ravel()
+        if len(xs) < 2:
+            return np.full(xs.shape, np.nan)
+        try:
+            p = self.M.get_terrain_profile(self.rasmap, self.geom_hdf,
+                                           list(xs), list(ys),
+                                           filter_tolerance=self.tol)
+            self.n_chamadas += 1
+        except Exception as e:                               # noqa: BLE001
+            self.log(f"      amostrador do RAS falhou: {e}")
+            return np.full(xs.shape, np.nan)
+        if p is None or not len(p):
+            return np.full(xs.shape, np.nan)
+        # estaca pedida = distancia acumulada ao longo da polilinha
+        d = np.r_[0.0, np.cumsum(np.hypot(np.diff(xs), np.diff(ys)))]
+        return np.interp(d, np.asarray(p["station"], float),
+                         np.asarray(p["elevation"], float))
+
+    def fechar(self):
+        self.log(f"      amostrador do RAS: {self.n_chamadas} perfis lidos")
