@@ -36,7 +36,13 @@ if not exist modelo mkdir modelo
 
 REM ---- procura um interpretador que consiga ao menos importar o pacote ----
 set PY=
+REM  O AMBIENTE DO PROJETO VEM PRIMEIRO. Criado com uv (uv venv +
+REM  uv pip install -e do repositorio do ras-commander) e traz
+REM  repositorio, com RasTerrainMod e RasTerrainModWriter -- ausentes na
+REM  versao do PyPI. Antes disso as dependencias iam parar no miniforge
+REM  base, que toda a maquina usa.
 for %%P in (
+    "%~dp0.venv\Scripts\python.exe"
     "C:\Users\haas\miniforge3\envs\hecras-qc\python.exe"
     "C:\Users\haas\miniforge3\envs\vale\python.exe"
     "C:\Users\haas\miniforge3\python.exe"
@@ -168,4 +174,7 @@ if defined RC if not "%RC%"=="0" (
     echo.
     echo  *** A EXECUCAO FALHOU -- codigo %RC%. Veja modelo\execucao.log ***
 )
+REM  RC vazio quando o modo nao roda o pipeline (ambiente, passos, qaqc):
+REM  "exit /b" sem valor devolvia 255 e um modo informativo parecia falha.
+if not defined RC set "RC=0"
 endlocal & exit /b %RC%
