@@ -449,6 +449,38 @@ def cortar_rio(eixo, amostrador, op, log=print, prog=None):
     return xs
 
 
+def _suavizar_alvo(alvo, op):
+    """Limita o SALTO de espacamento entre vaos vizinhos.
+
+    O criterio de Samuels e `dx <= k*D/S`: aperta onde o rio e ingreme e NAO
+    DIZ NADA onde e plano -- com S tendendo a zero o limite tende ao infinito.
+    A planicie herda o espacamento maximo enquanto a serra do mesmo rio fica no
+    piso, e a razao entre vaos vizinhos chega a 14x.
+
+    Medido no Cedros: 15 vaos acima de 400 m, um de 944 m, todos com
+    declividade de 1e-4 a 3e-4, contra mediana de 25 m no resto do rio. E foi
+    no ultimo quilometro plano, com vaos de 642 e 722 m, que o par
+    Benedito+Cedros instabilizou -- com 2 a 3 CENTIMETROS de lamina numa secao
+    de 500 m de largura, onde a conducao fica mal definida. Salto brusco de
+    espacamento e fonte conhecida de instabilidade em 1D nao permanente,
+    independente da declividade.
+
+    Iterativo porque baixar um vao aperta o vizinho seguinte.
+    """
+    razao = float(getattr(op, "razao_dx", 2.0))
+    if len(alvo) < 3 or razao <= 1.0:
+        return alvo
+    v = alvo.copy()
+    for _ in range(60):
+        antes = v.copy()
+        viz = np.minimum(np.r_[v[1:], v[-1]], np.r_[v[0], v[:-1]])
+        v = np.minimum(v, razao * viz)
+        if np.allclose(v, antes):
+            break
+    return np.maximum(v, float(getattr(op, "espacamento_piso", 25.0)))
+
+
+
 def densificar(xs, op, area_foz=None, log=print):
     """Insere secoes INTERPOLADAS onde o criterio numerico pede mais.
 
@@ -487,18 +519,35 @@ def densificar(xs, op, area_foz=None, log=print):
 
     kh, eh = op.canal_kh, op.canal_eh
     piso = float(getattr(op, "espacamento_piso", 25.0))
+    # ESPACAMENTO ALVO DE CADA PAR, calculado antes de inserir nada. O teto de
+    # vizinhanca tem de agir SOBRE ELE, e nao sobre os vaos do corte: no corte
+    # todos os vaos sao grandes e parecidos (>= 150 m), a razao entre vizinhos
+    # e ~1 e o limite nao morde. O desnivel nasce DEPOIS -- o trecho ingreme e
+    # subdividido a 25 m e o plano fica em 1.000 m, e ai a razao vira 14x.
+    alvos = []
+    for a_, b_ in zip(xs, xs[1:]):
+        dxr_ = float(a_["rs"]) - float(b_["rs"])
+        if dxr_ <= 0:
+            alvos.append(float(op.espacamento))
+            continue
+        dz_ = abs(float(a_.get("z_terreno", 0.0))
+                  - float(b_.get("z_terreno", 0.0)))
+        S_ = max(dz_ / dxr_, 1e-6)
+        A_ = 0.5 * (float(a_.get("area_km2", 1.0))
+                    + float(b_.get("area_km2", 1.0)))
+        D_ = kh * max(A_, 1.0) ** eh if getattr(op, "samuels_leopold", True) \
+            else float(op.samuels_D)
+        alvos.append(max(min(op.samuels_k * D_ / S_, dxr_), piso))
+    alvos = _suavizar_alvo(np.array(alvos, float), op)
+
     saida, n_novas = [], 0
-    for a, b in zip(xs, xs[1:]):                 # xs vem de montante p/ jusante
+    for i, (a, b) in enumerate(zip(xs, xs[1:])):  # xs vem de montante p/ jusante
         saida.append(a)
         dxr = float(a["rs"]) - float(b["rs"])
         if dxr <= 0:
             continue
-        dz = abs(float(a.get("z_terreno", 0.0)) - float(b.get("z_terreno", 0.0)))
-        S = max(dz / dxr, 1e-6)
         A = 0.5 * (float(a.get("area_km2", 1.0)) + float(b.get("area_km2", 1.0)))
-        D = kh * max(A, 1.0) ** eh if getattr(op, "samuels_leopold", True) \
-            else float(op.samuels_D)
-        lim = max(op.samuels_k * D / S, piso)
+        lim = float(alvos[i])
         n = int(np.ceil(dxr / lim)) - 1
         if n <= 0:
             continue

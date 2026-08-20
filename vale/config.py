@@ -175,6 +175,11 @@ class Opcoes:
     # pedia isso vinha do dossel do Copernicus, nao do rio.
     interpolar: bool = True
     interp_max: int = 40           # teto de intermediarias por par
+    # Salto maximo de espacamento entre vaos vizinhos. Samuels nao limita a
+    # planicie (S->0 => dx->infinito), e o Cedros saiu com vaos de 944 m ao
+    # lado de 25 m -- razao de 14x. Foi no trecho plano e grosseiro que o
+    # par Benedito+Cedros instabilizou, com 2 cm de lamina.
+    razao_dx: float = 2.0
     espacamento_piso: float = 25.0  # m; abaixo disto o modelo 1D nao vale
     n_pontos: int = 280            # limite do HEC-RAS e 450
     # Espacamento ALVO entre pontos da secao. Numero fixo de pontos numa
