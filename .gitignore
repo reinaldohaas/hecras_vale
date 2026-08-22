@@ -1,5 +1,5 @@
 .venv/
- saida do pacote vale/ (tudo regeneravel por rodar_vale.bat) ---
+# --- saida do pacote vale/ (tudo regeneravel por rodar_vale.bat) ---
 # estado.pkl tem 43 MB e o .g01 12 MB; ambos saem de um "rodar_vale.bat 4-10".
 # As figuras de erro tambem: o passo 8 e o 9 as regeram a cada rodada.
 modelo/
@@ -10,7 +10,7 @@ __pycache__/
 *.pyc
 *.npz
 *.aux.xml
--9]
+*.O0[0-9]
 *.b0[0-9]
 *.bco0[0-9]
 *.ic.o0[0-9]

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RASMapper>
   <Version>2.00</Version>
-  <RASProjectionFilename Filename="Itajai_Rede_2008.projection" />
+  <RASProjectionFilename Filename=".\SIRGAS2000_UTM22S.prj" />
   <Terrains />
   <Results />
 </RASMapper>

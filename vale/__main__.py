@@ -574,6 +574,20 @@ def main(argv=None):
 
     alvo = argv[0] if argv and not argv[0].count("=") else None
     pares = [a for a in argv if "=" in a]
+    # ARGUMENTO SOLTO E ERRO, e nao silencio. Tudo que nao e o alvo nem um
+    # par chave=valor era simplesmente descartado aqui. Em
+    # "rodar_vale.bat 1-7 selecao=Rio Itajai_Mirim" o .bat corta no espaco e
+    # manda ['1-7', 'selecao=Rio', 'Itajai_Mirim']: a opcao chegava pela
+    # metade e o resto do nome sumia sem uma linha de aviso -- e a rodada de
+    # um rio so virava o vale inteiro.
+    soltos = [a for a in argv if "=" not in a and a != alvo]
+    if soltos:
+        raise SystemExit(
+            f"argumento sem valor: {', '.join(repr(a) for a in soltos)}.\n"
+            f"As opcoes sao 'chave=valor'. Valor com espaco tem de vir entre "
+            f"aspas -- o .bat corta no espaco. Para um rio so, use o nome do "
+            f"HEC-RAS, sem espaco: selecao=Itajai_Mirim\n"
+            f"Veja 'python -m vale opcoes'.")
     op.aplicar(pares)
     if sim or auto:
         op.confirmar = False

@@ -105,6 +105,21 @@ def catalogo(area_min=AREA_MINIMA, base=BASE):
     return linhas
 
 
+def _termo(s):
+    """Chave de BUSCA: sem acento, sem o generico da frente, e sem separador.
+
+    A tabela do catalogo mostra duas grafias do mesmo rio -- "Rio Itajai-mirim"
+    e o nome do HEC-RAS "Itajai_Mirim" -- e a busca so casava com a primeira.
+    Quem lia a tabela e copiava a coluna "hec-ras" recebia "nao encontrei".
+    Aqui o hifen, o underscore e o espaco viram a mesma coisa, e o generico
+    ("rio", "ribeirao"...) sai dos DOIS lados, entao as duas grafias casam.
+    """
+    s = normalizar(s)
+    s = re.sub(r"[_\-]+", " ", s)
+    s = re.sub(r"^(rio|ribeirao|corrego|arroio)\s+", "", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
 def selecionar(cat, spec=None):
     """Resolve uma selecao contra o catalogo.
 
@@ -112,7 +127,8 @@ def selecionar(cat, spec=None):
         None ou "atuais"  -> os 12 rios do modelo de hoje
         "todos"           -> tudo que passou do limiar
         "1,3,5" ou "1-6"  -> por numero do catalogo
-        "acu,mirim"       -> por trecho do nome
+        "acu,mirim"       -> por trecho do nome, na grafia da BHO ou na do
+                             HEC-RAS ("Itajai_Mirim" e "Itajai-mirim" valem)
     Misturar formas e permitido: "1-6,luis alves".
     """
     if spec is None or str(spec).strip().lower() in ("", "atuais"):
@@ -121,7 +137,7 @@ def selecionar(cat, spec=None):
     if s == "todos":
         return list(cat)
 
-    escolhidos, faltando = [], []
+    escolhidos, faltando, largos = [], [], []
     for parte in [p.strip() for p in s.split(",") if p.strip()]:
         if re.fullmatch(r"\d+", parte):
             achado = [d for d in cat if d["n"] == int(parte)]
@@ -130,13 +146,34 @@ def selecionar(cat, spec=None):
             achado = [d for d in cat if a <= d["n"] <= min(a, b) or
                       min(a, b) <= d["n"] <= max(a, b)]
         else:
-            alvo = normalizar(parte)
-            achado = [d for d in cat if alvo in d["chave"]]
+            alvo = _termo(parte)
+            # TERMO VAZIO E PEDIDO DE TUDO, e nao de nada. "selecao=Rio" --
+            # que e o que sobra quando o .bat quebra "selecao=Rio Itajai_Mirim"
+            # no espaco -- casava com os 36 rios do catalogo, e a rodada de um
+            # rio so virava o vale inteiro sem uma linha de aviso. Custou uma
+            # execucao inteira para ser percebido. Quem quer tudo escreve
+            # "todos"; qualquer outro caminho para o catalogo completo e erro.
+            if not alvo:
+                largos.append((parte, len(cat)))
+                continue
+            achado = [d for d in cat
+                      if alvo in _termo(d["chave"]) or alvo in _termo(d["ras"])]
+            if len(achado) > max(3, len(cat) // 4):
+                largos.append((parte, len(achado)))
+                continue
         if not achado:
             faltando.append(parte)
         for d in achado:
             if d not in escolhidos:
                 escolhidos.append(d)
+    if largos:
+        det = "; ".join(f"'{p}' casa com {q} rios" for p, q in largos)
+        raise ValueError(
+            f"selecao larga demais: {det}. Seja especifico (o nome do HEC-RAS "
+            f"da tabela serve: 'Itajai_Mirim') ou escreva 'todos' se e o vale "
+            f"inteiro que voce quer. Veja 'python -m vale.rios'."
+            + (" ATENCAO: valor com espaco tem de vir entre aspas -- o .bat "
+               "corta no espaco." if any(" " in p for p, _ in largos) else ""))
     if faltando:
         raise ValueError(
             f"nao encontrei no catalogo: {', '.join(faltando)}. "

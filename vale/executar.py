@@ -84,7 +84,44 @@ def rodar(prj, ras_exe, log=print):
         msgs = str(HdfResultsPlan.get_compute_messages(hdf))
     except Exception as e:                                   # noqa: BLE001
         msgs = f"(sem mensagens: {e})"
+    devolver(novo, pathlib.Path(prj).resolve().parent, log)
     return r, msgs, str(novo)
+
+
+def devolver(prj_temp, raiz, log=print):
+    """Traz de volta o que a rodada isolada produziu.
+
+    A rodada acontecia em %TEMP%\\vale_runs\\<proj> e MORRIA la. O projeto em
+    modelo\\ ficava com o .g01.hdf de antes -- que carrega a superficie de
+    interpolacao ARMAZENADA da geometria anterior -- e o RAS Mapper, aberto
+    sobre ele, reprovava seção por seção com "Stored Interpolation Surface
+    does not contain XS'(s) at:".
+
+    Medido no Mirim: modelo\\ tinha 1.270 superficies e 160 secoes descobertas
+    enquanto a rodada, no temporario, tinha 1.443 e NENHUMA descoberta. Eram
+    dois modelos diferentes ao mesmo tempo, e a validacao olhava o pior.
+
+    O terreno nao volta: e symlink, e ja vive em modelo\\Terrain.
+    """
+    nome = prj_temp.stem
+    trazidos, mb = [], 0.0
+    for ext in GERADOS:
+        f = prj_temp.parent / (nome + ext)
+        if not f.exists():
+            continue
+        try:
+            shutil.copy2(f, raiz / f.name)
+        except OSError as e:                                 # noqa: BLE001
+            log(f"      nao consegui trazer {f.name}: {e}")
+            continue
+        trazidos.append(f.name)
+        mb += f.stat().st_size / 1e6
+    if trazidos:
+        log(f"      trazidos da rodada isolada: {len(trazidos)} arquivos "
+            f"({mb/1000:.1f} GB)" if mb > 1000 else
+            f"      trazidos da rodada isolada: {len(trazidos)} arquivos "
+            f"({mb:.0f} MB)")
+    return trazidos
 
 
 def erros_de_dado(pasta):

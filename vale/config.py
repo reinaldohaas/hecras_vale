@@ -38,6 +38,19 @@ WKT = ('PROJCS["SIRGAS_2000_UTM_Zone_22S",GEOGCS["GCS_SIRGAS_2000",'
        'PARAMETER["Central_Meridian",-51.0],PARAMETER["Scale_Factor",'
        '0.9996],PARAMETER["Latitude_Of_Origin",0.0],UNIT["Meter",1.0]]')
 
+# A EXTENSAO TEM DE SER .prj. Fugir do choque de nomes trocando a extensao
+# para ".projection" resolve a colisao e cria outra falha: o RAS Mapper abre
+# a pagina de projecao e estoura em
+# MapperOptionProjection.DisplaySRSFileText -> "Referencia de objeto nao
+# definida", porque nao reconhece o arquivo como SRS. O mesmo ja estava
+# escrito em terreno.py sobre o RasProcess ("passar um .projection faz o
+# RasProcess falhar"), e a licao nao tinha sido aplicada aqui.
+#
+# A saida e manter .prj e trocar o NOME: o conflito e com "<projeto>.prj",
+# nao com a extensao. Um nome fixo, do sistema de coordenadas, tambem deixa
+# claro que o arquivo nao pertence a um projeto so.
+NOME_SRS = "SIRGAS2000_UTM22S.prj"
+
 RAS_EXE = r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\Ras.exe"
 
 
@@ -174,7 +187,23 @@ class Opcoes:
     # afirmava. O Benedito tem 56% dos vaos abaixo do piso e, sozinho, completa
     # as 192 h com 0,024% de erro -- com as MESMAS 819 secoes que ele tem
     # dentro da rede, onde a simulacao cai. Mesmo espacamento, dois desfechos.
-    samuels: bool = True
+    #
+    # NASCE DESLIGADO, por decisao do dono do projeto, e a medicao sustenta.
+    # Ligado, ele densifica o CORTE do terreno: no Mirim produziu 1.553 secoes
+    # cortadas com mediana de 58 m -- 79% dos vaos abaixo dos 150 m pedidos e
+    # 16% mais finos que o pixel de 30 m do Copernicus, ou seja amostrando
+    # mais fino que o dado. Desligado, saem 432 cortadas com minimo de 150 m.
+    #
+    # E a densidade que ele impunha NAO e exigida pela numerica. Medido no
+    # so_mirim.g08, com o dt de 15 s do plano e as velocidades da propria
+    # rodada (mediana 0,31 a 0,40 m/s no canal, p90 0,69 a 0,92):
+    #
+    #     Courant = V*dt/dx = 0,10 a 0,29        -- com folga para 1
+    #     distancia percorrida por passo: 4,5 a 13,5 m, contra dx de 47 m
+    #
+    # Ou seja: o espacamento denso nunca veio de exigencia de passo de tempo.
+    # Veio deste criterio, e o preco dele e amostrar terreno inexistente.
+    samuels: bool = False
     samuels_k: float = 0.15
     samuels_D: float = 1.5         # m; profundidade de calha cheia tipica
     samuels_leopold: bool = True   # D = kh*A^eh por posicao, e nao fixo
@@ -237,6 +266,74 @@ class Opcoes:
     # do lado concavo. Passar disso e o que cruza as cutlines -- 24% dos pares
     # na primeira tentativa -- e a mancha do RAS Mapper perde sentido.
     folga_curva: float = 0.70
+
+    # O MESMO CRITERIO DE CURVA, AGORA SOBRE A GEOMETRIA FINAL. O limitador
+    # acima age dentro do cortar(), sobre as secoes CORTADAS e com as larguras
+    # de ANTES do recorte pela cheia. Depois dele entram a densificacao (que
+    # insere secoes com outro espacamento) e o recorte (que muda a largura
+    # toda) -- entao a condicao de nao se cruzarem nunca chegava a valer para
+    # o que o HEC-RAS recebe.
+    #
+    # Medido no Mirim: meia-largura mediana de 66 m em meandros cujo raio e
+    # menor que isso. As vizinhas se cruzam por dentro da curva e a edge line
+    # que liga as pontas da laco, com o RAS avisando "The generated edge lines
+    # have self intersections".
+    #
+    # E NASCE DESLIGADO, porque foi medido e PIOROU. Com ele, as cutlines que
+    # se cruzam caem de 65 para 34 -- e o Validate Geometry sobe de 240 para
+    # 995, com o defeito mudando de lugar: sai das edge lines e vai para as
+    # proprias secoes, que ficam curtas e desencontradas (largura minima de
+    # 120 m para 69 m).
+    #
+    # A licao, que ja custou tres tentativas neste dia -- fixar o lado da
+    # estaca 0, apertar `folga_curva` para 0,45, e este limitador -- e que
+    # melhorar uma secao ISOLADA piora as linhas que passam por ela. Bank line
+    # e edge line ligam ponta a ponta entre vizinhas: o que conta e a
+    # concordancia com a vizinha, nao a qualidade de cada uma.
+    #
+    # Fica aqui, desligado, com o numero ao lado: quem tentar de novo comeca
+    # sabendo o que ja foi medido.
+    curva_pos: bool = False
+    curva_piso: float = 45.0       # m; meia-largura minima ao apertar
+
+    # PUXAR O EIXO PARA O TALVEGUE antes de cortar. O tracado da BHO 2017 da
+    # ANA e esquematico: no Mirim o talvegue lido do terreno fica a 16 m dele
+    # na mediana, 42 m no p90 e 296 m no pior caso, contra 26 m de meia-calha.
+    # Em 28% das secoes o rio real esta fora da calha declarada e em 12% as
+    # duas margens caem do mesmo lado do eixo -- e e por isso que as bank
+    # lines geradas pelo HEC-RAS cruzam o eixo 320 vezes.
+    #
+    # E NASCE DESLIGADO POR UM MOTIVO MEDIDO: no Copernicus nao ha talvegue
+    # lateral para seguir. Medindo 1.070 perfis de +-80 m no Mirim, o quanto o
+    # terreno DESCE do eixo ate o minimo da janela:
+    #
+    #     mediana 0,00 m    p75 0,84 m    p90 3,98 m
+    #     65% dos perfis descem menos de 10 cm
+    #
+    # O eixo da ANA ja esta no fundo em dois tercos do rio. O GLO-30 e modelo
+    # de SUPERFICIE e traz a LAMINA D'AGUA, que e plana: dentro do rio a cota
+    # nao varia, o minimo lateral e um empate e o `argmin` devolve uma posicao
+    # arbitraria. Uma penalidade de 0,001 m por metro -- 8 cm ao longo da
+    # janela inteira -- ja anula a correcao, o que mostra o tamanho do sinal.
+    #
+    # Ou seja: os "16 m de afastamento entre eixo e talvegue" que eu havia
+    # medido nao sao o eixo fora do rio, sao empates num plano de agua. Ligar
+    # isto no Copernicus ajusta RUIDO, e deixa o eixo mais quebrado (giro
+    # maximo entre vertices de 117 para 167 graus).
+    #
+    # COM O MDT DO SIG-SC A 1 m (fonte=sigsc), que e solo exposto, o talvegue
+    # existe de verdade e vale ligar. Meca antes de trocar o padrao.
+    #
+    # As pontas NAO se movem: sao a conexao com a juncao, onde o snapping e
+    # exato. `eixo_taper` e o comprimento em que a correcao afunila ate zero.
+    eixo_talvegue: bool = False
+    eixo_passo: float = 50.0       # m; de quanto em quanto se procura o fundo
+    eixo_janela: float = 80.0      # m; meia-janela de busca lateral
+    eixo_res: float = 5.0          # m; passo da amostragem dentro da janela
+    eixo_desloc_max: float = 120.0  # m; teto do deslocamento
+    eixo_alisar: float = 250.0     # m; janela da media movel do deslocamento
+    eixo_taper: float = 300.0      # m; afunilamento junto as pontas
+    eixo_penalidade: float = 0.02  # m de cota por m de afastamento do centro
     # RECORTE PELA COTA DE CHEIA. A largura saia so do porte do rio
     # (180*sqrt(A/100), com piso de 500 m de meia-largura), e o piso e que
     # mandava: 129 das 148 secoes do Benedito estavam nele. Medido, a cheia de

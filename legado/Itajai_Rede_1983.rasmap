@@ -1,6 +1,6 @@
 <RASMapper>
   <Version>2.0.0</Version>
-  <RASProjectionFilename Filename=".\Itajai_Rede_1983.projection" />
+  <RASProjectionFilename Filename=".\SIRGAS2000_UTM22S.prj" />
   <Features>
     <Layer Name="Profile Lines" Type="PolylineFeatureLayer" Filename=".\Features\Profile Lines.shp" />
     <Layer Name="Profile Lines" Type="PolylineFeatureLayer" Filename=".\Features\Profile Lines.shp" />

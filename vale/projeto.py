@@ -26,7 +26,7 @@ import os
 
 import numpy as np
 
-from .config import EPSG, WKT
+from .config import EPSG, NOME_SRS, WKT
 
 MESES = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
          "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
@@ -430,18 +430,28 @@ def rasmap(op, terreno_hdf=None):
         # that this projection file is corrupted", e dali em diante nada que
         # dependa de georreferencia funciona -- inclusive as modificacoes de
         # terreno, que somem da arvore de camadas. O WKT esta no
-        # "<projeto>.projection", escrito logo abaixo nesta mesma funcao.
+        # NOME_SRS, escrito logo abaixo nesta mesma funcao.
         #
         # Os dois arquivos terem extensao .prj no HEC-RAS (projeto e projecao)
         # e a armadilha; o nome parecido escondeu isto por toda a
         # reconstrucao, com o aviso aparecendo nos logs como ruido:
         # "Could not parse WKT from HDF file: Invalid WKT string: Proj Title=".
-        f'  <RASProjectionFilename Filename=".{os.sep}{op.projeto}.projection" />\n'
+        #
+        # A saida NAO e trocar a extensao para ".projection": isso derruba o
+        # RAS Mapper em DisplaySRSFileText com "Referencia de objeto nao
+        # definida" assim que a pagina de projecao abre. O que muda e o NOME.
+        f'  <RASProjectionFilename Filename=".{os.sep}{NOME_SRS}" />\n'
         f'{t}'
         f'  <Geometries>\n    <Layer Name="{op.projeto}" Type="RASGeometry" '
         f'Filename=".{os.sep}{op.projeto}.g01.hdf" />\n  </Geometries>\n'
         f'  <Results>\n    <Layer Name="{op.projeto}" Type="RASResults" '
         f'Filename=".{os.sep}{op.projeto}.p01.hdf" />\n  </Results>\n'
         '</RASMapper>\n')
-    open(op.caminho(f"{op.projeto}.projection"), "w", encoding="ascii").write(WKT)
+    open(op.caminho(NOME_SRS), "w", encoding="ascii").write(WKT)
+    # O ".projection" de rodadas anteriores fica para tras e o RAS Mapper
+    # ainda o encontra pela arvore de camadas. Sair sem ele evita reabrir o
+    # projeto velho e ver o mesmo estouro.
+    velho = op.caminho(f"{op.projeto}.projection")
+    if os.path.exists(velho):
+        os.remove(velho)
     return caminho

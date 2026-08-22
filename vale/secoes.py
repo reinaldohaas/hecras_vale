@@ -336,9 +336,96 @@ def cortar(linha, s, amostrador, area_km2, he, hd, op):
             "z_terreno": float(z[i0])}
 
 
+def ajustar_ao_talvegue(linha, amostrador, op, log=print):
+    """Puxa o eixo para o fundo do vale, sem mexer nas pontas.
+
+    O eixo vem da BHO 2017 da ANA, que e um tracado ESQUEMATICO: no Mirim ele
+    fica a 16 m do talvegue lido do terreno na mediana, 42 m no p90 e 296 m no
+    pior caso -- contra uma meia-calha de 26 m. Em 28% das secoes o rio real
+    esta inteiro fora da calha declarada, e em 12% as duas margens caem do
+    MESMO lado do ponto do eixo.
+
+    A consequencia nao aparece nas secoes, aparece nas linhas que o HEC-RAS
+    deriva delas: a bank line liga os pontos de margem, segue o rio de verdade
+    e por isso cruza o eixo toda vez que o rio troca de lado -- 320 vezes no
+    Mirim. Com o eixo em cima do talvegue, secao, calha e bank line passam a
+    concordar por construcao, em vez de por acaso.
+
+    AS PONTAS NAO SE MOVEM. Elas sao a conexao com a juncao, e o snapping nas
+    confluencias e exato (0,0 m); deslocar a foz de um afluente desliga o
+    afluente da rede. A correcao e afunilada ate zero nos `eixo_taper` metros
+    de cada extremidade.
+
+    O deslocamento tambem e limitado e alisado: sem isso o eixo pula para um
+    meandro abandonado ou para uma vala de drenagem vizinha, que no MDS sao
+    tao fundos quanto o rio, e sai em dente de serra.
+    """
+    L = float(linha.length)
+    passo = float(getattr(op, "eixo_passo", 50.0))
+    jan = float(getattr(op, "eixo_janela", 80.0))
+    res = float(getattr(op, "eixo_res", 5.0))
+    dmax = float(getattr(op, "eixo_desloc_max", 120.0))
+    taper = float(getattr(op, "eixo_taper", 300.0))
+    if L < 4 * taper or passo <= 0:
+        return linha, None
+
+    # AS ESTACAS TEM DE INCLUIR O FIM. Com `arange(0, L, passo)` a ultima cai
+    # antes de L e a polilinha nova TERMINA ali: a foz andava 45 m mesmo com o
+    # afunilamento correto, porque o ponto final simplesmente nao existia.
+    ss = np.append(np.arange(0.0, L, passo), L)
+    offs = np.arange(-jan, jan + res * 0.5, res)
+    px, py, nx, ny = [], [], [], []
+    for s in ss:
+        tx, ty = direcao(linha, float(s), op.janela_direcao)
+        p = linha.interpolate(float(s))
+        px.append(p.x); py.append(p.y)
+        nx.append(ty); ny.append(-tx)          # normal, para a direita
+    px = np.array(px); py = np.array(py)
+    nx = np.array(nx); ny = np.array(ny)
+
+    X = px[:, None] + offs[None, :] * nx[:, None]
+    Y = py[:, None] + offs[None, :] * ny[:, None]
+    Z = np.asarray(amostrador.cota(X.ravel(), Y.ravel()), float).reshape(X.shape)
+
+    # PENALIDADE POR DISTANCIA, para nao trocar de rio. Um canal vizinho 5 cm
+    # mais fundo puxaria o eixo 80 m se o criterio fosse so o minimo. A
+    # penalidade e pequena perto do centro e cresce nas bordas da janela.
+    pen = float(getattr(op, "eixo_penalidade", 0.02)) * np.abs(offs)
+    custo = Z + pen[None, :]
+    custo[~np.isfinite(Z)] = np.inf
+    bom = np.isfinite(custo).any(axis=1)
+    d = np.zeros(len(ss))
+    d[bom] = offs[np.argmin(custo[bom], axis=1)]
+
+    # alisar e limitar
+    janela_s = max(3, int(round(float(getattr(op, "eixo_alisar", 250.0)) / passo)))
+    if janela_s % 2 == 0:
+        janela_s += 1
+    d = np.convolve(np.pad(d, janela_s // 2, mode="edge"),
+                    np.ones(janela_s) / janela_s, "valid")
+    d = np.clip(d, -dmax, dmax)
+    # afunilar nas pontas: a juncao nao pode se mover
+    f = np.clip(np.minimum(ss, L - ss) / max(taper, 1e-9), 0.0, 1.0)
+    d = d * f
+
+    from shapely.geometry import LineString
+    novo = LineString(np.c_[px + d * nx, py + d * ny])
+    return novo, d
+
+
 def cortar_rio(eixo, amostrador, op, log=print, prog=None):
     """Todas as secoes de um rio, da cabeceira para a foz."""
     linha = eixo["linha"]
+    if getattr(op, "eixo_talvegue", False):
+        novo, d = ajustar_ao_talvegue(linha, amostrador, op, log)
+        if d is not None:
+            a = np.abs(d)
+            log(f"   {eixo['ras']}: eixo puxado para o talvegue "
+                f"(deslocamento mediano {np.median(a):.1f} m, p90 "
+                f"{np.percentile(a, 90):.1f} m, maximo {a.max():.1f} m; "
+                f"comprimento {linha.length/1000:.1f} -> {novo.length/1000:.1f} km)")
+            linha = novo
+            eixo["linha"] = novo          # densificar() usa o MESMO eixo
     L = linha.length
     ss = estacas(linha, amostrador, op, eixo.get("area"))
 
@@ -440,7 +527,7 @@ def cortar_rio(eixo, amostrador, op, log=print, prog=None):
     for d in xs:
         d.pop("_i", None)
     n_cort = len(xs)
-    xs = densificar(xs, op, eixo.get("area"), log)
+    xs = densificar(xs, op, eixo.get("area"), log, eixo.get("linha"))
     log(f"   {eixo['ras']:<16} {n_cort:>4} secoes cortadas do terreno"
         + (f" + {len(xs)-n_cort} interpoladas = {len(xs)}"
            if len(xs) > n_cort else "")
@@ -481,7 +568,7 @@ def _suavizar_alvo(alvo, op):
 
 
 
-def densificar(xs, op, area_foz=None, log=print):
+def densificar(xs, op, area_foz=None, log=print, eixo=None):
     """Insere secoes INTERPOLADAS onde o criterio numerico pede mais.
 
     Duas coisas diferentes estavam sendo confundidas numa so:
@@ -632,17 +719,210 @@ def densificar(xs, op, area_foz=None, log=print):
                 mi = (1 - t) * np.array([(ca[0] + ca[2]) / 2,
                                          (ca[1] + ca[3]) / 2]) \
                     + t * np.array([(cb[0] + cb[2]) / 2, (cb[1] + cb[3]) / 2])
+                # O CENTRO TEM DE ESTAR NO EIXO, e nao na corda entre os
+                # centros vizinhos. A secao cortada nasce em
+                # `linha.interpolate(s)` -- um ponto DO eixo -- e por isso o
+                # eixo cruza exatamente no meio dela (mediana medida: -0,00 m).
+                # A interpolada saia da media dos dois centros, que num
+                # meandro e a CORDA: passa por dentro da curva, longe do rio.
+                #
+                # Medido no Mirim: 160 secoes (11%) nao alcancavam o eixo, e
+                # TODAS eram interpoladas -- nenhuma cortada. O RAS Mapper
+                # reprova essas com "Some cross-sections do not cross a river
+                # line - invalid geometry", nao consegue montar a superficie
+                # de interpolacao delas ("Stored Interpolation Surface does
+                # not contain XS'(s) at:") e o buraco se propaga: 236 pares
+                # consecutivos ficaram sem superficie, de 1.417 esperadas.
+                #
+                # A DIRECAO continua vindo das vizinhas -- interpolar vetor e
+                # legitimo, e o 382b95c ja tratou disso. So o centro muda.
+                if eixo is not None and r.get("s") is not None:
+                    q = eixo.interpolate(float(r["s"]))
+                    mi = np.array([q.x, q.y])
                 v = (1 - t) * np.array([ca[2] - ca[0], ca[3] - ca[1]]) \
                     + t * np.array([cb[2] - cb[0], cb[3] - cb[1]])
-                n = float(np.hypot(v[0], v[1])) or 1.0
-                u = v / n
+                # NAO chamar isto de `n`: `n` e o numero de secoes a inserir, e
+                # `t = k / (n + 1)` e recalculado A CADA VOLTA do laco. Com o
+                # nome repetido, da segunda secao em diante `t` passava a sair
+                # do COMPRIMENTO DA CUTLINE (centenas de metros) em vez da
+                # contagem, e as intermediarias desabavam para 0,07 a 3 m da
+                # secao de montante -- enquanto o vao de 150 m seguia sem
+                # refino nenhum. Era a origem das secoes coladas.
+                norma = float(np.hypot(v[0], v[1])) or 1.0
+                u = v / norma
                 meia = 0.5 * float(r["sta"][-1] - r["sta"][0])
                 r["cut"] = (float(mi[0] - meia * u[0]),
                             float(mi[1] - meia * u[1]),
                             float(mi[0] + meia * u[0]),
                             float(mi[1] + meia * u[1]))
+
+                # NAO FORCAR AQUI O LADO DA ESTACA 0. Tentei: 35 secoes tinham
+                # a estaca 0 na margem direita (33 delas interpoladas, porque
+                # o vetor `v` e a SOMA dos vetores das vizinhas e num meandro
+                # fechado a soma pode apontar para o outro lado), e inverter a
+                # secao inteira parecia o conserto obvio.
+                #
+                # Piorou, nas duas medidas, com as mesmas opcoes:
+                #     Validate Geometry           452 -> 612
+                #     auto-intersecoes das edges  170 -> 214
+                #
+                # O motivo: a edge line liga PONTA A PONTA entre vizinhas. O
+                # que importa nao e cada secao estar do lado "certo" em
+                # absoluto, e sim concordar com a vizinha. Inverter uma secao
+                # isolada troca a ponta que se conecta dos dois lados dela e
+                # cria DOIS lacos onde havia um desalinhamento. Otimizar a
+                # secao sozinha piora a linha que passa por ela.
             saida.append(r)
             n_novas += 1
     saida.append(xs[-1])
     saida.sort(key=lambda d: -d["rs"])
+    if getattr(op, "curva_pos", True) and eixo is not None:
+        saida = limitar_por_curvatura(saida, op, eixo, log)
     return saida
+
+
+def limitar_por_curvatura(xs, op, eixo, log=print):
+    """Aperta a largura das secoes onde o meandro fecha -- DEPOIS de densificar.
+
+    O limitador que ja existia (`R = folga_curva * ds / dth`, dentro do
+    cortar()) age em duas coisas que nao sao a geometria final: nas secoes
+    CORTADAS, e nas larguras de ANTES do recorte pela cota de cheia. Entre ele
+    e o arquivo gravado entram a densificacao -- que insere secoes entre as
+    cortadas, com espacamento outro -- e o recorte, que muda toda a largura.
+
+    O resultado e que a condicao de nao se cruzarem nunca era imposta sobre as
+    secoes que o HEC-RAS realmente recebe. Nos meandros fechados do Mirim o
+    raio de curvatura fica menor que a meia-largura (mediana 66 m), as
+    vizinhas se cruzam pelo lado de dentro da curva, e a edge line que liga as
+    pontas da o laco:
+
+        "The generated edge lines have self intersections, the interpolation
+         surface may not generate correctly because of this."
+
+    Aqui o mesmo criterio e aplicado ao conjunto final, com o angulo lido da
+    CUTLINE de cada secao (e nao do eixo) e a distancia medida entre elas.
+    Apara so o que passa; nunca alarga.
+    """
+    if len(xs) < 3:
+        return xs
+    xs = sorted(xs, key=lambda d: -float(d["rs"]))       # montante -> jusante
+    n = len(xs)
+    s = np.array([float(d["s"]) if d.get("s") is not None else np.nan
+                  for d in xs])
+    if not np.all(np.isfinite(s)):
+        return xs
+    ang = np.unwrap([np.arctan2(d["cut"][3] - d["cut"][1],
+                                d["cut"][2] - d["cut"][0]) for d in xs])
+
+    # ONDE O EIXO CRUZA CADA SECAO, em estaca. Nao e o meio: a cortada nasce
+    # com meias-larguras diferentes dos dois lados.
+    c = np.empty(n)
+    for i, d in enumerate(xs):
+        A = np.array(d["cut"][:2], float)
+        B = np.array(d["cut"][2:], float)
+        st = np.asarray(d["sta"], float)
+        from shapely.geometry import LineString
+        g = LineString([A, B]).intersection(eixo)
+        if g.is_empty:
+            c[i] = 0.5 * (st[0] + st[-1])
+            continue
+        p = g if g.geom_type == "Point" else list(g.geoms)[0]
+        ab = B - A
+        t = float(np.dot(np.asarray(p.coords[0]) - A, ab)
+                  / max(float(np.dot(ab, ab)), 1e-9))
+        c[i] = st[0] + np.clip(t, 0.0, 1.0) * (st[-1] - st[0])
+
+    esq = c - np.array([float(d["sta"][0]) for d in xs])
+    dire = np.array([float(d["sta"][-1]) for d in xs]) - c
+    le, ld = esq.copy(), dire.copy()
+    for i in range(n):
+        for j in (i - 1, i + 1):
+            if j < 0 or j >= n:
+                continue
+            ds = abs(s[j] - s[i])
+            dth = abs(ang[j] - ang[i])
+            if ds <= 0 or dth < 1e-6:
+                continue
+            R = op.folga_curva * ds / dth
+            if (ang[j] - ang[i]) * (1 if j > i else -1) > 0:
+                le[i] = min(le[i], R)
+            else:
+                ld[i] = min(ld[i], R)
+
+    # Alisar, pelo mesmo motivo do cortar(): o que derruba o solver nao e a
+    # largura, e o SALTO de area e conducao entre vizinhas.
+    def alisar(v, jan=5):
+        if len(v) < jan:
+            return v
+        m = np.array([v[max(0, i - jan // 2):i + jan // 2 + 1].min()
+                      for i in range(len(v))])
+        return np.convolve(np.pad(m, 1, mode="edge"), np.ones(3) / 3.0, "valid")
+
+    piso = float(getattr(op, "curva_piso", 30.0))
+    le = np.maximum(alisar(le), piso)
+    ld = np.maximum(alisar(ld), piso)
+
+    saida, n_ap, antes, depois = [], 0, [], []
+    for i, d in enumerate(xs):
+        antes.append(float(d["sta"][-1] - d["sta"][0]))
+        r = _aparar(d, c[i], le[i], ld[i])
+        if r is not d:
+            n_ap += 1
+        depois.append(float(r["sta"][-1] - r["sta"][0]))
+        saida.append(r)
+    if n_ap:
+        log(f"      {n_ap} secoes apertadas pelo raio do meandro "
+            f"(largura mediana {np.median(antes):.0f} -> "
+            f"{np.median(depois):.0f} m)")
+    return saida
+
+
+def _aparar(d, c, le, ld):
+    """Corta a secao em [c-le, c+ld], com as pontas na cota interpolada.
+
+    Estacas, cotas, cutline, margens e talvegue saem coerentes entre si -- e
+    o comprimento da cutline continua sendo a faixa de estacas, que e o que o
+    RAS Mapper exige ("The polyline length must match the last station minus
+    the first station").
+    """
+    st = np.asarray(d["sta"], float)
+    z = np.asarray(d["z"], float)
+    a = max(float(st[0]), float(c - le))
+    b = min(float(st[-1]), float(c + ld))
+    # O CANAL NAO SE APARA. Cortando so pela curvatura, 5 a 10 secoes saiam
+    # com a margem direita antes da esquerda -- a apara passava por dentro das
+    # estacas de margem e o `clip` colapsava as duas no mesmo ponto. Aperta-se
+    # a planicie; o que esta entre as margens fica.
+    if d.get("lb") is not None and d.get("rb") is not None:
+        a = min(a, float(d["lb"]))
+        b = max(b, float(d["rb"]))
+    if b - a < 5.0:                       # nao apara ate a secao sumir
+        return d
+    if a <= st[0] + 1e-6 and b >= st[-1] - 1e-6:
+        return d                          # nada a fazer
+    m = (st > a) & (st < b)
+    ns = np.concatenate(([a], st[m], [b]))
+    nz = np.concatenate(([float(np.interp(a, st, z))], z[m],
+                         [float(np.interp(b, st, z))]))
+    A = np.array(d["cut"][:2], float)
+    B = np.array(d["cut"][2:], float)
+    u = B - A
+    u = u / max(float(np.hypot(u[0], u[1])), 1e-9)
+    pa = A + (a - float(st[0])) * u
+    pb = A + (b - float(st[0])) * u
+    r = dict(d)
+    r["sta"] = ns - ns[0]
+    r["z"] = nz
+    r["cut"] = (float(pa[0]), float(pa[1]), float(pb[0]), float(pb[1]))
+    if d.get("lb") is not None and d.get("rb") is not None:
+        r["lb"] = float(np.clip(float(d["lb"]) - a, 0.0, r["sta"][-1]))
+        r["rb"] = float(np.clip(float(d["rb"]) - a, 0.0, r["sta"][-1]))
+    # O TALVEGUE E O MESMO PONTO, se ele sobreviveu ao corte -- e nao o menor
+    # da secao nova. Trocar por argmin joga o canal para onde a apara deixou a
+    # cota mais baixa, que pode ser a propria ponta recem-criada.
+    s_thal = float(st[int(d.get("i_thal", 0))])
+    if a <= s_thal <= b:
+        r["i_thal"] = int(np.argmin(np.abs(r["sta"] - (s_thal - a))))
+    else:
+        r["i_thal"] = int(np.argmin(nz))
+    return r
