@@ -24,3 +24,11 @@ eixos_do_relevo.geojson
 # projeto gerado (regeneravel por construir.py)
 Tajai.*
 !Tajai.prj
+
+# --- rasters grandes de origem (o GitHub recusa acima de 100 MB) ---
+# dem_itajai.tif tem 147 MB e dem_bacia_itajai.tif tem 129 MB. Estavam
+# rastreados e faziam o pre-receive do GitHub recusar a branch inteira.
+# Foram tirados do historico dos commits nao publicados e continuam no disco.
+dem_itajai.tif
+dem_itajai.tif.aux.xml
+dem_bacia_itajai.tif
