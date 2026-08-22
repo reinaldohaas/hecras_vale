@@ -103,10 +103,30 @@ def main(argv):
     eixos = ler_eixos(entrada)
     mapa = mapa_reaches(entrada)
     alvo, perdidos = marcadas(erros, S, mapa)
+    # A GANCHO E DA VIZINHA, e nao so da marcada. A bank line liga o ponto de
+    # margem de uma secao ao da seguinte: quem cruza o gancho e marcado, mas
+    # quem o produz pode ser o vizinho. Medido no g18, nas 30 marcadas: o
+    # deslocamento proprio tem mediana de 12,0 m e o das VIZINHAS, 15,1 m --
+    # e 11 das 30 estao abaixo da mediana do modelo inteiro, ou seja, nao tem
+    # defeito nenhum. Foi por isso que recentrar so as marcadas levou o
+    # contador de 49 para 52 na tentativa anterior.
+    janela = int(_arg(argv, "--vizinhas", 1, float))
+    if janela:
+        ordem = sorted(range(len(S)), key=lambda i: (mapa[i], -S[i]["rs"]))
+        pos = {i: k for k, i in enumerate(ordem)}
+        estendido = set(alvo)
+        for i in list(alvo):
+            for dk in range(-janela, janela + 1):
+                k = pos[i] + dk
+                if 0 <= k < len(ordem) and mapa[ordem[k]] == mapa[i]:
+                    estendido.add(ordem[k])
+        print(f"janela de {janela} vizinha(s): {len(alvo)} -> "
+              f"{len(estendido)} secoes tratadas")
+        alvo = estendido
     print(f"entrada: {entrada}   (intocada)")
     print(f"saida  : {novo}")
-    print(f"marcadas pelo HEC-RAS: {len(alvo)+len(perdidos)}   "
-          f"casadas: {len(alvo)}")
+    print(f"secoes a tratar: {len(alvo)}"
+          + (f"   (nao casaram: {len(perdidos)})" if perdidos else ""))
     for x in perdidos:
         print(f"   NAO CASOU: {x[0]} {x[1]} RS {x[2]} ({x[3]} candidatas)")
 
