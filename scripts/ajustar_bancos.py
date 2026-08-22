@@ -110,7 +110,17 @@ def main(argv):
     # e 11 das 30 estao abaixo da mediana do modelo inteiro, ou seja, nao tem
     # defeito nenhum. Foi por isso que recentrar so as marcadas levou o
     # contador de 49 para 52 na tentativa anterior.
+    if "--todas" in argv:
+        # REFAZ A BANK LINE INTEIRA em vez de remendar onde o RAS aponta.
+        # E outra aposta: em vez de corrigir o gancho, constroi a linha por
+        # uma regra unica -- o canal centrado onde o eixo cruza -- e deixa que
+        # a suavidade venha da construcao. Mexe no que e canal e no que e
+        # planicie em TODA a extensao, entao vale so se o numero justificar.
+        alvo = set(range(len(S)))
+        print(f"--todas: recentrando as {len(S)} secoes")
     janela = int(_arg(argv, "--vizinhas", 1, float))
+    if "--todas" in argv:
+        janela = 0
     if janela:
         ordem = sorted(range(len(S)), key=lambda i: (mapa[i], -S[i]["rs"]))
         pos = {i: k for k, i in enumerate(ordem)}
