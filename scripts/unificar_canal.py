@@ -205,9 +205,35 @@ def main(argv):
     print(f"   jusante : RS {base_r3:.2f} a {rs_novo[-1]:.2f}")
 
     # ---- reescreve
+    # AS EMENDAS TEM DE SER MONOTONICAS. Cada polilinha foi cortada na juncao
+    # por conta propria, e elas se sobrepoem: medido, a de R1 segue 66,8 m
+    # ALEM do ponto onde o canal comeca, e concatenar cru faz a linha andar
+    # para a frente e saltar 57,7 m para tras. Uma secao ali cruza o eixo DUAS
+    # vezes e a apara por curvatura a corta pela metade -- foi assim que a
+    # RS 20359,1 perdeu 506 m dos seus 1.152 m e a emenda ficou estrangulada.
+    # Cada trecho e cortado onde o seguinte comeca.
+    from shapely.geometry import LineString, Point
+    from shapely.ops import substring
+
+    def emendar(partes):
+        saida_xy = []
+        for k, p in enumerate(partes):
+            ln = LineString(p)
+            if k < len(partes) - 1:
+                s = ln.project(Point(*partes[k + 1][0]))
+                if 0 < s < ln.length:
+                    recuo = ln.length - s
+                    if recuo > 1.0:
+                        print(f"   emenda {k}: cortando {recuo:.1f} m de "
+                              "sobreposicao")
+                    ln = substring(ln, 0, s)
+            saida_xy.append(np.asarray(ln.coords))
+        return np.vstack(saida_xy)
+
     saida = list(cab)
     saida.append(f"River Reach={_pad(rio)},{_pad('R1')}")
-    xy = np.vstack([R1["xy"], CAN["xy"], R3["xy"]])
+    print("\nemendando as polilinhas:")
+    xy = emendar([R1["xy"], CAN["xy"], R3["xy"]])
     saida.append(f"Reach XY= {len(xy)} ")
     lin = ""
     for k, (x, y) in enumerate(xy):
