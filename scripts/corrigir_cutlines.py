@@ -1,42 +1,59 @@
 # -*- coding: utf-8 -*-
-"""Apara cutlines longas demais e sincroniza estaca com comprimento.
+"""Apara cutline larga demais para a curva em que ela esta.
 
-    python scripts/corrigir_cutlines.py modelo/mirim_t30/mirim_t30.g01 --saida g02
+    python scripts/corrigir_cutlines.py modelo/mirim_t30/mirim_t30.g07 --saida g08
 
 A ENTRADA NAO E TOCADA. Sai um .gXX novo.
 
-O QUE ISTO CORRIGE, E SO ISTO
+O QUE ISTO ATACA
 
-  1. CUTLINE QUE CRUZA O PROPRIO EIXO MAIS DE UMA VEZ (67 secoes no g01).
-     Uma cutline de 1.550 m num rio de 52 m atravessa a volta seguinte do
-     meandro: a mesma agua entra duas vezes na mesma secao. A secao e APARADA
-     nas pontas ate sobrar UMA travessia -- a que contem o canal.
+  Duas familias do Validate Geometry, que sao o mesmo defeito visto de dois
+  angulos -- medido no g07, com quatro reaches:
 
-  2. CUTLINE CRUZANDO A DA VIZINHA (66 secoes; 68 pares no g01).
-     Depois de aparar pelo eixo, o que ainda cruzar a vizinha imediata e
-     encurtado daquele lado, ate limpar.
+    446  "This is a edge line self intersection point"
+     64  "XS must intersect exactly one Reach"
+      5  "XS naming error - River Station out of order"  (sintoma: com a
+         cutline cortando o eixo duas vezes, a projecao fica ambigua)
 
-  3. ESTACA DISCORDANDO DO COMPRIMENTO DA CUTLINE (432 secoes acima de 5 mm).
-     Nao se mexe em XY: a ultima estaca passa a valer exatamente
-     `round(comprimento, 2)`. Como o `.g01` grava estaca em `%8.2f`, o erro
-     residual fica limitado a meio centavo de metro POR CONSTRUCAO -- e nao
-     ha como fazer melhor neste formato, porque a cutline tambem e gravada
-     com 1 cm de resolucao (`%16.2f`). A secao muda de largura em ate 1,6 cm.
+  A causa e uma so: secao larga demais para o raio da curva. Medido no g07,
+  57 secoes cortam o proprio eixo mais de uma vez (41 cortam 2x, 12 cortam 3x,
+  3 cortam 4x e uma corta 5x), e a largura mediana no reach do meandro e de
+  623 m -- com maximo de 1.550 m -- num rio cujo canal tem 52 a 100 m.
 
-O QUE ISTO NAO TOCA, DE PROPOSITO
+O CRITERIO E O RAIO DA CURVA, E NAO UM NUMERO FIXO
 
-  Nenhuma COTA muda. Nenhum ponto do canal sai. O HTab fica como esta -- ele
-  esta ancorado 2 cm acima do talvegue nas 1.418 secoes, e o talvegue nao se
-  move porque o canal nunca e aparado.
+  Numa curva de raio R, a secao que se estende alem de R pelo lado de DENTRO
+  passa do centro de curvatura: a partir dali ela anda para tras, cruza as
+  vizinhas e dobra sobre o proprio rio. E o mecanismo que produz tanto a
+  travessia repetida do eixo quanto o emaranhado das edge lines.
 
-  A APARA NUNCA ENTRA NO CANAL. O corte respeita `Bank Sta` mais uma folga de
-  `FOLGA_CANAL` larguras de canal de cada lado. Quando nao da para satisfazer
-  o criterio sem invadir essa faixa, A SECAO FICA COMO ESTA e entra no
-  relatorio -- e o caso em que aparar seria pior que o defeito.
+  Entao a meia-largura do lado interno fica limitada a `K_CURV * R`, com R
+  medido no eixo do PROPRIO reach numa janela proporcional a largura do canal.
+  Onde a curva e aberta, R e grande e nada e aparado.
 
-  A ORIENTACAO NAO E CORRIGIDA. Ha 253 secoes com angulo ruim contra a
-  tangente (135 delas quase paralelas ao fluxo). Girar uma cutline a move de
-  lugar, e isso e outra decisao -- nao entra aqui.
+A FOLGA CEDE EM VEZ DE TRAVAR
+
+  A versao anterior protegia 1,5 largura de canal de cada lado como constante,
+  e por isso conseguiu aparar so 31 secoes: a travessia indesejada fica, na
+  mediana, a 18 m da margem -- as vezes a 0 m --, dentro da faixa protegida.
+  Proteger 78 m de planicie onde a volta seguinte do meandro passa a 18 m nao
+  descreve terreno nenhum: ali nao HA planicie, ha um pescoco.
+
+  Aqui a folga comeca em 1,5 largura e vai cedendo por tentativas ate
+  `FOLGA_PISO` metros alem da margem. O CANAL NUNCA E INVADIDO: entre `lb` e
+  `rb` nada e cortado, em nenhuma hipotese. Quando nem com a folga minima o
+  criterio se satisfaz, A SECAO FICA COMO ESTA e entra no relatorio.
+
+CIENTE DE REACHES
+
+  Cada secao e conferida contra o eixo do SEU reach -- com quatro reaches, usar
+  um eixo so mediria a coisa errada -- e tambem contra os eixos dos OUTROS,
+  porque cutline que atravessa o ramo vizinho e ambigua para o HEC-RAS.
+
+NADA DE COTA MUDA
+
+  So saem pontos das PONTAS. Talvegue, largura de canal e as cotas que
+  sobrevivem sao identicos; a conferencia no fim mede isso.
 """
 import os
 import re
@@ -49,16 +66,17 @@ from qc_secoes import ler_secoes       # noqa: E402
 from qc_geometria import ler_eixos     # noqa: E402
 from ras_io import escrever            # noqa: E402
 
-FOLGA_CANAL = 1.5     # larguras de canal preservadas de cada lado da margem
-FOLGA_MIN = 30.0      # m; folga minima, quando o canal e muito estreito
-RECUO = 2.0           # m de recuo antes da travessia indesejada do eixo
+K_CURV = 0.80        # fracao do raio de curvatura admitida do lado de dentro
+FOLGA_MULT = 1.5     # folga desejada, em larguras de canal
+FOLGA_PISO = 8.0     # m; o minimo que se preserva alem da margem
+RECUO = 3.0          # m de recuo antes da travessia indesejada
+TOL = 0.005          # m; resolucao da estaca no formato do .gNN
 
 
 def _col(v, larg, dec):
-    """Grava em colunas de largura fixa, 10 por linha."""
     saida, linha = [], ""
     for i, x in enumerate(v):
-        linha += ("%*.*f" % (larg, dec, x))
+        linha += "%*.*f" % (larg, dec, x)
         if (i + 1) % 10 == 0:
             saida.append(linha)
             linha = ""
@@ -72,44 +90,111 @@ def _fmt(v):
     return s if s else "0"
 
 
-def travessias(A, u, L, eixo):
-    """Estacas em que a cutline corta o eixo, em ordem."""
+def _arg(argv, chave, padrao=None, tipo=str):
+    return tipo(argv[argv.index(chave) + 1]) if chave in argv else padrao
+
+
+def mapa_reaches(g):
+    t = open(g, encoding="latin-1", errors="replace").read() \
+        .replace("\r", "").split("\n")
+    ch, saida = None, []
+    for l in t:
+        if l.startswith("River Reach="):
+            p = l.split("=", 1)[1].split(",")
+            ch = (p[0].strip(), p[1].strip())
+        elif l.startswith("Type RM Length L Ch R"):
+            saida.append(ch)
+    return saida
+
+
+def curvatura(eixo, s, janela):
+    """Raio de curvatura e sinal do giro, no ponto `s` do eixo."""
+    a = max(s - janela, 0.0)
+    b = min(s + janela, eixo.length)
+    P0 = np.array(eixo.interpolate(a).coords[0])
+    P1 = np.array(eixo.interpolate(0.5 * (a + b)).coords[0])
+    P2 = np.array(eixo.interpolate(b).coords[0])
+    v1, v2 = P1 - P0, P2 - P1
+    cr = v1[0] * v2[1] - v1[1] * v2[0]
+    d01 = np.hypot(*(P1 - P0))
+    d12 = np.hypot(*(P2 - P1))
+    d02 = np.hypot(*(P2 - P0))
+    area2 = abs(cr)
+    if area2 < 1e-9 or d01 * d12 * d02 == 0:
+        return np.inf, 0.0
+    R = d01 * d12 * d02 / (2.0 * area2)      # raio do circulo pelos 3 pontos
+    return R, np.sign(cr)
+
+
+def travessias(A, u, s0, s1, eixo):
     from shapely.geometry import LineString
-    ln = LineString([A, A + L * u])
+    ln = LineString([A + s0 * u, A + s1 * u])
     x = ln.intersection(eixo)
     if x.is_empty:
         return []
     pts = list(x.geoms) if hasattr(x, "geoms") else [x]
-    s = []
+    out = []
     for p in pts:
         if p.geom_type != "Point":
             p = p.centroid
-        s.append(float(np.dot(np.array([p.x, p.y]) - A, u)))
-    return sorted(s)
+        out.append(float(np.dot(np.array([p.x, p.y]) - A, u)))
+    return sorted(out)
 
 
-def aparar(d, eixo):
-    """Devolve (s0, s1, motivo) -- a faixa de estacas que fica."""
+def faixa(d, eixo, outros):
+    """(s0, s1, motivo) -- o quanto da secao fica, e por que foi aparado."""
+    from shapely.geometry import Point
     A = np.asarray(d["cut"][0], float)
     B = np.asarray(d["cut"][-1], float)
     v = B - A
     L = float(np.hypot(*v))
     u = v / max(L, 1e-9)
     lb, rb = float(d["lb"]), float(d["rb"])
-    folga = max(FOLGA_MIN, FOLGA_CANAL * max(rb - lb, 1.0))
-    lim0, lim1 = max(0.0, lb - folga), min(L, rb + folga)
+    larg = max(rb - lb, 1.0)
 
-    s0, s1 = 0.0, L
-    t = travessias(A, u, L, eixo)
-    dentro = [x for x in t if lim0 <= x <= lim1]
-    alvo = dentro[0] if dentro else (min(t, key=lambda x: abs(x - 0.5 * (lb + rb)))
-                                     if t else 0.5 * (lb + rb))
-    for x in t:
-        if x < alvo - 1e-6:
-            s0 = max(s0, min(x + RECUO, lim0))
-        elif x > alvo + 1e-6:
-            s1 = min(s1, max(x - RECUO, lim1))
-    return s0, s1, len(t)
+    # ---- limite de curvatura, do lado de dentro da curva
+    M = 0.5 * (A + B)
+    s_eixo = eixo.project(Point(*M))
+    R, giro = curvatura(eixo, s_eixo, max(2.0 * larg, 40.0))
+    lim_curv = K_CURV * R if np.isfinite(R) else np.inf
+    # `giro` > 0: o eixo vira para a esquerda, e o lado INTERNO e o esquerdo.
+    # A cutline vai da esquerda para a direita, entao o lado interno e o de
+    # estaca BAIXA quando giro > 0.
+    meio = 0.5 * (lb + rb)
+    c_esq = lim_curv if giro > 0 else np.inf
+    c_dir = lim_curv if giro < 0 else np.inf
+
+    for k in range(9):
+        folga = max(FOLGA_PISO, FOLGA_MULT * larg * (1.0 - k / 8.0))
+        lim0 = max(0.0, lb - folga)
+        lim1 = min(L, rb + folga)
+        s0 = max(0.0, min(lim0, meio - c_esq))
+        s1 = min(L, max(lim1, meio + c_dir))
+        t = travessias(A, u, s0, s1, eixo)
+        dentro = [x for x in t if lim0 <= x <= lim1]
+        alvo = (dentro[0] if dentro else
+                (min(t, key=lambda x: abs(x - meio)) if t else meio))
+        for x in t:
+            if x < alvo - 1e-6:
+                s0 = max(s0, min(x + RECUO, lim0))
+            elif x > alvo + 1e-6:
+                s1 = min(s1, max(x - RECUO, lim1))
+        n_prop = len(travessias(A, u, s0, s1, eixo))
+        n_out = sum(len(travessias(A, u, s0, s1, e)) for e in outros)
+        if n_prop == 1 and n_out == 0:
+            return s0, s1, "ok"
+        if n_out:
+            # tambem atravessa outro ramo: encolhe pelas duas pontas
+            for e in outros:
+                for x in travessias(A, u, s0, s1, e):
+                    if x < meio:
+                        s0 = max(s0, min(x + RECUO, lim0))
+                    else:
+                        s1 = min(s1, max(x - RECUO, lim1))
+            if (len(travessias(A, u, s0, s1, eixo)) == 1
+                    and not any(travessias(A, u, s0, s1, e) for e in outros)):
+                return s0, s1, "ok (outro ramo)"
+    return s0, s1, "insuficiente"
 
 
 def main(argv):
@@ -117,7 +202,7 @@ def main(argv):
         raise SystemExit(__doc__)
     from shapely.geometry import LineString
     entrada = argv[0]
-    ext = argv[argv.index("--saida") + 1] if "--saida" in argv else "g02"
+    ext = _arg(argv, "--saida", "g08")
     raiz = os.path.dirname(entrada) or "."
     base = os.path.basename(entrada).split(".")[0]
     novo = os.path.join(raiz, f"{base}.{ext}")
@@ -125,77 +210,68 @@ def main(argv):
         raise SystemExit("saida igual a entrada -- recusado")
 
     S = ler_secoes(entrada)
-    ordem = sorted(range(len(S)), key=lambda i: -S[i]["rs"])
-    eixo = list(ler_eixos(entrada).values())[0]
+    eixos = ler_eixos(entrada)
+    mapa = mapa_reaches(entrada)
     print(f"entrada: {entrada}   (intocada)")
     print(f"saida  : {novo}")
-    print(f"secoes : {len(S)}\n")
+    print(f"secoes : {len(S)}   reaches: {len(eixos)}\n")
 
-    # ---- 1a passada: aparar pelo eixo
-    faixa = {}
-    for i in range(len(S)):
-        s0, s1, nt = aparar(S[i], eixo)
-        faixa[i] = [s0, s1, nt]
+    lim = {}
+    motivos = {}
+    for i, d in enumerate(S):
+        ch = mapa[i]
+        outros = [e for k, e in eixos.items() if k != ch]
+        s0, s1, mot = faixa(d, eixos[ch], outros)
+        lim[i] = [s0, s1]
+        motivos[i] = mot
 
-    # ---- 2a passada: encurtar o que ainda cruza a vizinha
+    # ---- vizinhas que ainda se cruzam, dentro do mesmo reach
     def linha(i):
         d = S[i]
         A = np.asarray(d["cut"][0], float)
         B = np.asarray(d["cut"][-1], float)
         u = (B - A) / max(float(np.hypot(*(B - A))), 1e-9)
-        s0, s1, _ = faixa[i]
-        return LineString([A + s0 * u, A + s1 * u])
+        return LineString([A + lim[i][0] * u, A + lim[i][1] * u])
 
+    ordem = sorted(range(len(S)), key=lambda i: (mapa[i], -S[i]["rs"]))
     encurtou = 0
     for k in range(len(ordem) - 1):
         i, j = ordem[k], ordem[k + 1]
-        for _ in range(24):
+        if mapa[i] != mapa[j]:
+            continue
+        for _ in range(20):
             if not linha(i).intersects(linha(j)):
                 break
-            # encurta o mais largo dos dois, pelo lado que ainda tem folga
-            a, b = (i, j) if (faixa[i][1] - faixa[i][0]) >= \
-                             (faixa[j][1] - faixa[j][0]) else (j, i)
+            a = i if (lim[i][1] - lim[i][0]) >= (lim[j][1] - lim[j][0]) else j
             d = S[a]
             lb, rb = float(d["lb"]), float(d["rb"])
-            folga = max(FOLGA_MIN, FOLGA_CANAL * max(rb - lb, 1.0))
-            lim0, lim1 = max(0.0, lb - folga), rb + folga
-            s0, s1 = faixa[a][0], faixa[a][1]
-            passo = max(0.02 * (s1 - s0), 1.0)
-            if (s1 - lim1) >= (lim0 - s0):
-                if s1 - passo < lim1:
+            p0 = max(0.0, lb - FOLGA_PISO)
+            p1 = rb + FOLGA_PISO
+            s0, s1 = lim[a]
+            passo = max(0.03 * (s1 - s0), 1.0)
+            if (s1 - p1) >= (p0 - s0):
+                if s1 - passo < p1:
                     break
-                faixa[a][1] = s1 - passo
+                lim[a][1] = s1 - passo
             else:
-                if s0 + passo > lim0:
+                if s0 + passo > p0:
                     break
-                faixa[a][0] = s0 + passo
+                lim[a][0] = s0 + passo
             encurtou += 1
 
-    # ---- monta o novo conteudo de cada secao
-    novos, intocadas, perdida = {}, 0, []
+    # ---- reescreve
+    novos, tirado = {}, []
     for i, d in enumerate(S):
         A = np.asarray(d["cut"][0], float)
         B = np.asarray(d["cut"][-1], float)
         vv = B - A
         L = float(np.hypot(*vv))
         u = vv / max(L, 1e-9)
-        s0, s1, _ = faixa[i]
+        s0, s1 = lim[i]
         st = np.asarray(d["sta"], float)
         z = np.asarray(d["z"], float)
-        if s0 <= 1e-9 and s1 >= L - 1e-9:
-            s0, s1 = 0.0, L
-            intocadas += 1
-        # recorta o perfil, interpolando as pontas novas.
-        # A TOLERANCIA E A DO FORMATO, e nao 1e-9: a estaca e gravada em
-        # `%8.2f`, entao dois valores a menos de 1 cm sao O MESMO PONTO no
-        # arquivo. Com 1e-9 o codigo inseria uma ponta a 3 mm da ultima
-        # estaca e depois arredondava as duas para o mesmo valor -- o
-        # HEC-RAS recusou 504 secoes com "Station and elevation data
-        # contains duplicate points".
-        TOL = 0.005
         m = (st >= s0 - TOL) & (st <= s1 + TOL)
-        ns = list(st[m])
-        nz = list(z[m])
+        ns, nz = list(st[m]), list(z[m])
         if not ns or ns[0] > s0 + TOL:
             ns.insert(0, s0)
             nz.insert(0, float(np.interp(s0, st, z)))
@@ -205,31 +281,30 @@ def main(argv):
         ns = np.array(ns) - s0
         nz = np.array(nz)
         nA, nB = A + s0 * u, A + s1 * u
-        # ---- item 3: a ultima estaca casa com o comprimento gravado
         Lg = round(float(np.hypot(*(nB - nA))), 2)
         if len(ns) > 1 and abs(ns[-1] - Lg) < 0.5 and Lg > ns[-2] + TOL:
             ns[-1] = Lg
-        # ---- e nada sai daqui com estaca repetida ou fora de ordem
         keep = [0]
         for k in range(1, len(ns)):
             if ns[k] > ns[keep[-1]] + TOL:
                 keep.append(k)
         ns, nz = ns[keep], nz[keep]
-        perdida.append(L - (s1 - s0))
+        tirado.append(L - (s1 - s0))
         novos[i] = {"sta": ns, "z": nz, "lb": float(d["lb"]) - s0,
-                    "rb": float(d["rb"]) - s0, "desl": s0,
-                    "cut": (nA, nB), "n_antes": len(st)}
+                    "rb": float(d["rb"]) - s0, "desl": s0, "cut": (nA, nB)}
 
-    perdida = np.array(perdida)
-    mexidas = int((perdida > 1e-6).sum())
-    print(f"secoes aparadas          : {mexidas}   (intocadas: {intocadas})")
+    tirado = np.array(tirado)
+    mex = int((tirado > 1e-6).sum())
+    print(f"secoes aparadas          : {mex}   "
+          f"(intocadas: {len(S)-mex})")
     print(f"encurtamentos por vizinha: {encurtou}")
-    if mexidas:
-        p = perdida[perdida > 1e-6]
+    if mex:
+        p = tirado[tirado > 1e-6]
         print(f"largura retirada         : mediana {np.median(p):.0f} m   "
-              f"p90 {np.percentile(p, 90):.0f}   max {p.max():.0f} m")
+              f"p90 {np.percentile(p,90):.0f}   max {p.max():.0f} m")
+    ruins = [i for i, m in motivos.items() if m == "insuficiente"]
+    print(f"secoes em que o criterio NAO foi satisfeito: {len(ruins)}")
 
-    # ---- reescreve o arquivo
     linhas = open(entrada, encoding="latin-1", errors="replace").read() \
         .replace("\r\n", "\n").replace("\r", "\n").split("\n")
     i_sec, saida, j = -1, [], 0
@@ -267,7 +342,8 @@ def main(argv):
                     j += 1
                 continue
             if l.startswith("Bank Sta="):
-                saida.append("Bank Sta=%s,%s" % (_fmt(nv["lb"]), _fmt(nv["rb"])))
+                saida.append("Bank Sta=%s,%s"
+                             % (_fmt(nv["lb"]), _fmt(nv["rb"])))
                 j += 1
                 continue
             if l.startswith("#Mann="):
@@ -281,9 +357,9 @@ def main(argv):
                               if x[c:c + 8].strip()]
                     k2 += 1
                 val = [float(x) for x in bruto[:3 * cnt]]
-                lim = float(nv["sta"][-1])
+                topo = float(nv["sta"][-1])
                 for t in range(0, 3 * cnt, 3):
-                    val[t] = min(max(val[t] - nv["desl"], 0.0), lim)
+                    val[t] = min(max(val[t] - nv["desl"], 0.0), topo)
                 saida.append(l)
                 lin, corpo = "", []
                 for t, x in enumerate(val):
@@ -299,49 +375,37 @@ def main(argv):
                 continue
         saida.append(l)
         j += 1
-
-    txt = "\n".join(saida)
-    t0 = linhas[0].split("=", 1)[1] if "=" in linhas[0] else ""
-    if t0:
-        txt = txt.replace("Geom Title=" + t0, "Geom Title=" + t0, 1)
-    escrever(novo, txt)
+    escrever(novo, "\n".join(saida))
 
     # ---------------------------------------------------------- conferencia
     print("\nCONFERENCIA (relendo o arquivo gravado)")
-    B2 = ler_secoes(novo)
-    B2.sort(key=lambda d: -d["rs"])
     A2 = ler_secoes(entrada)
-    A2.sort(key=lambda d: -d["rs"])
+    B2 = ler_secoes(novo)
     print(f"   secoes                 : {len(A2)} -> {len(B2)}")
-    zi = np.array([float(x["z"].min()) for x in A2])
-    zf = np.array([float(x["z"].min()) for x in B2])
-    print(f"   talvegue mudou em      : max {np.abs(zf - zi).max():.6f} m "
-          "(tem de ser zero)")
-    ci = np.array([float(x["rb"] - x["lb"]) for x in A2])
-    cf = np.array([float(x["rb"] - x["lb"]) for x in B2])
-    print(f"   largura do canal mudou : max {np.abs(cf - ci).max():.6f} m "
-          "(tem de ser zero)")
-    for rot, X in (("antes", A2), ("depois", B2)):
-        e = []
-        for d in X:
-            C = np.asarray(d["cut"], float)
-            Lc = float(np.hypot(*(np.diff(C, axis=0).T)).sum())
-            e.append(abs(Lc - float(d["sta"][-1] - d["sta"][0])))
-        e = np.array(e)
-        print(f"   estaca x cutline {rot:<6}: > 5 mm em {int((e > 0.005).sum()):4d} "
-              f"secoes   max {e.max()*1000:.1f} mm")
-    for rot, X in (("antes", A2), ("depois", B2)):
-        L = [LineString(np.asarray(d["cut"], float)) for d in X]
-        mult = sum(1 for ln in L
-                   if len(ln.intersection(eixo).geoms
-                          if hasattr(ln.intersection(eixo), "geoms")
-                          else [ln.intersection(eixo)]) >= 2)
-        from shapely.strtree import STRtree
-        tr = STRtree(L)
-        pares = {(i, int(j)) for i, ln in enumerate(L)
-                 for j in tr.query(ln) if int(j) > i and ln.intersects(L[int(j)])}
-        print(f"   {rot:<6}: cruza o eixo >=2x em {mult:4d} secoes   |  "
-              f"cutlines cruzadas: {len(pares):4d} pares")
+    for rot, f in (("talvegue", lambda x: float(x["z"].min())),
+                   ("largura do canal", lambda x: float(x["rb"] - x["lb"]))):
+        a = np.array([f(x) for x in A2])
+        b = np.array([f(x) for x in B2])
+        print(f"   {rot:<22} mudou no maximo "
+              f"{np.abs(b-a).max():.6f}  (tem de ser zero)")
+    rep = sum(1 for d in B2
+              if (np.diff(np.round(np.asarray(d['sta'], float), 2)) <= 0).any())
+    print(f"   secoes com estaca repetida ou fora de ordem: {rep}")
+    eixos2 = ler_eixos(novo)
+    mapa2 = mapa_reaches(novo)
+    mult = 0
+    for i, d in enumerate(B2):
+        ln = LineString(np.asarray(d["cut"], float))
+        x = ln.intersection(eixos2[mapa2[i]])
+        n = 0 if x.is_empty else (len(x.geoms) if hasattr(x, "geoms") else 1)
+        if n != 1:
+            mult += 1
+    print(f"   secoes que nao cruzam o proprio eixo exatamente 1x: {mult}"
+          f"   (era 58)")
+    la = np.array([float(x["sta"][-1]) for x in A2])
+    lbb = np.array([float(x["sta"][-1]) for x in B2])
+    print(f"   largura da secao: mediana {np.median(la):.0f} -> "
+          f"{np.median(lbb):.0f} m   max {la.max():.0f} -> {lbb.max():.0f} m")
     return novo
 
 

@@ -9,6 +9,9 @@ Terrain/
 __pycache__/
 *.pyc
 *.npz
+*.dem
+*.tif
+*.hdf
 *.aux.xml
 *.O0[0-9]
 *.b0[0-9]

@@ -154,7 +154,16 @@ def main(argv):
         raise SystemExit(__doc__)
     entrada = argv[0]
     ext = _arg(argv, "--saida", "g05")
-    nome = _arg(argv, "--reach", "Canal")
+    nome = _arg(argv, "--reach", "R1")
+    # O CANAL PRECISA DE NOME DE RIO PROPRIO, e nao so de reach proprio.
+    # Com os dois ramos sob 'Itajai_Mirim' o RAS Mapper costura as bank lines
+    # POR NOME DE RIO e gera DOIS jogos completos, cada um varrendo os 141 km
+    # -- medido: 4 polilinhas de 146, 153, 133 e 135 km onde deviam existir
+    # duas. Toda secao passa a cruzar 4 bank lines em vez de 2, e o Validate
+    # Geometry acusa "XS intersects > 2 banklines" em 1.401 das 1.469 secoes,
+    # mais "Multiple upstream/downstream connections to Rivers with the same
+    # name". Com nome proprio a bifurcacao fica sem ambiguidade.
+    rio_canal = _arg(argv, "--rio", "Canal_Retif")
     raiz = os.path.dirname(entrada) or "."
     base = os.path.basename(entrada).split(".")[0]
     novo = os.path.join(raiz, f"{base}.{ext}")
@@ -198,9 +207,9 @@ def main(argv):
                                                        "Dn River,Reach=",
                                                        "Junc L&A="))]
             if jn.startswith("Bifurcacao"):
-                dns.append(f"Dn River,Reach={_pad(rio)},{_pad(nome)}")
+                dns.append(f"Dn River,Reach={_pad(rio_canal)},{_pad(nome)}")
             else:
-                ups.append(f"Up River,Reach={_pad(rio)},{_pad(nome)}")
+                ups.append(f"Up River,Reach={_pad(rio_canal)},{_pad(nome)}")
             # uma linha por par (montante, jusante)
             la = [f"Junc L&A={comp},0" for comp in
                   ["100.00"] * (len(ups) * len(dns))]
@@ -216,7 +225,7 @@ def main(argv):
     # ---- o reach do canal, no fim
     eixo = np.asarray(json.load(open(EIXO))["features"][0]
                       ["geometry"]["coordinates"], float)
-    saida.append(f"River Reach={_pad(rio)},{_pad(nome)}")
+    saida.append(f"River Reach={_pad(rio_canal)},{_pad(nome)}")
     saida.append(f"Reach XY= {len(eixo)} ")
     lin = ""
     for k, (x, y) in enumerate(eixo):

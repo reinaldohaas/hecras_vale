@@ -65,6 +65,10 @@ def _fmt(v):
     return s if s else "0"
 
 
+def _arg(argv, chave, padrao=None, tipo=str):
+    return tipo(argv[argv.index(chave) + 1]) if chave in argv else padrao
+
+
 def invertidas(S, eixo):
     """Indices das secoes cuja cutline nao vai de esquerda para direita."""
     from shapely.geometry import Point
@@ -98,7 +102,62 @@ def main(argv):
 
     S = ler_secoes(entrada)
     eixo = list(ler_eixos(entrada).values())[0]
-    alvo = set(invertidas(S, eixo))
+    # A LISTA VEM DO PROPRIO HEC-RAS quando ha `--erros`.
+    # O detector daqui (`invertidas`) usa a tangente do eixo numa janela de
+    # +-25 m e erra onde a cutline e quase paralela ao fluxo: apontou 42
+    # secoes onde o Validate Geometry aponta 16, e o excedente PIOROU as bank
+    # lines. Preferir o veredito do proprio motor elimina o palpite.
+    erros = _arg(argv, "--erros")
+    if erros:
+        import csv
+        import re as _re
+        # DUAS ARMADILHAS NO CASAMENTO, ambas medidas:
+        #  - o RAS EXIBE o RS arredondado (114599.4 para 114599.36), entao
+        #    igualdade exata perde 6 das 16;
+        #  - o RS SE REPETE entre reaches (R2 vai de 20057 a 1221 e o canal de
+        #    7500 a 0), entao casar so por RS pega a secao errada.
+        # Casa-se por (rio, reach) e pela tolerancia do proprio arredondamento.
+        cab = open(entrada, encoding="latin-1", errors="replace").read() \
+            .replace("\r", "").split("\n")
+        ch, mapa = None, []
+        for l in cab:
+            if l.startswith("River Reach="):
+                p = l.split("=", 1)[1].split(",")
+                ch = (p[0].strip(), p[1].strip())
+            elif l.startswith("Type RM Length L Ch R"):
+                mapa.append(ch)
+        marcados, perdidos = [], []
+        for r in csv.DictReader(open(erros, encoding="utf-8"), delimiter=";"):
+            if "reversed" not in r["mensagem"]:
+                continue
+            m = _re.match(r"\s*([^,]+),\s*(\S+)\s*\(([\d.]+)\)",
+                          r["onde"].strip())
+            if not m:
+                continue
+            rio_e, rch_e, rs_e = m.group(1).strip(), m.group(2), float(m.group(3))
+            # O RAS TRUNCA, nao arredonda: 111072.16 aparece como "111072.1",
+            # a 0,06 do valor real -- fora de uma tolerancia de meia casa.
+            # A janela cobre os dois comportamentos: [-meia casa, +uma casa).
+            # Sem ambiguidade, porque a secao mais proxima esta a 185 m.
+            dec = len(m.group(3).split(".")[-1]) if "." in m.group(3) else 0
+            passo = 10 ** (-dec)
+            cand = [i for i, d in enumerate(S)
+                    if mapa[i] == (rio_e, rch_e)
+                    and -0.5 * passo - 1e-9 <= float(d["rs"]) - rs_e
+                    < passo + 1e-9]
+            if len(cand) == 1:
+                marcados.append(cand[0])
+            else:
+                perdidos.append((rio_e, rch_e, rs_e, len(cand)))
+        alvo = set(marcados)
+        print(f"lista de erros: {erros}")
+        print(f"   marcadas pelo HEC-RAS: {len(marcados)+len(perdidos)}   "
+              f"casadas: {len(alvo)}")
+        for x in perdidos:
+            print(f"   NAO CASOU: {x[0]} {x[1]} RS {x[2]}  "
+                  f"({x[3]} candidatas)")
+    else:
+        alvo = set(invertidas(S, eixo))
     print(f"entrada: {entrada}   (intocada)")
     print(f"saida  : {novo}")
     print(f"secoes : {len(S)}   gravadas ao contrario: {len(alvo)} "
@@ -221,32 +280,10 @@ def main(argv):
     ab = np.array([float(np.trapezoid(x["z"], x["sta"])) for x in B2])
     print(f"   area sob o perfil mudou: max {np.abs(ab - aa).max():.6f} m2 "
           "(tem de ser zero)")
-    eixo2 = list(ler_eixos(novo).values())[0]
-    print(f"   ainda ao contrario     : {len(invertidas(B2, eixo2))} "
-          f"(era {len(alvo)})")
-
-    def travessias(X):
-        n = 0
-        lado = []
-        for d in X:
-            A = np.asarray(d["cut"][0], float)
-            B = np.asarray(d["cut"][-1], float)
-            u = (B - A) / max(float(np.hypot(*(B - A))), 1e-9)
-            P = A + float(d["lb"]) * u
-            s = eixo2.project(Point(*P))
-            q0 = np.array(eixo2.interpolate(max(s - 25, 0)).coords[0])
-            q1 = np.array(eixo2.interpolate(
-                min(s + 25, eixo2.length)).coords[0])
-            t = q1 - q0
-            t /= max(float(np.hypot(*t)), 1e-9)
-            w = P - np.array(eixo2.interpolate(s).coords[0])
-            lado.append(np.sign(t[0] * w[1] - t[1] * w[0]))
-        lado = np.array(lado)
-        return int((np.diff(lado) != 0).sum())
-    A3 = sorted(A2, key=lambda d: -d["rs"])
-    B3 = sorted(B2, key=lambda d: -d["rs"])
-    print(f"   bank line atravessa o rio: {travessias(A3)} vezes -> "
-          f"{travessias(B3)} vezes")
+    # A conferencia de "quantas continuam ao contrario" e de travessia da bank
+    # line so vale com um eixo; com quatro reaches ela mediria a coisa errada.
+    # Quem responde isso agora e o proprio HEC-RAS, por `ler_erros_geometria`.
+    print("   rode `ler_erros_geometria.py` sobre o .hdf para o veredito")
     return novo
 
 
