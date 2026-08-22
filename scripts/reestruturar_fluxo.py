@@ -133,8 +133,17 @@ def main(argv):
     def reach_de(rs):
         for r in R:
             if r[3] - 1e-6 <= rs <= r[2] + 1e-6:
-                return r[1]
-        return None
+                return r[1], rs
+        # RS FORA DE TODOS OS REACHES. Acontece quando a geometria foi
+        # RENUMERADA -- ao trocar 19 km de meandro por 7,5 km de canal, o
+        # contorno de jusante deixa de estar em RS 75,00. Sem tratar isso o
+        # contorno some e o modelo nao roda. Vai para a secao mais proxima,
+        # e o ajuste e impresso, porque mover contorno nao pode ser silencioso.
+        melhor = min(((abs(x - rs), r[1], x) for r in R for x in r[4]),
+                     key=lambda t: t[0])
+        print(f"      RS {rs:.2f} nao existe mais -- levado para "
+              f"{melhor[2]:.2f} em {melhor[1]} (a {melhor[0]:.0f} m)")
+        return melhor[1], melhor[2]
 
     saida = list(t[:ini[0]])
     # ---- condicao inicial por reach
@@ -149,13 +158,15 @@ def main(argv):
         tipo = next((x.split("=")[0] for x in corpo
                      if "Hydrograph=" in x), "?")
         if rs1 is None:
-            # contorno pontual: so corrige o reach
-            rc = reach_de(rs0)
+            # contorno pontual: corrige o reach e, se houve renumeracao, o RS
+            print(f"\n   {tipo:<34} RS {rs0:9.2f}")
+            rc, rs_novo = reach_de(rs0)
             p = l.split("=", 1)[1].split(",")
             p[1] = _pad(rc)
+            p[2] = f"{rs_novo:<8.2f}"
             novo_l = "Boundary Location=" + ",".join(p)
             novos_bc.append([novo_l] + corpo)
-            print(f"\n   {tipo:<34} RS {rs0:9.2f}  ->  reach {rc}")
+            print(f"      -> reach {rc}, RS {rs_novo:.2f}")
             continue
 
         # ---- intervalo: rateia por reach
