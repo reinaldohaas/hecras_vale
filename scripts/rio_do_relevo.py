@@ -72,6 +72,7 @@ JANELA = 60.0         # m para cada lado, ao medir a tangente do eixo
 MEIA_MAX = 400.0      # m; teto da meia-largura
 MEIA_MIN = 60.0       # m; piso, para a secao nunca degenerar
 FOLGA_CALHA = 1.5     # m acima do talvegue = topo da margem
+DESCE_MAX = 0.30      # m que a secao pode descer abaixo do talvegue antes de parar
 JANELA_MARGEM = 3      # secoes para cada lado, na mediana movel da margem
 ALVO_SECAO = 8.0      # m acima do talvegue = onde a secao pode parar
 BUSCA = 500.0         # m; ate onde se procura terreno alto
@@ -176,11 +177,24 @@ def main():
         zt = float(z[i0])
 
         def anda(sinal, alvo):
+            """Anda para fora ate subir `alvo`, ou ate CAIR abaixo do talvegue.
+
+            A segunda parada e o que faltava: a busca ia ate 500 m e podia
+            entrar em OUTRO curso d'agua mais baixo. Medido no Benedito, 63 das
+            294 secoes ficavam com o ponto mais baixo FORA das proprias
+            margens, ate 8,64 m abaixo do invert da calha, e o HEC-RAS acusou
+            62 delas com "hTab starting values below the XS invert". Terreno
+            abaixo do talvegue deste rio nao e planicie deste rio.
+            """
             i = i0
+            ult = i0
             while 0 < i < len(off) - 1:
                 i += sinal
                 if not np.isfinite(z[i]):
                     continue
+                if z[i] < zt - DESCE_MAX:
+                    return ult
+                ult = i
                 if z[i] >= zt + alvo:
                     return i
             return None
@@ -322,7 +336,13 @@ def main():
         l.append(f"{s['sta'][0]:8.2f}{N_PLANICIE:8.3f}{0:8d}"
                  f"{s['lb']:8.2f}{N_CALHA:8.3f}{0:8d}"
                  f"{s['rb']:8.2f}{N_PLANICIE:8.3f}{0:8d}")
-        l.append(f"XS HTab Starting El and Incr={s['zt']+0.02:.2f},0.100, 500 ")
+        # HTAB ANCORADO NO INVERT DA CALHA, e nao no minimo da secao. O
+        # HEC-RAS compara com o ponto mais baixo ENTRE AS MARGENS; ancorar no
+        # minimo da secao poe o HTab abaixo do invert sempre que houver ponto
+        # mais fundo na planicie, e ele reseta a tabela sozinho.
+        mcal = (s["sta"] >= s["lb"]) & (s["sta"] <= s["rb"])
+        z_inv = float(s["z"][mcal].min()) if mcal.any() else s["zt"]
+        l.append(f"XS HTab Starting El and Incr={z_inv+0.02:.2f},0.100, 500 ")
         l.append("XS HTab Horizontal Distribution=-1,-1,-1")
         l.append("XS Rating Curve= 0 ,0")
         l.append("Exp/Cntr=0.3,0.1")
