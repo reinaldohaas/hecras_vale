@@ -1,0 +1,159 @@
+# -*- coding: utf-8 -*-
+"""Monta um projeto HEC-RAS rodavel para um rio gerado do relevo.
+
+    python scripts/projeto_rio_avulso.py modelo/benedito_mono/benedito_mono.g01 \
+        --hidrograma legado/Itajai_Rede_1983.u01 --rio-fonte Rio_Benedito
+
+Cria `.prj`, `.p01` e `.u01` ao lado da geometria. O rio gerado nao tem
+contorno proprio, entao:
+
+  MONTANTE   hidrograma de vazao COPIADO da rede legada, para o mesmo rio.
+             E o unico dado de cheia que existe nesta bacia; gerar um
+             sintetico so mudaria de lugar a invencao.
+
+  JUSANTE    profundidade normal, com a declividade MEDIDA nos ultimos
+             trechos da propria geometria. Rio avulso nao tem mare nem
+             remanso conhecido -- quando ele entrar na rede, o contorno passa
+             a ser a juncao, e este vai fora.
+
+O `.p01` usa o mesmo passo e as mesmas tolerancias do resto do projeto
+(15SEC, ZTol 0,02, 40 iteracoes), para que os numeros sejam comparaveis.
+"""
+import argparse
+import os
+import re
+import sys
+
+import numpy as np
+
+DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, DIR)
+from qc_secoes import ler_secoes    # noqa: E402
+from ras_io import escrever         # noqa: E402
+
+
+def hidrograma(u01, rio):
+    """Vazao horaria do contorno de montante daquele rio, na rede legada."""
+    t = open(u01, encoding="latin-1", errors="replace").read() \
+        .replace("\r", "").split("\n")
+    ini = [i for i, l in enumerate(t) if l.startswith("Boundary Location=")]
+    for a, b in zip(ini, ini[1:] + [len(t)]):
+        p = t[a].split("=", 1)[1].split(",")
+        if p[0].strip() != rio:
+            continue
+        for j in range(a, b):
+            m = re.match(r"^Flow Hydrograph=\s*(\d+)", t[j])
+            if not m:
+                continue
+            n = int(m.group(1))
+            v, k = [], j + 1
+            while k < b and len(v) < n:
+                x = t[k]
+                if not x.strip() or re.match(r"^[A-Za-z]", x):
+                    break
+                v += [float(x[c:c + 8]) for c in range(0, len(x), 8)
+                      if x[c:c + 8].strip()]
+                k += 1
+            return np.array(v[:n])
+    return None
+
+
+def col8(v):
+    saida, linha = [], ""
+    for i, x in enumerate(v):
+        linha += "%8.2f" % x
+        if (i + 1) % 10 == 0:
+            saida.append(linha)
+            linha = ""
+    if linha:
+        saida.append(linha)
+    return saida
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("geom")
+    ap.add_argument("--hidrograma", default="legado/Itajai_Rede_1983.u01")
+    ap.add_argument("--rio-fonte", required=True)
+    a = ap.parse_args()
+
+    pasta = os.path.dirname(a.geom)
+    nome = os.path.basename(a.geom).split(".")[0]
+    S = ler_secoes(a.geom)
+    S.sort(key=lambda d: -d["rs"])
+    t = open(a.geom, encoding="latin-1", errors="replace").read() \
+        .replace("\r", "").split("\n")
+    rr = next(l for l in t if l.startswith("River Reach="))
+    rio, rch = [x.strip() for x in rr.split("=", 1)[1].split(",")]
+
+    Q = hidrograma(a.hidrograma, a.rio_fonte)
+    if Q is None:
+        raise SystemExit(f"nao achei hidrograma de '{a.rio_fonte}' em "
+                         f"{a.hidrograma}")
+    print(f"geometria : {a.geom}")
+    print(f"rio/reach : {rio} , {rch}   {len(S)} secoes")
+    print(f"hidrograma: {len(Q)} horas   pico {Q.max():.1f} m3/s   "
+          f"(de {a.rio_fonte} na rede legada)")
+
+    z = np.array([float(d["z"].min()) for d in S])
+    ch = np.array([float(d["len_ch"]) for d in S])
+    k = max(len(S) - 11, 0)
+    decl = (z[k] - z[-1]) / max(ch[k:-1].sum(), 1.0)
+    decl = float(max(decl, 1e-4))
+    print(f"jusante   : profundidade normal, declividade medida "
+          f"{decl:.5f} nos ultimos {len(S)-k} trechos")
+
+    prj = [f"Proj Title={nome}", "Current Plan=p01",
+           "Default Exp/Contr=0.3,0.1", "SI Units", "Geom File=g01",
+           "Unsteady File=u01", "Plan File=p01",
+           "Y Axis Title=Elevation", "X Axis Title(PF)=Main Channel Distance",
+           "X Axis Title(XS)=Station", "BEGIN DESCRIPTION:",
+           f"{rio} gerado do relevo (MDT SIG-SC 1 m), sem perfil esculpido",
+           "END DESCRIPTION:", "DSS Start Date=", "DSS Start Time=",
+           "DSS End Date=", "DSS End Time=", "DSS Export Filename=",
+           "DSS Export Rating Curves= 0 ", "DSS Export Rating Curve Sorted= 0 ",
+           "DSS Export Volume Flow Curves= 0 ",
+           "DXF Filename=", "DXF OffsetX= 0 ", "DXF OffsetY= 0 ",
+           "DXF ScaleX= 1 ", "DXF ScaleY= 10 ", "GIS Export Profiles= 0 "]
+    escrever(os.path.join(pasta, f"{nome}.prj"), "\n".join(prj))
+
+    p01 = [f"Plan Title={nome}", "Program Version=7.01",
+           f"Short Identifier={nome[:16]:<16}",
+           "Simulation Date=01AUG2026,0000,08AUG2026,2300",
+           "Geom File=g01", "Flow File=u01", "Mixed Flow Regime",
+           "UNET Froude Reduction=True", "UNET Froude Limit= 0.8 ",
+           "UNET Froude Power= 4 ", "UNET ZTol= 0.02 ", "UNET ZSATol= 0.02 ",
+           "UNET MxIter= 40 ", "Computation Interval=15SEC",
+           "Output Interval=1HOUR", "Instantaneous Interval=1HOUR",
+           "Mapping Interval=1HOUR", "Run HTab=-1", "Run UNet=-1",
+           "Run PostProcess=-1", "Run RASMapper=-1", "UNET D1 Cores= 0 "]
+    escrever(os.path.join(pasta, f"{nome}.p01"), "\n".join(p01))
+
+    rs0, rs1 = S[0]["rs"], S[-1]["rs"]
+    u01 = [f"Flow Title={nome}", "Program Version=7.01", "Use Restart= 0 ",
+           f"Initial RS={rio:<16.16},{rch:<16.16},{rs0:.2f},{Q[0]:.2f}",
+           "",
+           f"Boundary Location={rio:<16.16},{rch:<16.16},{rs0:<8.2f},"
+           f"{'':<8},{'':<16},{'':<16}",
+           "Interval=1HOUR", f"Flow Hydrograph= {len(Q)} "]
+    u01 += col8(Q)
+    u01 += ["DSS Path=", "Use DSS=False", "Use Fixed Start Time=True",
+            "Fixed Start Date/Time=01AUG2026,0000",
+            "Is Critical Boundary=False", "Critical Boundary Flow=",
+            "",
+            f"Boundary Location={rio:<16.16},{rch:<16.16},{rs1:<8.2f},"
+            f"{'':<8},{'':<16},{'':<16}",
+            f"Friction Slope={decl:.6f},0"]
+    escrever(os.path.join(pasta, f"{nome}.u01"), "\n".join(u01))
+
+    print("\nCONFERENCIA")
+    for e in ("prj", "p01", "u01", "g01"):
+        p = os.path.join(pasta, f"{nome}.{e}")
+        ok = os.path.exists(p)
+        print(f"   {'OK   ' if ok else 'FALTA'} {nome}.{e}"
+              + (f"   {os.path.getsize(p)} bytes" if ok else ""))
+    return pasta
+
+
+if __name__ == "__main__":
+    main()
