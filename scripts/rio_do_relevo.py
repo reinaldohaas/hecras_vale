@@ -75,6 +75,7 @@ FOLGA_CALHA = 1.5     # m acima do talvegue = topo da margem
 DESCE_MAX = 0.30      # m que a secao pode descer abaixo do talvegue antes de parar
 JANELA_MARGEM = 3      # secoes para cada lado, na mediana movel da margem
 ALVO_SECAO = 8.0      # m acima do talvegue = onde a secao pode parar
+EXTRA_EIXO = 40.0     # m de eixo alem da primeira e da ultima secao
 BUSCA = 500.0         # m; ate onde se procura terreno alto
 N_CALHA, N_PLANICIE = 0.032, 0.055
 WKT = ('PROJCS["SIRGAS_2000_UTM_Zone_22S",GEOGCS["GCS_SIRGAS_2000",'
@@ -274,6 +275,14 @@ def main():
         sta = s["sta"]
         o_l = s["off_t"] + s["d_esq"]
         o_r = s["off_t"] - s["d_dir"]
+        # A CALHA TEM DE CONTER O EIXO. As margens sao medidas a partir do
+        # talvegue, que nem sempre cai sobre o eixo; onde ele esta todo de um
+        # lado, a margem "esquerda" acaba a DIREITA do eixo e a bank line
+        # atravessa o rio -- e o que se via no RAS Mapper mesmo com a calha ja
+        # filtrada. Obrigar o intervalo a cruzar o offset zero e o que impede
+        # isso por construcao, e nao por conserto depois.
+        o_l = max(o_l, PASSO)
+        o_r = min(o_r, -PASSO)
         lb = float(sta[np.argmin(np.abs(sta - (s["me"] - o_l)))])
         rb = float(sta[np.argmin(np.abs(sta - (s["me"] - o_r)))])
         if rb <= lb:
@@ -313,7 +322,20 @@ def main():
     l.append("Spatial Reference System=" + WKT)
     l.append("")
     l.append(f"River Reach={a.rio:<16.16},{a.reach:<16.16}")
-    c = list(eixo.coords)
+    # O EIXO SEGUE ALEM DA PRIMEIRA E DA ULTIMA SECAO. Elas caem exatamente
+    # sobre as pontas da polilinha e ali a cutline TOCA o eixo em vez de
+    # cruza-lo: o HEC-RAS recusa com "XS doesn't intersect the associated
+    # Reach", e junto vem "XS intersects < 2 banklines" e "XS must intersect
+    # exactly one Reach" -- seis Fatal vindos de duas secoes. Prolongar o eixo
+    # nao move secao nenhuma e nao muda comprimento de trecho, que sai de
+    # `Length Ch`.
+    cc = np.asarray(eixo.coords, float)
+    d0 = cc[0] - cc[1]
+    d0 /= max(float(np.hypot(*d0)), 1e-9)
+    d1 = cc[-1] - cc[-2]
+    d1 /= max(float(np.hypot(*d1)), 1e-9)
+    cc = np.vstack([cc[0] + EXTRA_EIXO * d0, cc, cc[-1] + EXTRA_EIXO * d1])
+    c = [tuple(q) for q in cc]
     l.append(f"Reach XY= {len(c)} ")
     ss = [f"{x:16.4f}{y:16.4f}" for x, y in c]
     for k in range(0, len(ss), 2):
