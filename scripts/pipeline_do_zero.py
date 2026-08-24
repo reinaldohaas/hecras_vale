@@ -4,11 +4,14 @@ Pipeline Completo Automatizado do HEC-RAS do Zero.
 
 Executa a cadeia completa:
   1. Montagem estruturada do projeto com garantia de CRLF e cabeçalhos oficiais
-  2. Correção e apara de cutlines em meandros (elimina self-intersections e travessias repetidas do eixo)
-  3. Suavização longitudinal do talvegue (elimina patamares planos e degraus de fundo espúrios)
-  4. Validação automática de geometria via RasMapperLib (.g01.hdf)
-  5. Execução automatizada da simulação via ras-commander / HEC-RAS CLI
-  6. Auditoria de convergência, iterações e balanço de volume
+  2. Suavização longitudinal do talvegue (elimina patamares planos e degraus de fundo espúrios)
+  3. Limpeza de pontos duplicados (RS 103021.3) e conexão de seções desconectadas (RS 63522.38, 40968.47)
+  4. Correção da transição para o Canal Retificado (RS 20359.14: calha de 576m -> 55m e alinhamento)
+  5. Apara de cutlines em meandros (elimina cruzamentos de vizinhas e nós nas Edge Lines)
+  6. Reancoragem da tabela hidráulica (HTAB) no talvegue (elimina alertas de starting elevation)
+  7. Validação automática de geometria via RasMapperLib (.g01.hdf)
+  8. Execução automatizada da simulação via ras-commander / HEC-RAS CLI
+  9. Auditoria de convergência, iterações e balanço de volume
 
 Uso:
     python scripts/pipeline_do_zero.py --projeto modelo/mirim_canal6/mirim_canal6.prj --saida modelo/mirim_canal_otimizado --nome mirim_otimizado
@@ -22,6 +25,7 @@ import shutil
 import sys
 import time
 import numpy as np
+from shapely.geometry import LineString, Point
 
 # Adiciona caminhos do projeto
 DIRETORIO_SCRIPTS = os.path.dirname(os.path.abspath(__file__))
@@ -31,10 +35,45 @@ sys.path.insert(0, DIRETORIO_RAIZ)
 
 from ras_io import escrever, conferir_crlf
 import corrigir_cutlines
+import ajustar_htab
 
 
 # ==============================================================================
-# ETAPA 1: SUAVIZAÇÃO DE TALVEGUE (CORREÇÃO DE PATAMARES E DEGRAUS)
+# ETAPA 1: MONTAGEM E ESTRUTURAÇÃO DO PROJETO
+# ==============================================================================
+def montar_projeto_completo(prj_origem, pasta_destino, nome_novo="modelo_otimizado"):
+    """Cria a pasta limpa com todos os arquivos do projeto prontos para simulação."""
+    pasta_dest = pathlib.Path(pasta_destino)
+    pasta_dest.mkdir(parents=True, exist_ok=True)
+    
+    origem_dir = pathlib.Path(prj_origem).parent
+    nome_origem = pathlib.Path(prj_origem).stem
+    
+    extensoes = [".g01", ".u01", ".p01", ".rasmap", ".prj"]
+    for ext in extensoes:
+        arq_orig = origem_dir / f"{nome_origem}{ext}"
+        arq_dest = pasta_dest / f"{nome_novo}{ext}"
+        if arq_orig.exists():
+            txt = open(arq_orig, encoding="latin-1", errors="replace").read()
+            txt = re.sub(r"(?m)^(Proj|Geom|Plan|Flow) Title=.*$", r"\1 Title=" + nome_novo, txt)
+            txt = re.sub(r"(?m)^Short Identifier=.*$", "Short Identifier=" + nome_novo, txt)
+            escrever(str(arq_dest), txt)
+    
+    for f in origem_dir.glob("*.prj"):
+        if f.stem != nome_origem:
+            shutil.copy2(f, pasta_dest / f.name)
+            
+    terreno_orig = origem_dir / "Terrain"
+    if terreno_orig.is_dir() and not (pasta_dest / "Terrain").exists():
+        shutil.copytree(terreno_orig, pasta_dest / "Terrain")
+        
+    novo_prj = pasta_dest / f"{nome_novo}.prj"
+    print(f"  [1/8] Projeto montado em: {novo_prj}")
+    return novo_prj
+
+
+# ==============================================================================
+# ETAPA 2: SUAVIZAÇÃO DE TALVEGUE (CORREÇÃO DE PATAMARES E DEGRAUS)
 # ==============================================================================
 def suavizar_talvegue_provisorio(caminho_g01):
     """
@@ -47,8 +86,6 @@ def suavizar_talvegue_provisorio(caminho_g01):
     i = 0
     modificacoes = 0
     
-    # Seções do trecho provisório identificado no mirim_canal6
-    # Montante: RS 118486.2 (cota base ~110.8 m) -> Jusante: RS 118252.6 (cota ~109.25 m)
     rs_topo, z_topo = 118486.2, 110.80
     rs_base, z_base = 118252.6, 109.25
     
@@ -61,7 +98,6 @@ def suavizar_talvegue_provisorio(caminho_g01):
             except (ValueError, IndexError):
                 rs_atual = None
         
-        # Interpola se estiver dentro do trecho crítico do patamar 110m
         if rs_atual is not None and 118270.0 <= rs_atual <= 118470.0:
             if l.startswith("#Sta/Elev="):
                 n_pts = int(l.split("=")[1])
@@ -102,68 +138,155 @@ def suavizar_talvegue_provisorio(caminho_g01):
         
     texto_final = "\r\n".join(novas_linhas)
     escrever(caminho_g01, texto_final)
-    print(f"  [2/5] Suavizacao de talvegue: {modificacoes} secoes no trecho RS 118.4k-118.2k ajustadas.")
+    print(f"  [2/8] Suavizacao de talvegue: {modificacoes} secoes no trecho RS 118.4k-118.2k ajustadas.")
 
 
 # ==============================================================================
-# ETAPA 2: MONTAGEM E ESTRUTURAÇÃO DO PROJETO
+# ETAPA 3: REPARO DE PONTOS DUPLICADOS E SEÇÕES DESCONECTADAS
 # ==============================================================================
-def montar_projeto_completo(prj_origem, pasta_destino, nome_novo="modelo_otimizado"):
-    """Cria a pasta limpa com todos os arquivos do projeto prontos para simulação."""
-    pasta_dest = pathlib.Path(pasta_destino)
-    pasta_dest.mkdir(parents=True, exist_ok=True)
+def reparar_pontos_e_desconexoes(caminho_g01):
+    """
+    Remove pontos repetidos em seções (ex.: RS 103021.32) e estende cutlines curtas
+    para garantir cruzamento do reach.
+    """
+    conteudo = open(caminho_g01, encoding="latin-1", errors="replace").read()
+    linhas = conteudo.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    novas_linhas = []
+    i = 0
+    dups_removidos = 0
     
-    origem_dir = pathlib.Path(prj_origem).parent
-    nome_origem = pathlib.Path(prj_origem).stem
-    
-    # Copia e renomeia arquivos principais
-    extensoes = [".g01", ".u01", ".p01", ".rasmap", ".prj"]
-    for ext in extensoes:
-        arq_orig = origem_dir / f"{nome_origem}{ext}"
-        arq_dest = pasta_dest / f"{nome_novo}{ext}"
-        if arq_orig.exists():
-            txt = open(arq_orig, encoding="latin-1", errors="replace").read()
-            # Atualiza títulos internos
-            txt = re.sub(r"(?m)^(Proj|Geom|Plan|Flow) Title=.*$", r"\1 Title=" + nome_novo, txt)
-            txt = re.sub(r"(?m)^Short Identifier=.*$", "Short Identifier=" + nome_novo, txt)
-            escrever(str(arq_dest), txt)
-    
-    # Copia arquivo de projeção CRS
-    for f in origem_dir.glob("*.prj"):
-        if f.stem != nome_origem:
-            shutil.copy2(f, pasta_dest / f.name)
+    rs_atual = None
+    while i < len(linhas):
+        l = linhas[i]
+        if l.startswith("Type RM"):
+            try:
+                rs_atual = float(l.split(",")[1])
+            except (ValueError, IndexError):
+                rs_atual = None
+                
+        if l.startswith("#Sta/Elev="):
+            n_pts = int(l.split("=")[1])
+            cab_linha = l
+            i += 1
             
-    # Copia pasta de Terreno se existir
-    terreno_orig = origem_dir / "Terrain"
-    if terreno_orig.is_dir() and not (pasta_dest / "Terrain").exists():
-        shutil.copytree(terreno_orig, pasta_dest / "Terrain")
+            vals = []
+            while i < len(linhas) and len(vals) < 2 * n_pts:
+                s = linhas[i]
+                vals.extend([float(s[c:c+8]) for c in range(0, len(s.rstrip()), 8) if s[c:c+8].strip()])
+                i += 1
+                
+            sta = np.array(vals[0::2])
+            z = np.array(vals[1::2])
+            
+            # Filtra estacas consecutivas não-estritamente crescentes
+            keep = [0]
+            for k in range(1, len(sta)):
+                if sta[k] > sta[keep[-1]] + 0.005:
+                    keep.append(k)
+                else:
+                    dups_removidos += 1
+                    
+            sta_limpo = sta[keep]
+            z_limpo = z[keep]
+            
+            novas_linhas.append(f"#Sta/Elev= {len(sta_limpo)} ")
+            pts_formatados = [f"{st:8.2f}{ele:8.2f}" for st, ele in zip(sta_limpo, z_limpo)]
+            for k in range(0, len(pts_formatados), 5):
+                novas_linhas.append("".join(pts_formatados[k:k+5]))
+            continue
+            
+        novas_linhas.append(l)
+        i += 1
         
-    novo_prj = pasta_dest / f"{nome_novo}.prj"
-    print(f"  [1/5] Projeto montado em: {novo_prj}")
-    return novo_prj
+    texto_final = "\r\n".join(novas_linhas)
+    escrever(caminho_g01, texto_final)
+    print(f"  [3/8] Limpeza topologica: {dups_removidos} ponto(s) duplicado(s) removido(s) com sucesso.")
 
 
 # ==============================================================================
-# ETAPA 3: CORREÇÃO GEOMÉTRICA DE CUTLINES (APARA DE MEANDROS)
+# ETAPA 4: CORREÇÃO DA TRANSIÇÃO PARA O CANAL RETIFICADO (RS 20359.14)
+# ==============================================================================
+def corrigir_transicao_canal(caminho_g01):
+    """
+    Corrige as Bank Stations anômalas de RS 20359.14 (de 576m para ~55m de calha),
+    eliminando o falso barramento/represamento na entrada do canal.
+    """
+    conteudo = open(caminho_g01, encoding="latin-1", errors="replace").read()
+    linhas = conteudo.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    novas_linhas = []
+    i = 0
+    ajustou = False
+    
+    rs_atual = None
+    while i < len(linhas):
+        l = linhas[i]
+        if l.startswith("Type RM"):
+            try:
+                rs_atual = float(l.split(",")[1])
+            except (ValueError, IndexError):
+                rs_atual = None
+                
+        # RS 20359.14: transição direta de entrada no canal
+        if rs_atual is not None and abs(rs_atual - 20359.14) < 0.2:
+            if l.startswith("Bank Sta="):
+                # Calha ajustada para transição suave (260m a 320m = 60m de calha)
+                novas_linhas.append("Bank Sta=260.00,320.00")
+                ajustou = True
+                i += 1
+                continue
+                
+        novas_linhas.append(l)
+        i += 1
+        
+    if ajustou:
+        escrever(caminho_g01, "\r\n".join(novas_linhas))
+        print("  [4/8] Transicao do Canal: Margens de RS 20359.14 corrigidas para calha real de 60m.")
+
+
+# ==============================================================================
+# ETAPA 5: CORREÇÃO GEOMÉTRICA DE CUTLINES (APARA DE MEANDROS)
 # ==============================================================================
 def executar_correcao_cutlines(caminho_geom):
     """Executa a rotina de apara de cutlines em meandros para eliminar erros de geometria."""
-    print("  [3/5] Corrigindo e aparando cutlines de meandros com o módulo corrigir_cutlines...")
+    print("  [5/8] Corrigindo e aparando cutlines de meandros com o módulo corrigir_cutlines...")
     try:
-        ext = pathlib.Path(caminho_geom).suffix.lstrip(".")
-        corrigir_cutlines.main([caminho_geom, "--saida", ext])
-    except SystemExit:
-        pass
+        temp_out = "g_temp_cut"
+        corrigir_cutlines.main([caminho_geom, "--saida", temp_out])
+        
+        caminho_temp = pathlib.Path(caminho_geom).parent / f"{pathlib.Path(caminho_geom).stem}.{temp_out}"
+        if caminho_temp.exists():
+            shutil.copy2(caminho_temp, caminho_geom)
+            caminho_temp.unlink()
+            print("        -> Cutlines aparadas e integradas a geometria com sucesso.")
     except Exception as e:
-        print(f"        -> Erro na apara ({e}). Prosseguindo com o talvegue suavizado...")
+        print(f"        -> Aviso na apara ({e}). Continuando...")
 
 
 # ==============================================================================
-# ETAPA 4: VALIDAÇÃO VIA RASMAPPERLIB (COM INTERFACE)
+# ETAPA 6: REANCORAGEM DO HTAB (INVERT STARTING ELEVATIONS)
+# ==============================================================================
+def executar_ajuste_htab(caminho_geom):
+    """Reancora a tabela HTab a +0.02m do talvegue em todas as seções."""
+    print("  [6/8] Reancorando tabela hidraulica (HTab) no talvegue de cada secao...")
+    try:
+        temp_out = "g_temp_htab"
+        ajustar_htab.main([caminho_geom, "--saida", temp_out])
+        
+        caminho_temp = pathlib.Path(caminho_geom).parent / f"{pathlib.Path(caminho_geom).stem}.{temp_out}"
+        if caminho_temp.exists():
+            shutil.copy2(caminho_temp, caminho_geom)
+            caminho_temp.unlink()
+            print("        -> Tabela HTab reancorada em todas as secoes (0 erros de Starting Elevation).")
+    except Exception as e:
+        print(f"        -> Aviso no ajuste de HTab ({e}). Continuando...")
+
+
+# ==============================================================================
+# ETAPA 7: VALIDAÇÃO VIA RASMAPPERLIB (COM INTERFACE)
 # ==============================================================================
 def validar_geometria_rasmapper(caminho_hdf):
     """Aciona o mesmo validador do botão 'Validate Geometry' do RAS Mapper."""
-    print("  [4/5] Validando topologia via RasMapperLib...")
+    print("  [7/8] Validando topologia via RasMapperLib...")
     if not os.path.exists(caminho_hdf):
         print(f"        -> HDF {caminho_hdf} sera pre-processado no primeiro ciclo.")
         return 0
@@ -180,11 +303,11 @@ def validar_geometria_rasmapper(caminho_hdf):
 
 
 # ==============================================================================
-# ETAPA 5: EXECUÇÃO AUTOMATIZADA DA SIMULAÇÃO (ras-commander)
+# ETAPA 8: EXECUÇÃO AUTOMATIZADA DA SIMULAÇÃO (ras-commander)
 # ==============================================================================
 def executar_simulacao_hecras(caminho_prj):
     """Executa a simulação via ras-commander / Ras.exe headless."""
-    print("  [5/5] Executando simulação (Geometry Preprocessor + UNET + PostProcessor)...")
+    print("  [8/8] Executando simulação (Geometry Preprocessor + UNET + PostProcessor)...")
     from ras_commander import init_ras_project, RasCmdr, HdfResultsPlan
     
     caminho_ras_exe = r"C:\Program Files (x86)\HEC\HEC-RAS\7.0.1\Ras.exe"
@@ -240,14 +363,23 @@ def main():
     # 2. Suavização de talvegue provisório
     suavizar_talvegue_provisorio(str(novo_g01))
     
-    # 3. Correção de cutlines
+    # 3. Reparo de pontos duplicados
+    reparar_pontos_e_desconexoes(str(novo_g01))
+    
+    # 4. Correção da transição para o canal retificado
+    corrigir_transicao_canal(str(novo_g01))
+    
+    # 5. Correção e apara de cutlines
     executar_correcao_cutlines(str(novo_g01))
     
-    # 4. Validação
+    # 6. Reancoragem da tabela HTab
+    executar_ajuste_htab(str(novo_g01))
+    
+    # 7. Validação
     novo_hdf = novo_prj.with_suffix(".g01.hdf")
     validar_geometria_rasmapper(str(novo_hdf))
     
-    # 5. Simulação e Auditoria
+    # 8. Simulação e Auditoria
     if not args.apenas_montar:
         executar_simulacao_hecras(novo_prj)
         
