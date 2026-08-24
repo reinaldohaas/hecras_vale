@@ -146,8 +146,54 @@ def main():
             f"Friction Slope={decl:.6f},0"]
     escrever(os.path.join(pasta, f"{nome}.u01"), "\n".join(u01))
 
+    # ---- PROJECAO E .rasmap. Sem eles o projeto "roda" mas nao tem sistema
+    # de coordenadas: o RAS Mapper nao desenha, o CompleteGeometryCommand nao
+    # monta o HDF da geometria (falha com "Geometry not found in
+    # WriteAttributePreCheck") e nada pode ser validado sem antes simular.
+    # O `.prj` de projecao e um arquivo ESRI, distinto do `.prj` do projeto.
+    import shutil
+    fonte = None
+    for c in ("SIRGAS2000_UTM22S.prj", "modelo/SIRGAS2000_UTM22S.prj",
+              "modelo/mirim_novo/SIRGAS2000_UTM22S.prj"):
+        if os.path.exists(c):
+            fonte = c
+            break
+    if fonte is None:
+        raise SystemExit("nao achei SIRGAS2000_UTM22S.prj para a projecao")
+    shutil.copy2(fonte, os.path.join(pasta, "SIRGAS2000_UTM22S.prj"))
+    print(f"projecao  : {fonte} -> {nome}/SIRGAS2000_UTM22S.prj")
+
+    P = np.vstack([np.asarray(d["cut"], float) for d in S])
+    rasmap = [
+        "<RASMapper>", "  <Version>2.0.0</Version>",
+        '  <RASProjectionFilename Filename=".\\SIRGAS2000_UTM22S.prj" />',
+        '  <Geometries Checked="True" Expanded="True">',
+        f'    <Layer Name="{nome}" Type="RASGeometry" Checked="True" '
+        f'Expanded="True" Filename=".\\{nome}.g01.hdf">',
+        '      <Layer Type="RASRiver" Checked="True" />',
+        '      <Layer Type="RASBankLines" Checked="True" />',
+        '      <Layer Type="FlowPaths" Checked="True" />',
+        '      <Layer Type="RiverStations" Checked="True" />',
+        '      <Layer Type="RASXS" Checked="True" />',
+        '      <Layer Type="RASErrors" Checked="True" />',
+        "    </Layer>", "  </Geometries>", "  <Terrains />",
+        "  <CurrentView>",
+        f"    <MinX>{P[:,0].min():.2f}</MinX>",
+        f"    <MaxX>{P[:,0].max():.2f}</MaxX>",
+        f"    <MinY>{P[:,1].min():.2f}</MinY>",
+        f"    <MaxY>{P[:,1].max():.2f}</MaxY>",
+        "  </CurrentView>", "</RASMapper>"]
+    escrever(os.path.join(pasta, f"{nome}.rasmap"), "\n".join(rasmap))
+    t2 = open(os.path.join(pasta, f"{nome}.prj"), encoding="latin-1").read()
+    if "RASMap Filename=" not in t2:
+        escrever(os.path.join(pasta, f"{nome}.prj"),
+                 t2.rstrip("\r\n") + f"\nRASMap Filename={nome}.rasmap")
+
     print("\nCONFERENCIA")
-    for e in ("prj", "p01", "u01", "g01"):
+    import xml.etree.ElementTree as ET
+    ET.parse(os.path.join(pasta, f"{nome}.rasmap"))
+    print("   rasmap: XML valido")
+    for e in ("prj", "p01", "u01", "g01", "rasmap"):
         p = os.path.join(pasta, f"{nome}.{e}")
         ok = os.path.exists(p)
         print(f"   {'OK   ' if ok else 'FALTA'} {nome}.{e}"

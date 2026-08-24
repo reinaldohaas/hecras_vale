@@ -36,11 +36,78 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from ras_io import escrever   # noqa: E402
 
 LIMITE = 20000       # trava contra laco infinito no GetErrors
 
 
+def preparar_hdf(caminho):
+    """Garante o `.gNN.hdf`, construindo-o SEM RODAR o solver se preciso.
+
+    O `.hdf` da geometria costumava aparecer so depois de uma simulacao, e por
+    isso a validacao vinha DEPOIS de rodar -- gastando dez minutos de solver
+    para descobrir que a geometria tinha centenas de erros. Nao precisa:
+    `RasMapperLib.Scripting.CompleteGeometryCommand` monta o HDF a partir do
+    texto do `.gNN`, que e exatamente o que o RAS Mapper faz ao abrir.
+
+    Aceita `.gNN` ou `.gNN.hdf`. Se o texto for mais novo que o HDF, refaz.
+    """
+    if caminho.lower().endswith(".hdf"):
+        g = caminho[:-4]
+        h = caminho
+    else:
+        g = caminho
+        h = caminho + ".hdf"
+    if not os.path.exists(g):
+        if os.path.exists(h):
+            return h
+        raise SystemExit(f"nao achei {g}")
+    if os.path.exists(h) and os.path.getmtime(h) >= os.path.getmtime(g):
+        return h
+    # `CompleteGeometryCommand` NAO serve para isto: ele COMPLETA um HDF que ja
+    # exista e falha calado com "Geometry not found in WriteAttributePreCheck",
+    # devolvendo `Execute ok` sem escrever arquivo nenhum. O caminho que
+    # funciona e rodar o PREPROCESSADOR GEOMETRICO sozinho -- `Run HTab=-1`
+    # com `Run UNet=0` --, que e barato: segundos, contra dez minutos de
+    # solver.
+    import re
+    import shutil
+    import tempfile
+    from ras_commander import init_ras_project, RasCmdr
+    from vale.terreno import HECRAS_DIR
+
+    pasta = os.path.dirname(os.path.abspath(g)) or "."
+    base = os.path.basename(g).split(".")[0]
+    prj = os.path.join(pasta, base + ".prj")
+    p01 = os.path.join(pasta, base + ".p01")
+    if not (os.path.exists(prj) and os.path.exists(p01)):
+        raise SystemExit(f"para montar o HDF preciso de {base}.prj e "
+                         f"{base}.p01 ao lado da geometria")
+    guarda = p01 + ".antes_do_htab"
+    shutil.copy2(p01, guarda)
+    try:
+        t = open(p01, encoding="latin-1", errors="replace").read()
+        for chave, val in (("Run HTab", "-1"), ("Run UNet", "0"),
+                           ("Run PostProcess", "0"), ("Run RASMapper", "0")):
+            if re.search(r"(?m)^%s=" % chave, t):
+                t = re.sub(r"(?m)^%s=.*$" % chave, f"{chave}={val}", t)
+            else:
+                t = t.rstrip("\r\n") + f"\r\n{chave}={val}"
+        escrever(p01, t)
+        print(f"   montando {os.path.basename(h)} pelo preprocessador "
+              "geometrico (sem solver)...")
+        p = init_ras_project(prj, os.path.join(HECRAS_DIR, "Ras.exe"))
+        RasCmdr.compute_plan("01", ras_object=p, force_rerun=True,
+                             clear_geompre=True)
+    finally:
+        shutil.move(guarda, p01)
+    if not os.path.exists(h):
+        raise SystemExit(f"o preprocessador nao produziu {h}")
+    return h
+
+
 def ler(hdf):
+    hdf = preparar_hdf(hdf)
     from vale.terreno import registrar_hecras, HECRAS_DIR
     registrar_hecras(log=lambda *a: None)
     import clr

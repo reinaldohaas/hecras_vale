@@ -72,6 +72,7 @@ JANELA = 60.0         # m para cada lado, ao medir a tangente do eixo
 MEIA_MAX = 400.0      # m; teto da meia-largura
 MEIA_MIN = 60.0       # m; piso, para a secao nunca degenerar
 FOLGA_CALHA = 1.5     # m acima do talvegue = topo da margem
+JANELA_MARGEM = 3      # secoes para cada lado, na mediana movel da margem
 ALVO_SECAO = 8.0      # m acima do talvegue = onde a secao pode parar
 BUSCA = 500.0         # m; ate onde se procura terreno alto
 N_CALHA, N_PLANICIE = 0.032, 0.055
@@ -184,39 +185,88 @@ def main():
                     return i
             return None
 
-        ie = anda(-1, FOLGA_CALHA)
-        idr = anda(+1, FOLGA_CALHA)
-        se = anda(-1, ALVO_SECAO)
-        sd = anda(+1, ALVO_SECAO)
-        lim_e = abs(off[se]) if se is not None else MEIA_MAX
-        lim_d = abs(off[sd]) if sd is not None else MEIA_MAX
-        if se is None or sd is None:
+        # QUAL LADO E A ESQUERDA. `n` e a tangente girada 90 graus no sentido
+        # anti-horario, e num mapa (x para leste, y para norte) isso e a
+        # margem ESQUERDA olhando para jusante. Como o ponto de offset `o` foi
+        # amostrado em `p + o*n`, offset POSITIVO e a esquerda.
+        #
+        # E o HEC-RAS exige a cutline percorrida da ESQUERDA para a DIREITA:
+        # a estaca 0 fica no offset MAIS POSITIVO e cresce descendo o offset.
+        # Ter escrito ao contrario custou "XS is reversed" em 293 das 294
+        # secoes, e bank line atravessando o rio em todo o trecho.
+        i_esq_calha = anda(+1, FOLGA_CALHA)
+        i_dir_calha = anda(-1, FOLGA_CALHA)
+        i_esq_sec = anda(+1, ALVO_SECAO)
+        i_dir_sec = anda(-1, ALVO_SECAO)
+        if i_esq_sec is None or i_dir_sec is None:
             no_teto += 1
-        me = float(np.clip(lim_e, MEIA_MIN, MEIA_MAX))
-        md = float(np.clip(lim_d, MEIA_MIN, MEIA_MAX))
-        dentro = (off >= -me) & (off <= md) & np.isfinite(z)
+        me = float(np.clip(abs(off[i_esq_sec]) if i_esq_sec is not None
+                           else MEIA_MAX, MEIA_MIN, MEIA_MAX))
+        md = float(np.clip(abs(off[i_dir_sec]) if i_dir_sec is not None
+                           else MEIA_MAX, MEIA_MIN, MEIA_MAX))
+        dentro = (off <= me) & (off >= -md) & np.isfinite(z)
         if dentro.sum() < 8:
             sem_dado += 1
             continue
-        sta = off[dentro] + me
-        zz = z[dentro]
-        lb = (off[ie] + me) if ie is not None else float(sta[0])
-        rb = (off[idr] + me) if idr is not None else float(sta[-1])
-        lb = float(sta[np.argmin(np.abs(sta - lb))])
-        rb = float(sta[np.argmin(np.abs(sta - rb))])
-        if rb <= lb:
-            j = int(np.argmin(np.abs(sta - (off[i0] + me))))
-            lb = float(sta[max(j - 1, 0)])
-            rb = float(sta[min(j + 1, len(sta) - 1)])
-        A = p - me * n
-        B = p + md * n
+        # estaca cresce da esquerda para a direita: sta = me - offset
+        ordem = np.argsort(-off[dentro])
+        sta = (me - off[dentro])[ordem]
+        zz = z[dentro][ordem]
+        A = p + me * n          # ponta ESQUERDA, estaca 0
+        B = p - md * n          # ponta DIREITA
         secoes.append({"s": s, "rs": round(float(L - s), 2),
                        "cut": (A, B), "sta": np.round(sta, 2),
-                       "z": np.round(zz, 2), "lb": lb, "rb": rb,
-                       "zt": float(zz.min())})
+                       "z": np.round(zz, 2), "zt": float(zz.min()),
+                       "me": me, "off_t": float(off[i0]),
+                       "d_esq": (float(off[i_esq_calha] - off[i0])
+                                 if i_esq_calha is not None else np.nan),
+                       "d_dir": (float(off[i0] - off[i_dir_calha])
+                                 if i_dir_calha is not None else np.nan)})
 
     print(f"secoes : {len(secoes)}   sem MDT utilizavel: {sem_dado}   "
           f"pararam no teto de {MEIA_MAX:g} m: {no_teto}")
+
+    # ---- a MARGEM E MEDIDA, mas a medida e ruidosa
+    # Detectar o topo do encaixe secao a secao da calha de 41 a 371 m, com
+    # SALTO DE ATE 752 m entre vizinhas -- onde a varzea e plana o ponto que
+    # sobe 1,5 m acima do talvegue pode estar muito longe. A bank line liga
+    # esses pontos e vira um zigue-zague que cruza o rio 82 vezes.
+    # A mediana movel nao inventa nada: cada valor de saida E UMA DAS MEDIDAS
+    # da vizinhanca. Filtra o salto e preserva a variacao real do rio.
+    for lado in ("d_esq", "d_dir"):
+        v = np.array([s[lado] for s in secoes], float)
+        bom = np.isfinite(v)
+        if bom.sum() < 3:
+            v[:] = np.nanmedian(v) if bom.any() else 20.0
+        else:
+            v[~bom] = np.interp(np.flatnonzero(~bom), np.flatnonzero(bom),
+                                v[bom])
+        sv = v.copy()
+        # NAO chamar estes de `a` e `b`: `a` e o namespace dos argumentos, e
+        # sobrescreve-lo faz `a.monotono` estourar mais adiante.
+        for i in range(len(v)):
+            j0 = max(0, i - JANELA_MARGEM)
+            j1 = min(len(v), i + JANELA_MARGEM + 1)
+            sv[i] = float(np.median(v[j0:j1]))
+        bruto = np.abs(np.diff(v))
+        filt = np.abs(np.diff(sv))
+        print(f"   {lado}: salto entre vizinhas   bruto mediana "
+              f"{np.median(bruto):.0f} m / max {bruto.max():.0f}   ->   "
+              f"filtrado {np.median(filt):.0f} / {filt.max():.0f}")
+        for s, x in zip(secoes, sv):
+            s[lado] = float(x)
+
+    for s in secoes:
+        sta = s["sta"]
+        o_l = s["off_t"] + s["d_esq"]
+        o_r = s["off_t"] - s["d_dir"]
+        lb = float(sta[np.argmin(np.abs(sta - (s["me"] - o_l)))])
+        rb = float(sta[np.argmin(np.abs(sta - (s["me"] - o_r)))])
+        if rb <= lb:
+            j = int(np.argmin(np.abs(sta - (s["me"] - s["off_t"]))))
+            lb = float(sta[max(j - 1, 0)])
+            rb = float(sta[min(j + 1, len(sta) - 1)])
+        s["lb"], s["rb"] = lb, rb
 
     # ---- talvegue: cru, ou isotonico
     zt = np.array([s["zt"] for s in secoes])
