@@ -1193,7 +1193,26 @@ def main():
         if not (qa.get("pronta") and qb.get("pronta")):
             continue
         ds_ = qb["s"] - qa["s"]
-        n_i = int(ds_ // 250.0)
+        # QUANTAS interpoladas: as que o SALTO DE AREA exigir, e nao um
+        # tapete de 250 m -- o usuario viu o canal (uniforme!) carpetado a
+        # 200 m enquanto o rio natural corria a 500. Se a area no nivel de
+        # referencia varia r entre os pais, n intermediarias reduzem o salto
+        # por passo a r^(1/(n+1)); pede-se passo <= 1,2. Par uniforme
+        # (canal) da ZERO interpoladas.
+        def _area_ref(d):
+            st = np.asarray(d["sta"], float)
+            zz = np.asarray(d["z"], float)
+            wse = float(zz.min()) + 3.0
+            h = np.clip(wse - zz, 0.0, None)
+            return float(np.trapezoid(h, st))
+        Aa, Ab = _area_ref(qa), _area_ref(qb)
+        if min(Aa, Ab) <= 0:
+            continue
+        razao = max(Aa, Ab) / min(Aa, Ab)
+        if razao <= 1.2:
+            continue
+        n_i = int(np.ceil(np.log(razao) / np.log(1.2))) - 1
+        n_i = min(n_i, max(int(ds_ // 250.0), 1))
         if n_i < 1:
             continue
         pa = _perfil_alinhado(qa)
