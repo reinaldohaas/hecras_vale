@@ -12,7 +12,7 @@ POR QUE PARALELO
   passar de 2 para 8 nucleos num rio so nao divide o tempo por quatro --, mas
   seis rios em seis processos usam a maquina inteira. `ras-commander` da o
   `compute_parallel` para varios PLANOS de um mesmo projeto; aqui sao varios
-  PROJETOS, entao a paralelizacao e um pool de threads sobre `compute_plan`,
+  PROJETOS, entao a paralelizacao e um pool de processos sobre `compute_plan`,
   cada um com seu `RasPrj`.
 
   `--workers` e quantos rios ao mesmo tempo, `--cores` quantos nucleos cada

@@ -134,10 +134,15 @@ def cmd_aplicar(a):
     x = np.r_[0.0, np.cumsum(ch[:-1])]
     z0 = np.array([talvegue_xy(d)[3] for d in S])
 
-    med_rs, med_z = [], []
+    med_rs, med_z, fic_rs = [], [], []
     for r in csv.DictReader(open(a.pontos, encoding="utf-8"), delimiter=";"):
         v = (r.get("z_leito_A_LEVANTAR") or r.get("z_leito") or "").strip()
         if not v:
+            # ponto SEM cota: seja por legado sintetico, rebaixamento
+            # implausivel ou secao longe demais, e um lugar onde NAO ha
+            # ancora. O motivo nao importa para o aplicar; o que importa e o
+            # aglomerado -- ver o peso por intervalo adiante.
+            fic_rs.append(float(r["rs"]))
             continue
         med_rs.append(float(r["rs"]))
         med_z.append(float(v.replace(",", ".")))
@@ -155,8 +160,46 @@ def cmd_aplicar(a):
     # distancia ao longo do rio de cada ponto levantado
     xm = np.interp(-med_rs, -rs, x)
     dentro = (rs <= med_rs.max() + 1e-6) & (rs >= med_rs.min() - 1e-6)
+    # COTA ABSOLUTA ENTRE ANCORAS -- e a que zera os contradeclives, trocando
+    # o ruido da lamina pela linha levantada (Mirim: 117 -> 0, o g02 que
+    # convergiu). Vale tambem entre ancoras REAIS afastadas: interpolar 4 km
+    # entre dois pontos levantados e o que ancorar significa.
     novo = z0.copy()
     novo[dentro] = np.interp(x[dentro], xm, med_z)
+    # ---- ONDE NAO HA ANCORA POR QUILOMETROS, O REBAIXAMENTO E ZERO.
+    # A interpolacao absoluta entre ancoras que cercam um VAO constroi uma
+    # PONTE por baixo do terreno (alvo bruto 119 m abaixo do MDT, no trecho
+    # em que o detector descartou a reta desenhada do legado). Tentativas com
+    # teto e com taper por distancia vazavam (57-67 m na borda) ou puniam
+    # vaos legitimos do Mirim (contradeclives 117 -> 43). O criterio final
+    # nao olha o MOTIVO do ponto apagado nem usa limiar de cota: um AGLOMERADO
+    # de pontos do pedido sem cota (vizinhos a menos de 3 km um do outro) com
+    # extensao >= 3 km e um vao sem ancora -- dentro dele o peso e zero (o
+    # MDT fica) com rampa de 1 km nas bordas. Ponto apagado ISOLADO segue
+    # sendo ponte legitima entre as ancoras vizinhas, como sempre foi.
+    n_fic = 0
+    if fic_rs:
+        xf = np.sort(np.interp(-np.array(fic_rs), -rs, x))
+        grupos, ini = [], xf[0]
+        for aa, bb in zip(xf[:-1], xf[1:]):
+            if bb - aa > 3000.0:
+                if aa - ini >= 3000.0:
+                    grupos.append((ini, aa))
+                ini = bb
+        if xf[-1] - ini >= 3000.0:
+            grupos.append((ini, xf[-1]))
+        if grupos:
+            w = np.ones(len(x))
+            for xa, xb in grupos:
+                dist = np.where(x < xa, xa - x,
+                                np.where(x > xb, x - xb, 0.0))
+                w = np.minimum(w, np.clip(dist / 1000.0, 0.0, 1.0))
+            novo = z0 + w * (novo - z0)
+            n_fic = int((w < 1.0).sum())
+            print(f"   VAO SEM ANCORA   : rebaixamento zerado em {n_fic} "
+                  f"secoes, em {len(grupos)} trecho(s): "
+                  + ", ".join(f"{xa/1000:.1f}-{xb/1000:.1f} km"
+                              for xa, xb in grupos))
     fora = int((~dentro).sum())
     print(f"   secoes ancoradas : {int(dentro.sum())}")
     print(f"   FORA do intervalo levantado (perfil do MDT mantido): {fora}"

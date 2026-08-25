@@ -19,17 +19,19 @@ Faz TUDO, em ordem, e a validacao decide se as etapas anteriores valem:
       8. religa o terreno em cada projeto     projeto_rio_avulso.py
       9. confere a edge line NO HDF DO RAS    conferir_edge_lines.py
 
-O PORTEIRO DE EIXO ALTO (passo 5)
+O LEGADO SINTETICO (passo 5)
 
-  Antes de ancorar a batimetria, o pipeline compara o talvegue lido do MDT com
-  o fundo levantado de 1983. Onde o eixo esquematico corre pela ENCOSTA de um
-  vale encaixado, a lamina do MDT fica dezenas a centenas de metros acima do
-  fundo, e ancorar ali cavaria um canion -- foi o que deixou o Benedito
-  inviavel (rebaixamento mediano 104 m) e mandou o solver do Acu a
-  instabilidade (55 m no R1). Rio com trecho assim NAO ganha g02: o pipeline
-  imprime a faixa em km, gera a figura (diagnostico_eixo_alto.py) e marca na
-  tabela final "REFAZER EIXO". O g02 velho, se existir, e removido -- rodar o
-  pipeline duas vezes tem de dar o mesmo estado.
+  Nas cabeceiras do Acu (RS ~143-164 km) e do Benedito (RS 18-44 km) o "fundo
+  levantado" do legado e uma RETA DESENHADA: declive exatamente 8,00 m/km com
+  residuo rms de 1-2 MILIMETROS por dezenas de secoes -- nos dois rios, a
+  mesma constante ("rede real ANA + relevo DEM", diz o proprio titulo).
+  Ancorar nisso pediria cavar ate 284 m. O diagnostico anterior ("eixo pela
+  encosta") estava ERRADO: procurado o caminho de menor cota num corredor de
+  +-1500 m, nao ha vale mais baixo -- o eixo esta certo, o legado e que e
+  ficcao ali. O detector no batimetria_do_legado.py descarta essas ancoras
+  (reta local com rms < 5 cm), o aplicar nao interpola por cima do vao, e o
+  MDT lidar fica valendo no trecho. `eixo_alto` segue medindo, agora so para
+  RELATAR a faixa na tabela e na figura.
 
 O TERRENO E DA BACIA, E NAO DE UM RIO
 
@@ -115,7 +117,7 @@ TRECHO_EIXO = 1.0      # km; menos que isto e blip de uma secao, nao eixo
 
 
 def eixo_alto(g01, rio, limiar=LIMIAR_EIXO, trecho_km=TRECHO_EIXO):
-    """(km_ini, km_fim, reb_max) do trecho onde ancorar cavaria um canion.
+    """(km_ini, km_fim, reb_max) do trecho onde o legado diverge do MDT.
 
     Compara o talvegue do MDT (lamina) com o fundo levantado do legado, ao
     longo do rio. Rebaixamento maior que `limiar` nao e batimetria: a calha
@@ -193,33 +195,35 @@ def construir(rio, pasta, limite, taxas, dx, cada):
     roda(["scripts/batimetria.py", "pedir", g, "--cada", str(cada),
           "--saida", ped], mostrar=("pontos    :",))
 
-    # ---- 5. batimetria do legado -> g02, atras do porteiro de eixo alto
+    # ---- 5. batimetria do legado -> g02. O detector de ficcao do
+    # batimetria_do_legado ja descartou as ancoras do trecho SINTETICO (a
+    # reta de 8,00 m/km com residuo de milimetros nas cabeceiras do Acu e do
+    # Benedito -- "relevo DEM", como o titulo do legado avisa), e o aplicar
+    # nao interpola por cima do vao: ali o MDT fica valendo. `eixo_alto`
+    # continua medindo a diferenca lamina-fundo, agora so para RELATAR onde o
+    # legado nao presta -- nao barra mais nada, porque o que se aplicaria ali
+    # ja e o MDT.
     roda(["scripts/batimetria_do_legado.py", ped, "--rio", rio],
-         mostrar=("casados", "REBAIXAMENTO", "ATENCAO"))
+         mostrar=("casados", "REBAIXAMENTO", "ATENCAO", "SINTETICO"))
     g2 = os.path.join(pasta, os.path.basename(pasta) + ".g02")
     alto = eixo_alto(g, rio)
-    if alto is None:
-        roda(["scripts/batimetria.py", "aplicar", g, "--pontos", ped,
-              "--saida", "g02"],
-             mostrar=("contradeclives", "declividade", "leito bate"))
-        roda(["scripts/projeto_rio_avulso.py", g2, "--rio-fonte", rio],
-             mostrar=("jusante   :",))
-        print(f"   batimetria aplicada -> {g2}")
-    else:
+    if alto is not None:
         km0, km1, reb = alto
         fig = os.path.join("doc", "figuras",
                            f"eixo_alto_{os.path.basename(pasta)}.png")
         roda(["scripts/diagnostico_eixo_alto.py", "--rios", rio,
               "--saida", fig])
-        # determinismo: sem g02 valido, nao pode sobrar um g02 velho no lugar
-        if os.path.exists(g2):
-            os.remove(g2)
-        print(f"   EIXO ALTO de {km0:.0f} a {km1:.0f} km (rebaixamento ate "
-              f"{reb:.0f} m): g02 NAO aplicado -- refazer o eixo pelo "
-              f"talvegue do MDT. Figura: {fig}")
+        print(f"   legado sintetico de {km0:.0f} a {km1:.0f} km "
+              f"(lamina-fundo ate {reb:.0f} m): ancoras descartadas, "
+              f"MDT mantido. Figura: {fig}")
+    roda(["scripts/batimetria.py", "aplicar", g, "--pontos", ped,
+          "--saida", "g02"],
+         mostrar=("contradeclives", "declividade", "leito bate", "VAO"))
+    roda(["scripts/projeto_rio_avulso.py", g2, "--rio-fonte", rio],
+         mostrar=("jusante   :",))
+    print(f"   batimetria aplicada -> {g2}")
     return {"rio": rio, "pasta": pasta, "erros": n, "fatal": fat,
-            "taxa": taxa, "pedido": ped, "eixo_alto": alto,
-            "g02": alto is None}
+            "taxa": taxa, "pedido": ped, "eixo_alto": alto, "g02": True}
 
 
 def terreno(pastas, nome="vale30"):
@@ -342,12 +346,11 @@ def main():
           f"   batimetria")
     for r in res:
         d = r.get("dobras")
-        if r.get("g02"):
+        if r.get("eixo_alto"):
+            k0, k1, _ = r["eixo_alto"]
+            bat = f"g02 (MDT em {k0:.0f}-{k1:.0f} km: legado sintetico)"
+        elif r.get("g02"):
             bat = "g02 aplicado"
-        elif r.get("eixo_alto"):
-            k0, k1, reb = r["eixo_alto"]
-            bat = (f"REFAZER EIXO ({k0:.0f}-{k1:.0f} km, "
-                   f"reb ate {reb:.0f} m)")
         else:
             bat = "?"
         print(f"{r['rio']:<16}{r['erros']:>7}{r['fatal']:>7}"

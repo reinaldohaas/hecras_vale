@@ -16,6 +16,14 @@ minimizar cheias.
 
 ## O que já funciona, medido
 
+- **Verificação desta retomada:** os scripts citados existem e compilam. Branch
+  atual: `vale-perfil-isotonico`; último commit: `fc1bde9 feat(pipeline): a
+  batimetria entra no UM comando, atras do porteiro de eixo`. Atenção: existe
+  `modelo/itajai_acu/itajai_acu.g02` no disco, mas ele NÃO deve ser tomado como
+  válido: o porteiro atual ainda mede eixo alto no Açu
+  `(11,25–31,80 km, rebaixamento até 117,4 m)`. Se rodar o pipeline atual, esse
+  g02 velho deve ser removido até o eixo ser refeito.
+
 - **`medir()` do `rodar_rios.py` consertado.** Lê do `.bco01` (o HEC-RAS não
   gera `computeMsgs.txt` aqui): erro de volume no bloco "Total Volume
   Accounting", iteração no `<i>` que abre cada linha `<i> <Reach> ...`. E o pool
@@ -64,68 +72,49 @@ minimizar cheias.
   Detenção por balanço de massa; corte ótimo calculado do próprio hidrograma.
   Pico: Sul −40%, Oeste −37%, Norte −75%. É a alavanca do sistema de decisão.
 
-## O bloqueio de verdade: EIXO ALTO no Açu R1 e no Benedito
+## A descoberta que mudou tudo: o LEGADO E FICCAO nas cabeceiras
 
-`scripts/diagnostico_eixo_alto.py` mede e figura (`doc/figuras/eixo_alto.png`):
-o `eixos_do_relevo.geojson` É a linha esquemática do legado. No vale largo ela
-cai sobre o canal e a batimetria é um rebaixamento sadio (~5–10 m). No vale
-encaixado de **cabeceira** ela corre pela ENCOSTA, e a seção que o
-`rio_do_relevo` corta do MDT pega o talvegue dezenas a centenas de metros ACIMA
-do canal real:
+Nas cabeceiras do Açu (RS ~141–164 km) e do Benedito (RS 18–44 km) — e no
+montante do Mirim (RS 103–114 km) — o "fundo levantado" do legado é uma RETA
+DESENHADA: declive exatamente 8,00 m/km com resíduo rms de 1–2 milímetros por
+dezenas de seções, a mesma constante nos dois rios ("rede real ANA + relevo
+DEM", diz o título do próprio legado). Rio real dá rms de 1–15 m (controles).
+O diagnóstico anterior ("eixo pela encosta") estava ERRADO e está corrigido em
+`diagnostico_eixo_alto.py`: buscado o caminho conectado de menor cota num
+corredor de ±1500 m, não há vale naquela cota — o eixo está certo, o legado é
+que mente ali. Ancorar nele pediria cavar até 284 m e foi o que instabilizou o
+Açu ("Solution Solver Failed" às 03:14) e, por ele, a rede.
 
-- **Benedito**, montante toda (RS 22–44 km): rebaixamento mediana 104 m. Sem
-  g02, fora da rede (por isso Indaial inativa).
-- **Açu R1** (cabeceira, RS ~143 000–174 000, Rio do Sul→Ibirama): rebaixamento
-  mediana 55 m, até 118 m. Ancorar ali cava um cânion, o Açu vai instável
-  sozinho, e a rede vai junto — **"Solution Solver Failed" às 03:14 do 1º dia**,
-  erro de volume 12,96% de um run ABORTADO (só 4 passos de saída; a solução
-  explode desde o 1º passo, sempre no Açu R1/R2). O Açu de JUSANTE (R2/R3, RS <
-  140 000) tem batimetria boa (5–10 m).
+O conserto está NO PIPELINE, medido nos seis rios:
 
-**Não é problema de batimetria — é de eixo.** Filtrar ponto a ponto não resolve
-(tentei; a interpolação entre o que sobra piora o degrau). O conserto é REFAZER
-O EIXO de cabeceira do Açu e do Benedito seguindo o talvegue do MDT (acumulação
-de fluxo), recortar as seções nesse eixo, e só então ancorar no levantamento —
-que a jusante já bate.
-
-## Segundo defeito achado depois: a FOZ do Açu sem MDT
-
-A foz do Açu tem um vão de 1500 m entre seções (…2000, 1550, **[vão]**, 50, 0)
-colado no contorno de maré. Não é espaçamento escolhido: o grid nasce regular
-(1165 seções a 150 m, mesmo `--dx` do Mirim), mas o `rio_do_relevo.py`
-descartou **109 seções "sem MDT utilizável"** — o estuário é lâmina d'água, e
-no MDT SIG-SC lâmina = 0.0 = vazio. O legado tem o estuário levantado (Açu R4:
-RS 5534→75, regular). **Conserto DENTRO do `rio_do_relevo.py`** (regra: corrigir
-no software que já é usado, não criar script ao lado): onde o MDT é
-inutilizável, cair para a seção do legado se houver uma próxima.
+- `batimetria_do_legado.py`: detector de ficção (reta local com rms < 5 cm E
+  declive ≥ 1 m/km — canal dragado é reta PLANA e é real) + filtro de
+  rebaixamento implausível (> 25 m numa calha de ~11) + casamento por RS
+  (folga 800 m; XY só de sanidade 1200 m).
+- `batimetria.py aplicar`: interpolação absoluta entre âncoras (zera
+  contradeclives: Mirim 117→0), e rebaixamento ZERADO por intervalo em
+  aglomerados de pontos sem âncora ≥ 3 km, com rampa de 1 km — sem ponte por
+  baixo do terreno. Medido: Açu ajuste máx 117→24 m, contradeclives 125→17;
+  Norte 62→0; Sul 50→0; Oeste 59→0; Benedito máx 5,5 m.
+- `rio_do_relevo.py`: onde o MDT não cobre (< 50% do centro) ou onde a zona é
+  de maré (talvegue < 2 m e legado com fundo > 2 m abaixo), a seção levantada
+  do legado entra INTEIRA (cutline, largura e margens dela — o recorte no grid
+  de ±400 m cortava o canal do porto de 2.116 m pela metade); o pente de
+  lâmina entre levantadas cai; ponta degenerada (restinga de 76 m recebendo a
+  maré) cai. Foz do Açu: 8 últimas seções levantadas, fundo −10,1→−10,8,
+  4,2–4,4 km de largura.
 
 ## O que fazer agora, nesta ordem
 
-1. **Refazer o eixo de cabeceira do Açu (R1) e do Benedito pelo talvegue do
-   MDT** (acumulação de fluxo do relevo), não pela linha esquemática do legado.
-   DENTRO da fonte de eixo que o `rio_do_relevo.py` lê — não como script
-   avulso. Aceite: o porteiro de eixo alto do `construir_rio.py` passa a dar
-   "sadio" nos dois, e o Açu isolado converge.
-2. **Foz sem MDT → seção do legado**, dentro do `rio_do_relevo.py` (ver seção
-   acima). Aceite: foz do Açu sem vão > 300 m.
-3. **Rodar a rede e fechar o balanço.** Com o Açu estável, `montar_rede.py` +
-   `rodar_rios.py itajai_rede`. Vigiar a condição inicial: a rede começou com
-   185 hm³ nos canais (plausível para calha funda de 174 km) e drenava o
-   excesso — se sobrar erro depois de estável, é warmup/restart.
-4. **Benedito na rede** depois do eixo: ele reativa a junção Indaial (Açu passa
-   a ter 4 reaches, como no legado).
-5. **Barragens na rede + calibração de 1983 sem a Norte.** As barragens entram
-   como hidrograma roteado nas cabeceiras (`reservatorio.py` → `montar()` de
-   `projeto_rede.py` aceita `q_override`). Cuidado: o Canal Retificado precisa
-   de nome de rio próprio (`Canal_Retif`), senão dá 1.401 erros de bankline.
-6. **Sistema de decisão / visualização.** Cenários (natural / 1983 Sul+Oeste /
-   atual três) → rodar a rede → pico de cota nos pontos críticos
-   (`barragens_itajai.json`: Rio do Sul, Blumenau, Itajaí, com cotas de
-   alerta/emergência). Comparar RELATIVO (redução de pico) é robusto ao erro; o
-   ABSOLUTO precisa do zero da régua de cada ponto (dado externo, não no repo).
-7. **Projeto JICA:** dados externos (regras de operação, estruturas) não estão
-   no repo — pedir/localizar antes.
-
+1. **Rodar o pipeline inteiro** (`construir_rio.py --todos`) — o usuário roda
+   no terminal; o programa imprime o aceite (validador 0/0, banks 0, adotadas
+   na foz, tabela com "g02"). Depois `montar_rede.py` — com o Benedito agora
+   COM g02, a junção Indaial reativa sozinha (Açu em 4 reaches, como o
+   legado).
+2. **Rodar a rede** (`rodar_rios.py itajai_rede`) e ler o veredito pelo MCP
+   (`get_plan_results_summary`: foi "Unsteady Went Unstable" que desmascarou o
+   run abortado). Vigiar a condição inicial (a rede partia com 185 hm³ e
+   drenava o excesso).
 ## Estado dos scripts novos desta rodada
 
 - `construir_rede.py` — costura a rede, parte o tronco, escreve as junções.

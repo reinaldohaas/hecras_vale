@@ -99,7 +99,8 @@ def secoes_levantadas(g, rio, completas=False):
                 c = cut.mean(0)
                 if completas:
                     out.append({"rs": rs, "x": float(c[0]), "y": float(c[1]),
-                                "sta": sta, "z": z, "lb": lb, "rb": rb})
+                                "sta": sta, "z": z, "lb": lb, "rb": rb,
+                                "cut": (tuple(cut[0]), tuple(cut[-1]))})
                 else:
                     out.append((rs, c[0], c[1], inv, topo))
             i = j - 1
@@ -143,19 +144,82 @@ def main():
     print(f"   fundo {L[:,3].min():.2f} a {L[:,3].max():.2f} m   "
           f"calha mediana {np.median(prof):.2f} m")
 
+    # ---- DETECTOR DE FICCAO. Nas cabeceiras do Acu e do Benedito o "fundo
+    # levantado" do legado e uma RETA DESENHADA: declive exatamente 8,00 m/km
+    # com residuo rms de 1-2 MILIMETROS ao longo de 73-119 secoes -- nos dois
+    # rios, a mesma constante. Rio de verdade nao faz isso (controles: Mirim
+    # rms 15,4 m; Benedito de jusante 1,15 m). O titulo do proprio legado
+    # avisa: "rede real ANA + relevo DEM". Ancorar nisso pediria cavar ate
+    # 284 m ("eixo alto" foi o diagnostico errado; o eixo esta no vale que o
+    # lidar mede -- procurado um caminho mais baixo num corredor de +-1500 m,
+    # nao ha). Secao cujo entorno ajusta uma reta com rms < 5 cm e sintetica
+    # e NAO vira ancora: o MDT fica valendo ali.
+    o = np.argsort(-L[:, 0])
+    rs_s, inv_s = L[o, 0], L[o, 3]
+    sint_s = np.zeros(len(L), bool)
+    W = 7
+    for i in range(len(rs_s)):
+        j0, j1 = max(0, i - W), min(len(rs_s), i + W + 1)
+        if j1 - j0 < 5:
+            continue
+        c = np.polyfit(rs_s[j0:j1], inv_s[j0:j1], 1)
+        # A reta PLANA e real: o canal dragado do estuario e reto POR PROJETO
+        # (0,10 m/km, rms 0, fundo -10,85 -- profundidade de porto mantida).
+        # A ficcao tem DECLIVE: 8,00 m/km desenhados morro acima. Sem a
+        # condicao de declive o detector descartava o estuario junto, e o
+        # aplicar do Acu piorava (ajuste max 67 m, declividades 45 -> 59).
+        if abs(c[0]) >= 0.001 and \
+                (inv_s[j0:j1] - np.polyval(c, rs_s[j0:j1])).std() < 0.05:
+            sint_s[i] = True
+    sintetica = np.zeros(len(L), bool)
+    sintetica[o] = sint_s
+    if sintetica.any():
+        rr = rs_s[sint_s]
+        print(f"   LEGADO SINTETICO: {int(sintetica.sum())} de {len(L)} "
+              f"secoes sao reta desenhada (residuo local < 5 cm), "
+              f"RS {rr.max():.0f} a {rr.min():.0f} -- nao viram ancora")
+
     linhas = list(csv.DictReader(open(a.pedido, encoding="utf-8"),
                                  delimiter=";"))
     if not linhas:
         raise SystemExit(f"{a.pedido} esta vazio")
     campos = list(linhas[0].keys())
-    n_ok, dists, quedas = 0, [], []
+    n_ok, n_fic, dists, quedas = 0, 0, [], []
     for r in linhas:
         x, y = float(r["x"]), float(r["y"])
-        k = int(np.argmin(np.hypot(L[:, 1] - x, L[:, 2] - y)))
+        rs_p = float(r["rs"])
+        # O CASAMENTO E POR RS, nao por distancia 2D. O centro da secao do
+        # legado e esquematico; no cinturao de meandros ele fica longe do
+        # ponto do pedido e o limite de 300 m em XY deixava trechos REAIS
+        # orfaos de ancora (Oeste: 27 em branco, e o aplicar mantinha o ruido
+        # do MDT ali). O RS casa ao longo do rio, imune ao pescoco de
+        # meandro; a folga e meio espacamento do legado (800 m) e a
+        # distancia 2D vira sanidade larga (1200 m).
+        k = int(np.argmin(np.abs(L[:, 0] - rs_p)))
+        d_rs = abs(float(L[k, 0]) - rs_p)
         d = float(np.hypot(L[k, 1] - x, L[k, 2] - y))
-        if d > a.limite:
-            r["observacao"] = (f"sem secao levantada a menos de "
-                               f"{a.limite:.0f} m (mais proxima {d:.0f} m)")
+        if d_rs > 800.0 or d > 1200.0:
+            r["observacao"] = (f"sem secao levantada (RS mais proximo a "
+                               f"{d_rs:.0f} m, centro a {d:.0f} m)")
+            continue
+        if sintetica[k]:
+            r["z_leito_A_LEVANTAR"] = ""
+            r["observacao"] = (f"legado sintetico em RS {L[k,0]:.0f} (reta "
+                               "desenhada, residuo < 5 cm) -- MDT vale aqui")
+            n_fic += 1
+            continue
+        # A ZONA DE TRANSICAO da reta desenhada foi "suavizada" (rms 8 m --
+        # escapa do teste de linearidade) mas ainda pede cortar 55-71 m numa
+        # calha levantada de ~11 m: implausivel do mesmo jeito. Este filtro
+        # por ponto ja existiu e FALHOU quando o aplicar interpolava por cima
+        # do buraco; agora o aplicar zera POR INTERVALO os pontos marcados, e
+        # o filtro volta a ser seguro.
+        zm_ = float(r.get("z_lamina_mdt") or "nan")
+        if np.isfinite(zm_) and zm_ - L[k, 3] > 25.0:
+            r["z_leito_A_LEVANTAR"] = ""
+            r["observacao"] = (f"rebaixamento implausivel ({zm_-L[k,3]:.0f} m "
+                               "> 25 numa calha de ~11) -- MDT vale aqui")
+            n_fic += 1
             continue
         r["z_leito_A_LEVANTAR"] = f"{L[k,3]:.2f}"
         zm = float(r.get("z_lamina_mdt") or "nan")
@@ -171,7 +235,8 @@ def main():
         w.writeheader()
         w.writerows(linhas)
     print(f"\npedido    : {a.pedido}   {len(linhas)} pontos")
-    print(f"   casados : {n_ok}   em branco: {len(linhas)-n_ok}")
+    print(f"   casados : {n_ok}   em branco: {len(linhas)-n_ok}"
+          + (f"   (destes, {n_fic} por legado sintetico)" if n_fic else ""))
     if dists:
         dists = np.array(dists)
         quedas = np.array(quedas)

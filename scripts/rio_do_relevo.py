@@ -196,60 +196,88 @@ def main():
     Z = MosaicoSigsc(tiles=tiles).cota(pts[:, 0], pts[:, 1]) \
         .reshape(len(base), len(off))
 
-    # ---- onde o MDT e VAZIO, vale a secao LEVANTADA do legado.
+    # ---- onde o MDT e VAZIO, a secao LEVANTADA do legado entra INTEIRA.
     #
     # No SIG-SC a lamina d'agua e 0.0 = nodata, entao o estuario inteiro sai
     # "sem MDT utilizavel": no Acu eram 109 secoes descartadas e um VAO DE
-    # 1500 m entre a foz (RS 0) e a secao seguinte, colado no contorno de
-    # mare. O legado tem exatamente esse trecho levantado (Acu R4, RS 5534 a
-    # 75, regular). O eixo e o mesmo (distancia ZERO conferida), entao a
-    # secao levantada mais proxima e reamostrada no MESMO grid de offsets e
-    # segue pelo MESMO caminho das outras -- filtros, margens, edge line --
-    # sem caso especial a jusante. Nao e inventar cota: e a unica medida que
-    # existe onde o MDT nao ve o fundo.
+    # 1500 m colado no contorno de mare. O legado tem exatamente esse trecho
+    # levantado (Acu R4, RS 5534 a 75; canal do porto com 2.116 m ENTRE AS
+    # MARGENS). A primeira versao reamostrava esse perfil no meu grid de
+    # +-BUSCA m -- e cortava o canal pela metade: a secao adotada nao chegava
+    # ao outro lado do rio, como se viu no RAS Mapper. Agora a secao entra
+    # INTEIRA, com a cutline, as margens e o perfil DELA, uma unica vez (na
+    # estacao de RS mais proximo -- adotar a mesma em varias estacoes
+    # duplicaria a cutline). Ela nao passa pelos filtros de largura, que
+    # existem para ruido do MDT, nao para levantamento; e entra na lista so
+    # depois deles. O casamento e por RS (imune ao pescoco de meandro) com
+    # folga de meio espacamento do legado, e distancia 2D larga de sanidade.
     from batimetria_do_legado import secoes_levantadas, LEGADO
-    LEG_DIST = 300.0        # m; alem disso a secao levantada e de outro trecho
+    LEG_RS = 800.0          # m de RS; ~metade do maior espacamento do legado
+    LEG_XY = 1200.0         # m; sanidade contra casamento grosseiramente errado
     _leg = secoes_levantadas(LEGADO, a.rio, completas=True) or []
-    _leg_xy = (np.array([[d["x"], d["y"]] for d in _leg])
-               if _leg else None)
+    _leg_rs = np.array([d["rs"] for d in _leg]) if _leg else np.array([])
+    _s_base = np.array([b[0] for b in base])
+    _dono = (np.array([int(np.argmin(np.abs((L - _s_base) - r)))
+                       for r in _leg_rs]) if len(_leg_rs) else np.array([]))
 
-    def z_do_legado(p):
-        """Perfil da secao levantada mais proxima, no grid `off`.
+    def adotar(k, s, p, fundo_max=None):
+        """A secao levantada cuja estacao-dona e `k`, inteira, ou None.
 
-        `off` positivo e a margem ESQUERDA e a estaca do legado cresce da
-        esquerda para a direita, entao off = estaca_do_talvegue - estaca.
-        Fora da largura levantada fica NaN, como o MDT vazio ficaria.
+        Com `fundo_max`, so adota se o fundo levantado esta ABAIXO dele --
+        e o criterio da zona de mare: o lidar mede a lamina (~0 m) e o
+        levantamento sabe que o canal desce a -10,85; se o legado nao for
+        mais fundo que o que o MDT ja ve, nao ha razao para trocar.
         """
-        if _leg_xy is None:
-            return None
-        k = int(np.argmin(np.hypot(_leg_xy[:, 0] - p[0],
-                                   _leg_xy[:, 1] - p[1])))
-        if float(np.hypot(_leg_xy[k, 0] - p[0],
-                          _leg_xy[k, 1] - p[1])) > LEG_DIST:
-            return None
-        d = _leg[k]
-        sta, zz = d["sta"], d["z"]
-        m = (sta >= d["lb"]) & (sta <= d["rb"])
-        sta_t = (float(sta[m][np.argmin(zz[m])]) if m.sum() >= 2
-                 else float(sta[np.argmin(zz)]))
-        q = sta_t - off
-        znew = np.full(len(off), np.nan)
-        dentro = (q >= sta.min()) & (q <= sta.max())
-        znew[dentro] = np.interp(q[dentro], sta, zz)
-        return znew
+        for j in np.flatnonzero(_dono == k) if len(_dono) else []:
+            d = _leg[int(j)]
+            if abs(d["rs"] - (L - s)) > LEG_RS:
+                continue
+            if float(np.hypot(d["x"] - p[0], d["y"] - p[1])) > LEG_XY:
+                continue
+            m = (d["sta"] >= d["lb"]) & (d["sta"] <= d["rb"])
+            zt_leg = float(d["z"][m].min() if m.any() else d["z"].min())
+            if fundo_max is not None and zt_leg >= fundo_max:
+                continue
+            return {"s": s, "rs": round(float(L - s), 2), "pronta": True,
+                    "sta": np.asarray(d["sta"], float),
+                    "z": np.asarray(d["z"], float),
+                    "lb": float(d["lb"]), "rb": float(d["rb"]),
+                    "cut": (np.asarray(d["cut"][0], float),
+                            np.asarray(d["cut"][1], float)),
+                    "zt": zt_leg}
+        return None
 
     # ---- cada secao, medida
-    secoes, no_teto, sem_dado, n_leg = [], 0, 0, 0
+    secoes, prontas, no_teto, sem_dado = [], [], 0, 0
     for k, ((s, p), n) in enumerate(zip(base, normais)):
         z = Z[k]
         centro = np.abs(off) <= 30.0
-        if (not np.isfinite(z).any()
-                or not np.isfinite(z[centro]).any()):
-            z = z_do_legado(p)
-            if z is None or not np.isfinite(z[centro]).any():
+        # O criterio e COBERTURA, nao presenca. No estuario a lamina e vazio
+        # mas sobram respingos de borda d'agua: meia duzia de pixels no
+        # centro passavam no teste "tem dado", viravam secao-lixo (76 m de
+        # largura, 5 cm de fundo, na boca do porto) e morriam adiante no
+        # filtro de faixa vazia -- 19 assim, e a foz ficava com vao de
+        # 1500 m. Centro com menos de metade das amostras finitas nao e
+        # medida: vai para a adocao do legado, ou fora.
+        if float(np.isfinite(z[centro]).mean()) < 0.5:
+            d = adotar(k, s, p)
+            if d is not None:
+                prontas.append(d)
+            else:
                 sem_dado += 1
+            continue
+        # NA ZONA DE MARE O LIDAR VE A LAMINA, NAO O CANAL. Na boca do porto
+        # a estacao tinha cobertura boa (a restinga) e virava secao de 224 m
+        # com fundo 0,17 m -- enquanto o levantamento sabe que ali o canal
+        # tem 2.116 m entre margens e fundo -10,85. Onde o talvegue do MDT
+        # esta abaixo de 2 m e o legado conhece fundo mais de 2 m abaixo
+        # dele, a secao levantada vale mais que o respingo.
+        zt_c = float(np.nanmin(np.where(centro, z, np.nan)))
+        if zt_c < 2.0:
+            d = adotar(k, s, p, fundo_max=zt_c - 2.0)
+            if d is not None:
+                prontas.append(d)
                 continue
-            n_leg += 1
         i0 = int(np.nanargmin(np.where(centro, z, np.nan)))
         zt = float(z[i0])
 
@@ -322,7 +350,7 @@ def main():
                        "z_calha": float(zt)})
 
     print(f"secoes : {len(secoes)}   sem MDT utilizavel: {sem_dado}   "
-          f"adotadas do legado: {n_leg}   "
+          f"adotadas do legado (inteiras): {len(prontas)}   "
           f"pararam no teto de {MEIA_MAX:g} m: {no_teto}")
 
     # ---- a MARGEM E MEDIDA, mas a medida e ruidosa
@@ -646,6 +674,79 @@ def main():
               f"ajuste mediano {np.median(np.abs(novo-cru)):.2f} m   "
               f"max {np.abs(novo-cru).max():.2f} m")
 
+    # ---- as ADOTADAS entram agora, inteiras, na ordem da estacao. Depois dos
+    # filtros de largura e da isotonica de proposito: largura levantada nao e
+    # ruido a filtrar, e batimetria levantada nao se "corrige" por regressao.
+    if prontas:
+        secoes = sorted(secoes + prontas, key=lambda q: q["s"])
+
+    # ---- NA ZONA ADOTADA, O PENTE DE LAMINA CAI. Entre duas secoes
+    # levantadas vizinhas o MDT ainda gerava secoes de lamina (fundo ~0,0)
+    # alternando com as dragadas (fundo -10,8): uma falsa soleira de 10 m a
+    # cada 150 m -- um pente que nenhum solver engole. Secao do MDT cujo
+    # fundo esta mais de 2 m ACIMA de ambas as levantadas vizinhas (a menos
+    # de 2,5 km) e lamina sobre agua funda, nao leito: cai. O mesmo vale para
+    # o rabo alem da ultima levantada (era a restinga de 224 m recebendo a
+    # mare no lugar do canal do porto).
+    if prontas:
+        pr = sorted((q["s"], q["zt"]) for q in secoes if q.get("pronta"))
+        pr_s = np.array([q[0] for q in pr])
+        pr_z = np.array([q[1] for q in pr])
+        mantem, n_pente = [], 0
+        for q in secoes:
+            if q.get("pronta"):
+                mantem.append(q)
+                continue
+            # so na ZONA DE MARE: rio acima a secao de lamina carrega a
+            # varzea real do lidar, e o fundo dela e ancorado depois pelo
+            # `batimetria.py aplicar` -- cortar la jogaria fora a planicie.
+            if q["zt"] >= 2.0:
+                mantem.append(q)
+                continue
+            i = int(np.searchsorted(pr_s, q["s"]))
+            cima = i - 1 if i > 0 else None
+            baixo = i if i < len(pr_s) else None
+            cai = False
+            if cima is not None and baixo is not None:
+                if (pr_s[baixo] - pr_s[cima] <= 2500.0
+                        and q["zt"] > max(pr_z[cima], pr_z[baixo]) + 2.0):
+                    cai = True
+            elif cima is not None:
+                if (q["s"] - pr_s[cima] <= 1200.0
+                        and q["zt"] > pr_z[cima] + 2.0):
+                    cai = True
+            elif baixo is not None:
+                if (pr_s[baixo] - q["s"] <= 1200.0
+                        and q["zt"] > pr_z[baixo] + 2.0):
+                    cai = True
+            if cai:
+                n_pente += 1
+            else:
+                mantem.append(q)
+        if n_pente:
+            print(f"   pente de lamina na zona adotada: {n_pente} secao(oes) "
+                  "do MDT descartada(s) entre/junto a secoes levantadas")
+        secoes = mantem
+
+    # ---- PONTA DEGENERADA NAO RECEBE CONTORNO. Na boca do porto sobrava uma
+    # secao de 76 m de largura e 9 cm de fundo -- um respingo de borda d'agua
+    # com cobertura suficiente para passar no criterio, mas sem nenhuma
+    # representatividade -- e era NELA que a mare entraria. Secao de ponta com
+    # menos de 30% da largura mediana das 10 vizinhas cai; as internas ficam,
+    # que estreitamento no meio do rio pode ser real.
+    def _ext(q):
+        return float(q["sta"][-1] - q["sta"][0])
+    for lado_, idx_ in (("jusante", -1), ("montante", 0)):
+        while len(secoes) > 12:
+            viz = (secoes[-11:-1] if idx_ == -1 else secoes[1:11])
+            med = float(np.median([_ext(q) for q in viz]))
+            if _ext(secoes[idx_]) >= 0.3 * med:
+                break
+            s_ = secoes.pop(idx_)
+            print(f"   ponta de {lado_} degenerada descartada: RS "
+                  f"{s_['rs']:.1f} ({_ext(s_):.0f} m de largura, vizinhas "
+                  f"{med:.0f} m)")
+
     # ---- escreve
     os.makedirs(a.saida, exist_ok=True)
     nome = os.path.basename(a.saida.rstrip("/\\"))
@@ -711,6 +812,9 @@ def main():
     lc = np.array([s["rb"] - s["lb"] for s in secoes])
     ls = np.array([s["sta"][-1] for s in secoes])
     npt = np.array([len(s["sta"]) for s in secoes])
+    # recalcula do `secoes` FINAL: as adotadas do legado entraram depois da
+    # isotonica, e medir dz num array de antes do merge quebrava o relatorio
+    zt = np.array([s["zt"] for s in secoes])
     dz = np.diff(zt)
     ch = np.array([secoes[i + 1]["s"] - secoes[i]["s"]
                    for i in range(len(secoes) - 1)])

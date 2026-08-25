@@ -1,35 +1,30 @@
 # -*- coding: utf-8 -*-
-"""Onde o eixo do relevo corre ALTO, e a batimetria do legado nao serve.
+"""Onde o LEGADO E FICCAO: a lamina do MDT contra a reta desenhada.
 
     python scripts/diagnostico_eixo_alto.py
     python scripts/diagnostico_eixo_alto.py --rios Rio_Benedito Itajai_Acu
 
 Serve a qualquer rio. Compara, ao longo do rio, o talvegue que o `rio_do_relevo`
-leu do MDT (a LAMINA d'agua) com o fundo levantado em 1983 (legado). Onde os
-dois andam juntos, a batimetria e um rebaixamento sadio de alguns metros. Onde
-o eixo esquematico do legado -- de onde saiu `eixos_do_relevo.geojson` -- corre
-pela ENCOSTA de um vale encaixado em vez do talvegue, a secao cortada do MDT
-pega o fundo dezenas a centenas de metros ACIMA do canal real, e o
-rebaixamento dispara.
+leu do MDT (a LAMINA d'agua) com o fundo do legado. Onde os dois andam juntos,
+a batimetria e um rebaixamento sadio de alguns metros. Onde divergem por
+dezenas a centenas de metros, quem mente e o LEGADO: nesses trechos o "fundo
+levantado" e uma RETA DESENHADA -- declive exatamente 8,00 m/km com residuo
+rms de 1-2 MILIMETROS por dezenas de secoes, nos dois rios a mesma constante
+("rede real ANA + relevo DEM", diz o titulo do proprio legado). Rio de verdade
+nao faz isso: os controles dao rms de 1 a 15 m.
 
-POR QUE ISTO IMPORTA
+O DIAGNOSTICO ANTERIOR ESTAVA ERRADO, E FICA REGISTRADO
 
-  Ancorar a batimetria nesse trecho manda o `aplicar` DESCER o leito dezenas de
-  metros dentro de uma calha que nao tem essa profundidade: cava um canion,
-  contra as regras. Medido, foi o que:
+  A primeira leitura foi "o eixo corre pela encosta". Medido, nao: procurado o
+  caminho conectado de MENOR COTA num corredor de +-1500 m em torno do eixo
+  (programacao dinamica sobre o MDT), o melhor caminho fica a 231 m do "fundo"
+  do legado -- nao existe vale naquela cota. O eixo esta no fundo do vale que
+  o lidar mede; a ficcao e a reta do legado. O conserto e nao ancorar nela:
+  o detector do `batimetria_do_legado.py` descarta essas ancoras e o
+  `batimetria.py aplicar` zera o rebaixamento no vao, deixando o MDT valer.
 
-    - deixou o Rio Benedito sem g02 (rebaixamento mediana 104 m a montante);
-    - desestabilizou o solver do Itajai-Acu, cujo trecho de cabeceira (R1,
-      RS > ~143000) pede rebaixar 55 m na mediana e ate 118 m -- o Acu sozinho
-      da "Solution Solver Failed", e a rede vai instavel por causa dele.
-
-  O conserto NAO e filtrar ponto a ponto (a interpolacao entre o que sobra so
-  piora o degrau) nem inventar cota: e REFAZER O EIXO desse trecho seguindo o
-  talvegue do MDT (acumulacao de fluxo), recortar as secoes nele, e so entao
-  ancorar no levantamento -- que a jusante ja bate.
-
-A figura marca a faixa onde o rebaixamento passa de `--limiar` metros: e ali
-que o eixo precisa ser refeito.
+A figura marca a faixa onde a divergencia passa de `--limiar` metros: e ali
+que o legado nao presta e o MDT fica valendo.
 """
 import argparse
 import os
@@ -96,7 +91,7 @@ def main():
         ax.plot(x / 1000, z, color="tab:red", lw=1.5,
                 label="talvegue lido do MDT (lamina)")
         ax.plot(x / 1000, fundo, color="tab:blue", lw=1.5,
-                label="fundo levantado 1983 (legado)")
+                label="fundo do legado (reta desenhada onde diverge)")
         if alto.any():
             ax.fill_between(x / 1000, z, fundo, where=alto, color="tab:red",
                             alpha=.25,
