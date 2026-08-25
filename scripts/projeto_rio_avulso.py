@@ -66,6 +66,40 @@ def hidrograma(u01, rio, tipo=r"Flow Hydrograph"):
     return None
 
 
+LIMITE_MARE = 2.0    # m; fundo da ultima secao abaixo disto = foz no mar
+
+
+def mare(u01, rio="Itajai_Acu", rs="75.00"):
+    """Os 192 valores horarios de nivel na foz, na rede legada.
+
+    E o unico registro de mare desta bacia, e ele ja esta no repositorio.
+    Copia-lo e o mesmo que copiar o hidrograma de vazao: dado medido no
+    lugar certo, e nao numero inventado para o modelo fechar.
+    """
+    t = open(u01, encoding="latin-1", errors="replace").read() \
+        .replace("\r", "").split("\n")
+    ini = [i for i, l in enumerate(t) if l.startswith("Boundary Location=")]
+    for a, b in zip(ini, ini[1:] + [len(t)]):
+        p = t[a].split("=", 1)[1].split(",")
+        if p[0].strip() != rio or p[2].strip() != rs:
+            continue
+        for j in range(a, b):
+            m = re.match(r"^Stage Hydrograph=\s*(\d+)", t[j])
+            if not m:
+                continue
+            n = int(m.group(1))
+            v, k = [], j + 1
+            while k < b and len(v) < n:
+                x = t[k]
+                if not x.strip() or re.match(r"^[A-Za-z]", x):
+                    break
+                v += [float(x[c:c + 8]) for c in range(0, len(x), 8)
+                      if x[c:c + 8].strip()]
+                k += 1
+            return np.array(v[:n])
+    return None
+
+
 def col8(v):
     saida, linha = [], ""
     for i, x in enumerate(v):
@@ -121,8 +155,8 @@ def main():
     k = max(len(S) - 11, 0)
     decl = (z[k] - z[-1]) / max(ch[k:-1].sum(), 1.0)
     decl = float(max(decl, 1e-4))
-    print(f"jusante   : profundidade normal, declividade medida "
-          f"{decl:.5f} nos ultimos {len(S)-k} trechos")
+    print(f"declive   : {decl:.5f} medido nos ultimos {len(S)-k} trechos "
+          "(so vira contorno se nao houver mare)")
 
     prj = [f"Proj Title={nome}", "Current Plan=p01",
            "Default Exp/Contr=0.3,0.1", "SI Units", f"Geom File={ext}",
@@ -170,8 +204,45 @@ def main():
             "Is Critical Boundary=False", "Critical Boundary Flow=",
             "",
             f"Boundary Location={rio:<16.16},{rch:<16.16},{rs1:<8.2f},"
-            f"{'':<8},{'':<16},{'':<16}",
-            f"Friction Slope={decl:.6f},0"]
+            f"{'':<8},{'':<16},{'':<16}"]
+    # ---- JUSANTE: MARE ONDE HA MARE, profundidade normal onde nao ha.
+    #
+    # Profundidade normal na foz do Mirim, com o leito levantado a -9,81 m e
+    # declividade de 0,000115, punha o solver a oscilar entre -8.282 e +30.993
+    # m3/s entre RS 3.000 e 5.000 -- 40 iteracoes em todo passo, do primeiro ao
+    # ultimo. Contorno de rio de montanha aplicado a um estuario.
+    #
+    # O modelo legado que roda usa `Stage Hydrograph` na foz do Acu (RS 75,
+    # 192 h de mare entre -0,20 e +0,80 m) e faz os afluentes terminarem em
+    # JUNCAO, sem contorno proprio. Enquanto os rios estao avulsos, a mare
+    # entra como contorno provisorio nos que chegam ao mar -- e so neles:
+    #
+    #     Itajai_Acu     fundo da ultima secao     0,00 m   -> mare
+    #     Itajai_Mirim                            -9,81 m   -> mare
+    #     Rio_Benedito                            51,03 m   -> profundidade normal
+    #     Itajai_Norte                           130,89 m   -> idem
+    #     Itajai_Oeste                           333,71 m   -> idem
+    #     Itajai_Sul                             333,94 m   -> idem
+    #
+    # Nos quatro de cima a mare seria absurdo: eles desaguam a centenas de
+    # metros de altitude, e o contorno certo deles e a juncao, nao o mar.
+    z_foz = float(np.min(S[-1]["z"]))
+    H = None
+    if z_foz < LIMITE_MARE:
+        H = mare(a.hidrograma)
+    if H is not None:
+        u01 += ["Interval=1HOUR", f"Stage Hydrograph= {len(H)} "]
+        u01 += col8(H)
+        u01 += ["DSS Path=", "Use DSS=False", "Use Fixed Start Time=True",
+                "Fixed Start Date/Time=01AUG2026,0000"]
+        print(f"jusante   : MARE copiada de {a.hidrograma} "
+              f"({len(H)} h, {H.min():.2f} a {H.max():.2f} m) -- "
+              f"o fundo da ultima secao esta em {z_foz:.2f} m")
+    else:
+        u01 += [f"Friction Slope={decl:.6f},0"]
+        print(f"jusante   : profundidade normal, declividade {decl:.5f} -- "
+              f"o fundo da ultima secao esta em {z_foz:.2f} m, fora do "
+              "alcance da mare")
     escrever(os.path.join(pasta, f"{nome}.u01"), "\n".join(u01))
 
     # ---- PROJECAO E .rasmap. Sem eles o projeto "roda" mas nao tem sistema
