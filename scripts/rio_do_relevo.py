@@ -491,10 +491,24 @@ def main():
         # `me` aqui, toda bank station saiu deslocada de `me - o_esq` metros
         # para fora -- exatamente o descolamento entre bank station e bank line
         # que o validador vinha acusando.
-        lb = float(sta[np.argmin(np.abs(sta - (o_esq - o_l)))])
-        rb = float(sta[np.argmin(np.abs(sta - (o_esq - o_r)))])
+        # O SNAP NAO PODE DEVOLVER A MARGEM AO LADO ERRADO. `argmin(|sta-alvo|)`
+        # escolhia a estaca mais proxima DOS DOIS LADOS: com a margem grampeada
+        # a PASSO do eixo, "mais proxima" caia do outro lado do zero e o grampo
+        # evaporava -- medido no Acu, 12 secoes de 1086 com a calha fora do
+        # eixo (ex.: RS 32300, eixo na estaca 400,0 e lb=408) e 22 cruzamentos
+        # de bank line com o rio, em pares, todos no cinturao de meandros. A
+        # esquerda arredonda PARA FORA (estaca <= alvo) e a direita idem
+        # (estaca >= alvo): o eixo fica dentro por construcao.
+        cand = sta[sta <= o_esq - o_l]
+        lb = float(cand.max()) if len(cand) else float(sta[0])
+        cand = sta[sta >= o_esq - o_r]
+        rb = float(cand.min()) if len(cand) else float(sta[-1])
         if rb <= lb:
-            j = int(np.argmin(np.abs(sta - (o_esq - s["off_t"]))))
+            # canal degenerado: abre para as estacas vizinhas DO EIXO (estaca
+            # `o_esq`, o offset zero), e nao do talvegue -- em volta do
+            # talvegue as duas podiam cair do MESMO lado do eixo, e era dai
+            # que a bank line atravessava o rio.
+            j = int(np.argmin(np.abs(sta - o_esq)))
             lb = float(sta[max(j - 1, 0)])
             rb = float(sta[min(j + 1, len(sta) - 1)])
         s["lb"], s["rb"] = lb, rb
