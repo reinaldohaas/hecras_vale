@@ -57,11 +57,16 @@ sys.path.insert(0, os.path.dirname(DIR))
 LEGADO = "legado/Itajai_Rede_1983.g01"
 
 
-def secoes_levantadas(g, rio):
+def secoes_levantadas(g, rio, completas=False):
     """(rs, x, y, invert, topo) de cada secao daquele rio no `.gNN` legado.
 
     Le o texto direto: `qc_secoes` nao devolve a que rio cada secao pertence,
     e num arquivo de rede isso e o que importa.
+
+    Com `completas=True` devolve, em vez do array-resumo, uma lista de dicts
+    com o PERFIL inteiro (rs, x, y, sta, z, lb, rb) -- e o que o
+    `rio_do_relevo.py` usa para adotar a secao levantada onde o MDT e vazio
+    (o estuario e lamina d'agua, e no SIG-SC lamina = 0.0 = nodata).
     """
     t = open(g, encoding="latin-1", errors="replace").read() \
         .replace("\r", "").split("\n")
@@ -92,9 +97,15 @@ def secoes_levantadas(g, rio):
                 inv = float(z[m].min()) if m.sum() >= 2 else float(z.min())
                 topo = float(min(np.interp(lb, sta, z), np.interp(rb, sta, z)))
                 c = cut.mean(0)
-                out.append((rs, c[0], c[1], inv, topo))
+                if completas:
+                    out.append({"rs": rs, "x": float(c[0]), "y": float(c[1]),
+                                "sta": sta, "z": z, "lb": lb, "rb": rb})
+                else:
+                    out.append((rs, c[0], c[1], inv, topo))
             i = j - 1
         i += 1
+    if completas:
+        return out or None
     return np.array(out) if out else None
 
 

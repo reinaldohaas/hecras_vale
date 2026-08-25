@@ -196,17 +196,60 @@ def main():
     Z = MosaicoSigsc(tiles=tiles).cota(pts[:, 0], pts[:, 1]) \
         .reshape(len(base), len(off))
 
+    # ---- onde o MDT e VAZIO, vale a secao LEVANTADA do legado.
+    #
+    # No SIG-SC a lamina d'agua e 0.0 = nodata, entao o estuario inteiro sai
+    # "sem MDT utilizavel": no Acu eram 109 secoes descartadas e um VAO DE
+    # 1500 m entre a foz (RS 0) e a secao seguinte, colado no contorno de
+    # mare. O legado tem exatamente esse trecho levantado (Acu R4, RS 5534 a
+    # 75, regular). O eixo e o mesmo (distancia ZERO conferida), entao a
+    # secao levantada mais proxima e reamostrada no MESMO grid de offsets e
+    # segue pelo MESMO caminho das outras -- filtros, margens, edge line --
+    # sem caso especial a jusante. Nao e inventar cota: e a unica medida que
+    # existe onde o MDT nao ve o fundo.
+    from batimetria_do_legado import secoes_levantadas, LEGADO
+    LEG_DIST = 300.0        # m; alem disso a secao levantada e de outro trecho
+    _leg = secoes_levantadas(LEGADO, a.rio, completas=True) or []
+    _leg_xy = (np.array([[d["x"], d["y"]] for d in _leg])
+               if _leg else None)
+
+    def z_do_legado(p):
+        """Perfil da secao levantada mais proxima, no grid `off`.
+
+        `off` positivo e a margem ESQUERDA e a estaca do legado cresce da
+        esquerda para a direita, entao off = estaca_do_talvegue - estaca.
+        Fora da largura levantada fica NaN, como o MDT vazio ficaria.
+        """
+        if _leg_xy is None:
+            return None
+        k = int(np.argmin(np.hypot(_leg_xy[:, 0] - p[0],
+                                   _leg_xy[:, 1] - p[1])))
+        if float(np.hypot(_leg_xy[k, 0] - p[0],
+                          _leg_xy[k, 1] - p[1])) > LEG_DIST:
+            return None
+        d = _leg[k]
+        sta, zz = d["sta"], d["z"]
+        m = (sta >= d["lb"]) & (sta <= d["rb"])
+        sta_t = (float(sta[m][np.argmin(zz[m])]) if m.sum() >= 2
+                 else float(sta[np.argmin(zz)]))
+        q = sta_t - off
+        znew = np.full(len(off), np.nan)
+        dentro = (q >= sta.min()) & (q <= sta.max())
+        znew[dentro] = np.interp(q[dentro], sta, zz)
+        return znew
+
     # ---- cada secao, medida
-    secoes, no_teto, sem_dado = [], 0, 0
+    secoes, no_teto, sem_dado, n_leg = [], 0, 0, 0
     for k, ((s, p), n) in enumerate(zip(base, normais)):
         z = Z[k]
-        if not np.isfinite(z).any():
-            sem_dado += 1
-            continue
         centro = np.abs(off) <= 30.0
-        if not np.isfinite(z[centro]).any():
-            sem_dado += 1
-            continue
+        if (not np.isfinite(z).any()
+                or not np.isfinite(z[centro]).any()):
+            z = z_do_legado(p)
+            if z is None or not np.isfinite(z[centro]).any():
+                sem_dado += 1
+                continue
+            n_leg += 1
         i0 = int(np.nanargmin(np.where(centro, z, np.nan)))
         zt = float(z[i0])
 
@@ -279,6 +322,7 @@ def main():
                        "z_calha": float(zt)})
 
     print(f"secoes : {len(secoes)}   sem MDT utilizavel: {sem_dado}   "
+          f"adotadas do legado: {n_leg}   "
           f"pararam no teto de {MEIA_MAX:g} m: {no_teto}")
 
     # ---- a MARGEM E MEDIDA, mas a medida e ruidosa
