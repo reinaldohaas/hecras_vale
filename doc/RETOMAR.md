@@ -117,6 +117,32 @@ MACIOS (aceitos ≤ referência/5 = 70/26, relatados no veredito). Os 7 vãos
 eram podas reabrindo espaçamento depois da seleção — o gerador agora TAPA
 vãos > 1400 m reinstalando a melhor candidata medida. Seguir para a REDE.
 
+## O que o ANTIGRAVITY fez melhor (credito devido, medido)
+
+`modelos/_anti/mirim` (gerado por `a_scripts/gerar_mirim.py`, ferramenta
+Antigravity) e a melhor corrida do Mirim do projeto: 192 h completas, erro de
+volume 0,0015%, convergindo na 1a iteracao em ~137 mil passos, geometria com
+0 GRAVES e linhas TOTAL 0 — estavel ate com dt de 60 s. Merece estudo, e ja
+rendeu:
+
+- **Canal Retificado** unificado ao eixo (adotado no nosso gerador, commit
+  eee007b) — fechou a lacuna mais antiga da memoria do projeto;
+- **dt = 5 s** como referencia de robustez (adotado);
+- ainda POR adotar: **Bank Sta por construcao** (injetar lb/centro/rb na
+  lista de estacas — elimina a classe inteira de bugs de snap), **chaves de
+  estabilidade do p01** (UNET WFStab/SFStab, DZMax Abort=30), e o
+  **empacotamento autocontido** (um script → projeto inteiro).
+
+O que NAO se copia dele, pelas regras do usuario: leito de 8 numeros
+inventados + calha-parabola + margens forcadas + hidrologia sintetica (pico
+109 m3/s contra 1.671 do legado). Converge porque e liso por construcao; nao
+serve ao objetivo de 1983. A licao de metodo: rio inventado converge facil,
+rio medido briga — e o alvo continua sendo o medido, com a suavidade
+conquistada por interpolacao entre medidas, nao por invencao.
+
+Ferramentas paralelas neste repo: `a_scripts/` = Antigravity, `modelo/_codex`
+e `doc/reparo_codex_*` = Codex. OLHAR O TRABALHO DELAS ANTES de reinventar.
+
 ## O que fazer agora, nesta ordem
 
 1. **Rodar o pipeline inteiro** (`construir_rio.py --todos`) — o usuário roda
