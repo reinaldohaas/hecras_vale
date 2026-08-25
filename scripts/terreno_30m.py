@@ -65,11 +65,27 @@ def _arg(argv, chave, padrao=None, tipo=str):
     return tipo(argv[argv.index(chave) + 1]) if chave in argv else padrao
 
 
+def _e_valor(argv, x):
+    """True se `x` e o VALOR de uma opcao `--algo`, e nao uma geometria."""
+    i = argv.index(x)
+    return i > 0 and argv[i - 1].startswith("--")
+
+
 def dominio(geom, margem):
-    """Envoltoria das cutlines E dos eixos, com folga."""
-    S = ler_secoes(geom)
-    P = [np.asarray(d["cut"], float) for d in S]
-    E = [np.asarray(e.coords, float) for e in ler_eixos(geom).values()]
+    """Envoltoria das cutlines E dos eixos, com folga.
+
+    Aceita UMA geometria ou uma lista delas. Um terreno por rio nao serve
+    quando os rios viram rede: o de 30 m que existia cobria o Mirim inteiro e
+    deixava Norte, Sul e Oeste 100% de fora, com o Acu em 60% -- o RAS Mapper
+    abria e nao desenhava nada. A uniao dos seis da 146 x 133 km.
+    """
+    geoms = [geom] if isinstance(geom, str) else list(geom)
+    S, P, E = [], [], []
+    for g in geoms:
+        s = ler_secoes(g)
+        S += s
+        P += [np.asarray(d["cut"], float) for d in s]
+        E += [np.asarray(e.coords, float) for e in ler_eixos(g).values()]
     T = np.vstack(P + E)
     C = np.vstack(P)
     if (T.min(0) < C.min(0)).any() or (T.max(0) > C.max(0)).any():
@@ -119,17 +135,24 @@ def cobertura(tif, S, geom, log=print):
 def main(argv):
     if not argv:
         raise SystemExit(__doc__)
-    geom = argv[0]
+    geom = [x for x in argv if not x.startswith("--")
+            and not _e_valor(argv, x)]
+    geom = geom if len(geom) > 1 else geom[0]
     nome = _arg(argv, "--nome", "mirim30")
     res = _arg(argv, "--res", 30.0, float)
     margem = _arg(argv, "--margem", MARGEM, float)
     fonte = _arg(argv, "--fonte")             # None = folhas de 1 m
-    raiz = os.path.dirname(geom) or "."
+    raiz = os.path.dirname(geom if isinstance(geom, str) else geom[0]) or "."
+    if not isinstance(geom, str):
+        raiz = os.path.dirname(raiz) or "."       # sobe da pasta do rio
     pasta = os.path.join(raiz, "Terrain")
     os.makedirs(pasta, exist_ok=True)
 
     (x0, y0, x1, y1), S = dominio(geom, margem)
-    print(f"geometria : {geom}   ({len(S)} secoes)")
+    print(f"geometria : "
+          + (geom if isinstance(geom, str)
+             else ", ".join(os.path.basename(g) for g in geom))
+          + f"   ({len(S)} secoes)")
     print(f"dominio   : {(x1-x0)/1000:.1f} x {(y1-y0)/1000:.1f} km  "
           f"(folga de {margem:g} m)")
     print(f"resolucao : {res:g} m")
@@ -169,7 +192,7 @@ def main(argv):
             "-overwrite", entrada, tif], None, print)
     piramides(tif, log=print)
     print(f"\nraster: {tif}  ({tamanho(os.path.getsize(tif))})")
-    cobertura(tif, S, geom)
+    cobertura(tif, S, geom if isinstance(geom, str) else geom[0])
 
     # ---- o .hdf, pelo RasProcess do proprio HEC-RAS
     from ras_commander import RasTerrain

@@ -83,6 +83,9 @@ def main():
     ap.add_argument("geom")
     ap.add_argument("--hidrograma", default="legado/Itajai_Rede_1983.u01")
     ap.add_argument("--rio-fonte", required=True)
+    ap.add_argument("--terreno", default=None,
+                    help="hdf do terreno; por padrao procura "
+                         "Terrain/vale30_Terreno.hdf ao lado da pasta do rio")
     a = ap.parse_args()
 
     pasta = os.path.dirname(a.geom)
@@ -177,6 +180,40 @@ def main():
     shutil.copy2(fonte, os.path.join(pasta, "SIRGAS2000_UTM22S.prj"))
     print(f"projecao  : {fonte} -> {nome}/SIRGAS2000_UTM22S.prj")
 
+    # ---- O TERRENO. Sem ele o RAS Mapper abre e nao desenha nada -- foi o
+    # que aconteceu: o terreno de 30 m que existia fora feito sobre o dominio
+    # do Mirim, e cobria 100% dele, 60% do Acu, 5% do Benedito e ZERO do
+    # Norte, do Sul e do Oeste. O de agora e um so, sobre a uniao dos seis
+    # (150 x 137 km, 765 folhas do SIG-SC a 1 m reduzidas a 30 m).
+    #
+    # UMA camada de terreno, e nunca duas: rasmap com terreno repetido derruba
+    # o StoreAllMapsCommand com saida -532462766, sem mensagem.
+    terreno = a.terreno
+    if terreno is None:
+        for c in (os.path.join(os.path.dirname(pasta), "Terrain",
+                               "vale30_Terreno.hdf"),
+                  os.path.join("modelo", "Terrain", "vale30_Terreno.hdf")):
+            if os.path.exists(c):
+                terreno = c
+                break
+    if terreno and os.path.exists(terreno):
+        rel = os.path.relpath(terreno, pasta).replace("/", "\\")
+        tnome = os.path.basename(terreno)[:-4]
+        bloco = ['  <Terrains Checked="True" Expanded="True">',
+                 f'    <Layer Name="{tnome}" Type="TerrainLayer" '
+                 f'Checked="True" Filename=".\{rel}"'
+                 if not rel.startswith("..") else
+                 f'    <Layer Name="{tnome}" Type="TerrainLayer" '
+                 f'Checked="True" Filename="{rel}"',
+                 '      Expanded="False">',
+                 '      <ResampleMethod>near</ResampleMethod>',
+                 '      <Surface On="True" />', '    </Layer>',
+                 '  </Terrains>']
+        print(f"terreno   : {terreno}  ->  {rel}")
+    else:
+        bloco = ["  <Terrains />"]
+        print("terreno   : NENHUM -- o RAS Mapper vai abrir sem relevo")
+
     P = np.vstack([np.asarray(d["cut"], float) for d in S])
     rasmap = [
         "<RASMapper>", "  <Version>2.0.0</Version>",
@@ -190,7 +227,7 @@ def main():
         '      <Layer Type="RiverStations" Checked="True" />',
         '      <Layer Type="RASXS" Checked="True" />',
         '      <Layer Type="RASErrors" Checked="True" />',
-        "    </Layer>", "  </Geometries>", "  <Terrains />",
+        "    </Layer>", "  </Geometries>"] + bloco + [
         "  <CurrentView>",
         f"    <MinX>{P[:,0].min():.2f}</MinX>",
         f"    <MaxX>{P[:,0].max():.2f}</MaxX>",

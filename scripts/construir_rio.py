@@ -4,12 +4,36 @@
     python scripts/construir_rio.py Itajai_Acu
     python scripts/construir_rio.py --todos
 
-Faz as quatro etapas em ordem, e a quarta decide se as tres anteriores valem:
+Faz TUDO, em ordem, e a validacao decide se as etapas anteriores valem:
 
-    1. geometria do MDT SIG-SC 1 m            rio_do_relevo.py
-    2. projeto com projecao e contorno        projeto_rio_avulso.py
-    3. VALIDACAO SEM RODAR O SOLVER           ler_erros_geometria.py
-    4. pedido de batimetria                   batimetria.py
+    por rio
+      1. geometria do MDT SIG-SC 1 m          rio_do_relevo.py
+      2. projeto com projecao e contorno      projeto_rio_avulso.py
+      3. VALIDACAO SEM RODAR O SOLVER         ler_erros_geometria.py
+      4. pedido de batimetria                 batimetria.py
+    uma vez, no fim
+      5. terreno sobre a UNIAO dos rios       terreno_30m.py
+      6. limpeza do vazio negativo            limpar_vazio_negativo.py
+      7. religa o terreno em cada projeto     projeto_rio_avulso.py
+      8. confere a edge line NO HDF DO RAS    conferir_edge_lines.py
+
+O TERRENO E DA BACIA, E NAO DE UM RIO
+
+  Havia um terreno de 30 m e ele cobria 100% do Mirim, 60% do Acu, 5% do
+  Benedito e ZERO do Norte, do Sul e do Oeste -- fora feito sobre o dominio de
+  um rio so. Quem abrisse qualquer um dos outros no RAS Mapper via o modelo
+  sem relevo nenhum. Aqui ele sai da uniao dos seis, de uma vez, e entra no
+  `.rasmap` de todos. Vem DEPOIS das geometrias porque o dominio vem delas.
+
+  `--sem-terreno` pula as etapas 5 a 7, que sao as caras: 765 folhas do
+  SIG-SC a 1 m sobre 150 x 137 km. Sem elas o modelo abre sem relevo.
+
+POR QUE A CONFERENCIA DA EDGE LINE E SEPARADA DA VALIDACAO
+
+  O "Validate Geometry" NAO conta a auto-interseccao das edge lines na sua
+  lista: o Oeste marcava zero mensagens e o RAS Mapper avisava assim mesmo.
+  A etapa 8 le `/Geometry/River Edge Lines` do HDF -- o traco que o RAS usa
+  para montar a superficie de interpolacao -- e mede nele.
 
 E SE AINDA HOUVER ERRO, ELE APERTA SOZINHO. O que controla a geometria e a
 TAXA de variacao da largura da secao, nao a largura: a edge line liga as
@@ -108,6 +132,37 @@ def construir(rio, pasta, limite, taxas, dx, cada):
             "taxa": taxa, "pedido": ped}
 
 
+def terreno(pastas, nome="vale30"):
+    """Terreno unico sobre a uniao das geometrias, limpo do vazio negativo.
+
+    Devolve o caminho do `.hdf`, ou None se nao deu.
+    """
+    print(f"\n{'='*68}\nTERRENO DA BACIA\n{'='*68}")
+    geoms = [os.path.join(p, os.path.basename(p) + ".g01") for p in pastas]
+    geoms = [g for g in geoms if os.path.exists(g)]
+    if not geoms:
+        print("   nenhuma geometria -- nada a fazer")
+        return None
+    roda(["scripts/terreno_30m.py"] + geoms + ["--nome", nome],
+         mostrar=("dominio   :", "fonte     :", "raster:", "cobertura",
+                  "celulas entre", "OK    ", "FALTA"))
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(geoms[0])))
+    pt = os.path.join(raiz, "Terrain")
+    tif = os.path.join(pt, "MDT_SIGSC_30m.tif")
+    vrt = os.path.join(pt, nome + "_sigsc_1m.vrt")
+    # A LIMPEZA NAO E OPCIONAL. Reduzir 1 m -> 30 m e uma media de 900 pixels,
+    # e as folhas que gravam o vazio como numero negativo grande contaminam a
+    # media: medidas 879 celulas assim na bacia, e 471 delas com media
+    # POSITIVA -- plausiveis, erradas, e invisiveis a olho.
+    if os.path.exists(tif) and os.path.exists(vrt):
+        roda(["scripts/limpar_vazio_negativo.py", tif, "--vrt", vrt,
+              "--nome", nome],
+             mostrar=("com minimo negativo", "media POSITIVA", "raster limpo:",
+                      "cota ", "OK    ", "FALTA"))
+    h = os.path.join(pt, nome + "_Terreno.hdf")
+    return h if os.path.exists(h) else None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("rio", nargs="?")
@@ -119,6 +174,8 @@ def main():
                     help="fixa a taxa em vez de deixar o laco procurar")
     ap.add_argument("--dx", type=float, default=150.0)
     ap.add_argument("--cada", type=float, default=2000.0)
+    ap.add_argument("--sem-terreno", action="store_true",
+                    help="pula as etapas 5 a 7; o modelo abre sem relevo")
     a = ap.parse_args()
     if not a.rio and not a.todos:
         raise SystemExit("informe um rio ou --todos.  Rios: " + ", ".join(RIOS))
@@ -132,11 +189,35 @@ def main():
         if r:
             res.append(r)
 
-    print(f"\n{'='*68}\nRESUMO\n{'='*68}")
-    print(f"{'rio':<16}{'pasta':<26}{'erros':>7}{'Fatal':>7}{'taxa':>8}")
+    # ---- 5 a 7: terreno da bacia, depois das geometrias
+    if res and not a.sem_terreno:
+        thdf = terreno([r["pasta"] for r in res])
+        if thdf:
+            print("\n   religando o terreno em cada projeto")
+            for r in res:
+                g = os.path.join(r["pasta"],
+                                 os.path.basename(r["pasta"]) + ".g01")
+                roda(["scripts/projeto_rio_avulso.py", g, "--rio-fonte",
+                      r["rio"], "--terreno", thdf], mostrar=("terreno   :",))
+
+    # ---- 8: a edge line, medida NA QUE O RAS CONSTRUIU
     for r in res:
+        h = os.path.join(r["pasta"],
+                         os.path.basename(r["pasta"]) + ".g01.hdf")
+        r["dobras"] = None
+        if os.path.exists(h):
+            m = re.search(r"TOTAL: (\d+)",
+                          roda(["scripts/conferir_edge_lines.py", h]))
+            if m:
+                r["dobras"] = int(m.group(1))
+
+    print(f"\n{'='*68}\nRESUMO\n{'='*68}")
+    print(f"{'rio':<16}{'pasta':<26}{'erros':>7}{'Fatal':>7}{'taxa':>8}"
+          f"{'dobras':>8}")
+    for r in res:
+        d = r.get("dobras")
         print(f"{r['rio']:<16}{r['pasta']:<26}{r['erros']:>7}{r['fatal']:>7}"
-              f"{r['taxa']:>8.2f}")
+              f"{r['taxa']:>8.2f}{('?' if d is None else str(d)):>8}")
     ruins = [r for r in res if r["erros"] > a.limite]
     if ruins:
         print(f"\nacima do limite de {a.limite}: "
