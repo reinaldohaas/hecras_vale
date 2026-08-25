@@ -76,7 +76,7 @@ DESCE_MAX = 0.30      # m que a secao pode descer abaixo do talvegue antes de pa
 JANELA_MARGEM = 3      # secoes para cada lado, na mediana movel da margem
 ALVO_SECAO = 8.0      # m acima do talvegue = onde a secao pode parar
 TAXA_LARGURA = 0.15   # quanto a meia-largura pode variar por metro de rio
-K_CURV = 0.80         # fracao do raio de curvatura admitida do lado de dentro
+K_CURV = 0.50         # fracao do raio de curvatura admitida do lado de dentro
 EXTRA_EIXO = 40.0     # m de eixo alem da primeira e da ultima secao
 BUSCA = 500.0         # m; ate onde se procura terreno alto
 N_CALHA, N_PLANICIE = 0.032, 0.055
@@ -151,6 +151,8 @@ def main():
     ap.add_argument("--saida", required=True)
     ap.add_argument("--reach", default="R1")
     ap.add_argument("--dx", type=float, default=DX)
+    ap.add_argument("--taxa", type=float, default=TAXA_LARGURA,
+                    help="quanto a meia-largura pode variar por metro de rio")
     ap.add_argument("--monotono", action="store_true",
                     help="ajusta o talvegue por regressao isotonica")
     a = ap.parse_args()
@@ -319,7 +321,7 @@ def main():
         # ENCOLHE: nenhuma secao fica mais larga do que o terreno mediu. Por
         # isso ele nunca inventa planicie -- no maximo deixa de usar parte da
         # que existe, e o relatorio diz quanto.
-        teto = TAXA_LARGURA * a.dx
+        teto = a.taxa * a.dx
         lim = sv.copy()
         for i in range(1, len(lim)):
             lim[i] = min(lim[i], lim[i - 1] + teto)
@@ -327,13 +329,44 @@ def main():
             lim[i] = min(lim[i], lim[i + 1] + teto)
         cortado = float(np.sum(sv - lim))
         if cortado > 1.0:
-            print(f"      limite de taxa ({TAXA_LARGURA:g} m/m): retirou "
+            print(f"      limite de taxa ({a.taxa:g} m/m): retirou "
                   f"{cortado/max(len(lim),1):.1f} m por secao em media")
         for s, x in zip(secoes, lim):
             s[lado] = float(x)
 
+    # LIMITE DE CURVATURA, aplicado DEPOIS do filtro e nao antes.
+    # Aplicado antes, a mediana movel o desfazia: bastava uma vizinha larga
+    # para o valor limitado voltar a subir. Medido no Acu, nos 14 segmentos em
+    # que a edge line se auto-intersecta o raio mediano e 545 m contra 1.420 m
+    # do rio inteiro, e a meia-largura e 234 m contra 92 m -- e secao larga em
+    # curva fechada, e nao largura sozinha nem curva sozinha.
+    #
+    # A ponta da secao descreve uma curva paralela ao eixo, deslocada de `w`.
+    # Pelo lado de dentro essa paralela encolhe, e em `w = R` ela colapsa no
+    # centro de curvatura: dali em diante ela anda para tras e cruza a si
+    # mesma. `K_CURV` fica abaixo de 1 com folga, porque as secoes sao
+    # discretas e a colisao chega antes do limite continuo.
+    n_curv = 0
     for s in secoes:
-        me, md = s["me"], s["md"]
+        R, giro = curvatura(eixo, s["s"], max(2.0 * a.dx, 200.0))
+        if not np.isfinite(R):
+            continue
+        lim = max(K_CURV * R, MEIA_MIN)
+        if giro > 0 and s["me"] > lim:
+            s["me"] = lim
+            n_curv += 1
+        elif giro < 0 and s["md"] > lim:
+            s["md"] = lim
+            n_curv += 1
+    if n_curv:
+        print(f"   limite de curvatura (K={K_CURV:g}): apertou {n_curv} secoes")
+
+    def montar(s, me, md):
+        """Perfil, cutline e margens de UMA secao, para as larguras dadas.
+
+        Isolado em funcao porque a passada anti-dobra, mais abaixo, chama de
+        novo -- com largura menor e so nas secoes culpadas.
+        """
         z = s["z_perfil"]
         dentro = (off <= me) & (off >= -md) & np.isfinite(z)
         # A SECAO TEM DE ALCANCAR O PROPRIO RIO, dos dois lados. Onde o MDT
@@ -346,45 +379,123 @@ def main():
         tem_dir = bool((dentro & (off < 0)).any())
         if dentro.sum() < 8 or not (tem_esq and tem_dir):
             s["sta"] = None
-            continue
-        ordem = np.argsort(-off[dentro])           # estaca cresce esq -> dir
+            return False
+        ordem = np.argsort(-off[dentro])          # estaca cresce esq -> dir
         # A CUTLINE NASCE DO PERFIL, e nao da meia-largura pedida. Os pontos
         # sao amostrados de 4 em 4 m e o primeiro e o ultimo raramente caem
         # exatamente em `me` e `-md`: montar a cutline com os valores pedidos
         # faz a polilinha ficar mais longa que a amplitude das estacas, e o
         # HEC-RAS acusa "XS Profile length is different than Polyline length".
-        # Tomando as pontas do proprio perfil, os dois coincidem por
-        # construcao.
         o_esq = float(off[dentro].max())
         o_dir = float(off[dentro].min())
+        s["o_esq"], s["o_dir"] = o_esq, o_dir
         s["sta"] = np.round((o_esq - off[dentro])[ordem], 2)
         s["z"] = np.round(z[dentro][ordem], 2)
         s["zt"] = float(s["z"].min())
         s["cut"] = (s["p"] + o_esq * s["n"], s["p"] + o_dir * s["n"])
-        me = o_esq
         sta = s["sta"]
-        o_l = s["off_t"] + s["d_esq"]
-        o_r = s["off_t"] - s["d_dir"]
         # A CALHA TEM DE CONTER O EIXO. As margens sao medidas a partir do
         # talvegue, que nem sempre cai sobre o eixo; onde ele esta todo de um
         # lado, a margem "esquerda" acaba a DIREITA do eixo e a bank line
-        # atravessa o rio -- e o que se via no RAS Mapper mesmo com a calha ja
-        # filtrada. Obrigar o intervalo a cruzar o offset zero e o que impede
-        # isso por construcao, e nao por conserto depois.
-        o_l = max(o_l, PASSO)
-        o_r = min(o_r, -PASSO)
-        lb = float(sta[np.argmin(np.abs(sta - (s["me"] - o_l)))])
-        rb = float(sta[np.argmin(np.abs(sta - (s["me"] - o_r)))])
+        # atravessa o rio. Obrigar o intervalo a cruzar o offset zero e o que
+        # impede isso por construcao, e nao por conserto depois.
+        o_l = max(s["off_t"] + s["d_esq"], PASSO)
+        o_r = min(s["off_t"] - s["d_dir"], -PASSO)
+        # A ESTACA DE UM OFFSET E `o_esq - o`, e nao `me - o`: a estaca zero
+        # esta na PONTA DO PERFIL, nao na meia-largura pedida. Enquanto usei
+        # `me` aqui, toda bank station saiu deslocada de `me - o_esq` metros
+        # para fora -- exatamente o descolamento entre bank station e bank line
+        # que o validador vinha acusando.
+        lb = float(sta[np.argmin(np.abs(sta - (o_esq - o_l)))])
+        rb = float(sta[np.argmin(np.abs(sta - (o_esq - o_r)))])
         if rb <= lb:
-            j = int(np.argmin(np.abs(sta - (s["me"] - s["off_t"]))))
+            j = int(np.argmin(np.abs(sta - (o_esq - s["off_t"]))))
             lb = float(sta[max(j - 1, 0)])
             rb = float(sta[min(j + 1, len(sta) - 1)])
         s["lb"], s["rb"] = lb, rb
+        return True
+
+    for s in secoes:
+        montar(s, s["me"], s["md"])
     antes = len(secoes)
     secoes = [s for s in secoes if s.get("sta") is not None]
     if len(secoes) < antes:
         print(f"   descartadas por faixa vazia depois do filtro: "
               f"{antes - len(secoes)}")
+
+    # ---- A EDGE LINE NAO PODE DOBRAR SOBRE SI MESMA
+    #
+    # O HEC-RAS liga as pontas esquerdas de todas as secoes numa polilinha (a
+    # "edge line"), faz o mesmo do lado direito, e usa as duas para montar a
+    # superficie de interpolacao entre secoes. Se uma delas se cruza, o RAS
+    # Mapper avisa "The generated edge lines have self intersections, the
+    # interpolation surface may not generate correctly" e a superficie sai
+    # errada -- e nada disso aparece na contagem do Validate Geometry.
+    #
+    # Tentei DEDUZIR a causa e nao fecha. Suspeitei da curvatura do eixo
+    # (secao larga na volta fechada dobra sobre a vizinha) e limitei a
+    # meia-largura a K*R; sobrou dobra em secao com raio de 10.909 m, ou seja,
+    # em reta. Suspeitei do salto de largura e ja havia mediana movel mais
+    # limite de taxa; sobrou. A causa e composta e nao vale mais palpite.
+    #
+    # Entao a condicao passa a ser IMPOSTA E VERIFICADA, e nao inferida:
+    # mede-se o cruzamento com a propria geometria e encolhe-se quem participa
+    # dele, ate nao haver nenhum. Encolher SO TIRA largura -- nenhuma secao
+    # fica maior do que o terreno mediu -- e o preco esta no relatorio.
+    from shapely.strtree import STRtree
+
+    def dobras(pts):
+        """Indices dos vertices envolvidos em cruzamento da polilinha."""
+        seg = [LineString([pts[i], pts[i + 1]]) for i in range(len(pts) - 1)]
+        if len(seg) < 3:
+            return set()
+        arv = STRtree(seg)
+        maus = set()
+        for i, g in enumerate(seg):
+            for j in arv.query(g):
+                j = int(j)
+                if abs(i - j) <= 1:
+                    continue
+                if g.intersects(seg[j]):
+                    maus.update((i, i + 1, j, j + 1))
+        return maus
+
+    PISO = 3.0 * PASSO           # nenhuma secao encolhe abaixo disto
+    n_enc, voltas, restou = 0, 0, 0
+    while voltas < 25:
+        voltas += 1
+        maus = set()
+        for lado, k in (("me", 0), ("md", 1)):
+            pts = [tuple(s["cut"][k]) for s in secoes]
+            for i in dobras(pts):
+                maus.add((i, lado))
+        if not maus:
+            break
+        mexeu = False
+        for i, lado in maus:
+            s = secoes[i]
+            # encolhe a partir da largura EFETIVA (`o_esq`/`o_dir`), e nao da
+            # pedida: onde o MDT falta, a pedida ja e maior que a real e
+            # multiplica-la nao mexeria na cutline -- laco eterno.
+            real = s["o_esq"] if lado == "me" else -s["o_dir"]
+            novo_v = max(min(s[lado], real) * 0.85, PISO)
+            if novo_v < s[lado] - 1e-6:
+                s[lado] = novo_v
+                mexeu = True
+                n_enc += 1
+            montar(s, s["me"], s["md"])
+        secoes = [s for s in secoes if s.get("sta") is not None]
+        if not mexeu:
+            restou = len(maus)
+            break
+    else:
+        restou = len(maus)
+    pts_e = [tuple(s["cut"][0]) for s in secoes]
+    pts_d = [tuple(s["cut"][1]) for s in secoes]
+    sobra = len(dobras(pts_e)) + len(dobras(pts_d))
+    print(f"edge line: {n_enc} encolhimentos em {voltas} passadas   "
+          f"cruzamentos restantes {sobra}"
+          + ("   (no piso de %.0f m)" % PISO if sobra else ""))
 
     # ---- talvegue: cru, ou isotonico
     zt = np.array([s["zt"] for s in secoes])
