@@ -76,6 +76,10 @@ DESCE_MAX = 0.30
 DESCE_FORA = 0.30     # m abaixo do fundo da calha; abaixo disso e outro vale
 JANELA_MARGEM = 3      # secoes para cada lado, na mediana movel da margem
 ALVO_SECAO = 8.0      # m acima do talvegue = onde a secao pode parar
+EXIGE_SECO = 2.0      # m acima do talvegue que a PONTA precisa ter (contrato:
+                      # ponta <= 1 m e GRAVE no qc_perfis; 2 da folga medida)
+MARGEM_AFAST = 8.0    # m; margem nao pode ser colada ao talvegue (ruido)
+MARGEM_PERSIST = 3    # pontos seguintes que precisam sustentar o topo
 TAXA_LARGURA = 0.15   # quanto a meia-largura pode variar por metro de rio
 K_CURV = 0.50         # fracao do raio de curvatura admitida do lado de dentro
 EXTRA_EIXO = 150.0   # m de eixo alem da primeira e da ultima secao; nunca
@@ -238,10 +242,37 @@ def main():
             zt_leg = float(d["z"][m].min() if m.any() else d["z"].min())
             if fundo_max is not None and zt_leg >= fundo_max:
                 continue
+            # OS BANCOS TEM DE CONTER O EIXO (contrato, item 4 -- vale para a
+            # adotada tambem). Medido: 7 de 71 prontas tinham o cruzamento do
+            # eixo 13-31 m alem do rb levantado, e cada uma punha DOIS
+            # cruzamentos de bank line no rio (14 ao todo). O banco e
+            # atributo de MODELAGEM (separa calha de planicie); estica-se o
+            # mais proximo ate conter o eixo, sem tocar cota nenhuma. Cutline
+            # que nem cruza o eixo nao vira secao.
+            from shapely.geometry import LineString as _LS
+            _g = _LS([d["cut"][0], d["cut"][-1]]).intersection(eixo)
+            if _g.is_empty or _g.geom_type != "Point":
+                continue
+            _sta_e = float(np.hypot(_g.x - d["cut"][0][0],
+                                    _g.y - d["cut"][0][1]))
+            lb_, rb_ = float(d["lb"]), float(d["rb"])
+            if not (lb_ < _sta_e < rb_):
+                # o banco esticado tem de cair NUMA ESTACA EXISTENTE do
+                # perfil: Bank Sta fora do Sta/Elev derruba o preprocessador
+                # ("Right bank station not in station elevation data" nas 7
+                # prontas, e SEM bank/edge line no HDF vieram 744 Fatal em
+                # cascata). Snap direcional para a estaca real alem do eixo.
+                stt = np.asarray(d["sta"], float)
+                if _sta_e <= lb_:
+                    cand = stt[stt < _sta_e]
+                    lb_ = float(cand.max()) if len(cand) else float(stt[0])
+                else:
+                    cand = stt[stt > _sta_e]
+                    rb_ = float(cand.min()) if len(cand) else float(stt[-1])
             return {"s": s, "rs": round(float(L - s), 2), "pronta": True,
                     "sta": np.asarray(d["sta"], float),
                     "z": np.asarray(d["z"], float),
-                    "lb": float(d["lb"]), "rb": float(d["rb"]),
+                    "lb": lb_, "rb": rb_,
                     "cut": (np.asarray(d["cut"][0], float),
                             np.asarray(d["cut"][1], float)),
                     "zt": zt_leg}
@@ -281,15 +312,24 @@ def main():
         i0 = int(np.nanargmin(np.where(centro, z, np.nan)))
         zt = float(z[i0])
 
-        def anda(sinal, alvo):
+        def anda(sinal, alvo, persistente=False):
             """Anda para fora ate subir `alvo`, ou ate CAIR abaixo do talvegue.
 
-            A segunda parada e o que faltava: a busca ia ate 500 m e podia
+            A parada por queda e o que faltava: a busca ia ate 500 m e podia
             entrar em OUTRO curso d'agua mais baixo. Medido no Benedito, 63 das
             294 secoes ficavam com o ponto mais baixo FORA das proprias
             margens, ate 8,64 m abaixo do invert da calha, e o HEC-RAS acusou
             62 delas com "hTab starting values below the XS invert". Terreno
             abaixo do talvegue deste rio nao e planicie deste rio.
+
+            Com `persistente=True` (deteccao de MARGEM, contrato do usuario):
+              - anda no minimo MARGEM_AFAST do talvegue antes de aceitar topo,
+                para nao parar no ruido imediato do proprio canal;
+              - o topo tem de SE SUSTENTAR: a mediana dos proximos
+                MARGEM_PERSIST pontos finitos tambem precisa passar de 80% da
+                subida. "Subiu 1,5 m" num pixel isolado nao e margem -- era
+                isso que fazia a Bank Sta pular de lado e a bank line
+                zigue-zaguear cruzando o eixo.
             """
             i = i0
             ult = i0
@@ -300,8 +340,31 @@ def main():
                 if z[i] < zt - DESCE_MAX:
                     return ult
                 ult = i
+                if persistente and abs(off[i] - off[i0]) > MEIA_MAX:
+                    # margem nao achada em largura plausivel: NAO se fabrica
+                    # uma a 400 m -- devolve None e a secao entra na
+                    # interpolacao longitudinal de vizinhas boas (item 3 do
+                    # contrato). Devolver `i` aqui punha o banco NA PONTA da
+                    # secao e derrubou TODAS: 744 Fatal "XS intersects < 2
+                    # banklines" na primeira taxa.
+                    return None
                 if z[i] >= zt + alvo:
-                    return i
+                    if not persistente:
+                        return i
+                    if abs(off[i] - off[i0]) < MARGEM_AFAST:
+                        continue
+                    prox = []
+                    j = i
+                    while 0 < j < len(off) - 1 and len(prox) < MARGEM_PERSIST:
+                        j += sinal
+                        if np.isfinite(z[j]):
+                            prox.append(z[j])
+                    # o topo se sustenta se a vizinhanca nao DESPENCA de
+                    # volta: mediana >= metade da subida. Exigir 80% rejeitava
+                    # varzea plana com micro-relevo e empurrava a busca ate o
+                    # teto.
+                    if not prox or np.median(prox) >= zt + 0.5 * alvo:
+                        return i
             return None
 
         # QUAL LADO E A ESQUERDA. `n` e a tangente girada 90 graus no sentido
@@ -313,10 +376,23 @@ def main():
         # a estaca 0 fica no offset MAIS POSITIVO e cresce descendo o offset.
         # Ter escrito ao contrario custou "XS is reversed" em 293 das 294
         # secoes, e bank line atravessando o rio em todo o trecho.
-        i_esq_calha = anda(+1, FOLGA_CALHA)
-        i_dir_calha = anda(-1, FOLGA_CALHA)
+        i_esq_calha = anda(+1, FOLGA_CALHA, persistente=True)
+        i_dir_calha = anda(-1, FOLGA_CALHA, persistente=True)
         i_esq_sec = anda(+1, ALVO_SECAO)
         i_dir_sec = anda(-1, ALVO_SECAO)
+
+        def sai_dagua(sinal):
+            """Offset absoluto onde o terreno sobe EXIGE_SECO acima do
+            talvegue: a largura MINIMA para a ponta nao terminar n'agua.
+            Pula vazios (agua) e nao para em degrau raso."""
+            i = i0
+            while 0 <= i + sinal < len(off):
+                i += sinal
+                if np.isfinite(z[i]) and z[i] >= zt + EXIGE_SECO:
+                    return float(off[i])
+            return np.nan
+        need_me = sai_dagua(+1)
+        need_md = -sai_dagua(-1)
         if i_esq_sec is None or i_dir_sec is None:
             no_teto += 1
         me = float(np.clip(abs(off[i_esq_sec]) if i_esq_sec is not None
@@ -341,6 +417,8 @@ def main():
         secoes.append({"s": s, "rs": round(float(L - s), 2),
                        "p": p, "n": n, "z_perfil": z, "zt_bruto": zt,
                        "me": me, "md": md, "off_t": float(off[i0]),
+                       "need_me": need_me, "need_md": need_md,
+                       "R": float(R), "giro": float(giro),
                        "d_esq": (float(off[i_esq_calha] - off[i0])
                                  if i_esq_calha is not None else np.nan),
                        "d_dir": (float(off[i0] - off[i_dir_calha])
@@ -348,6 +426,46 @@ def main():
                        # fundo DA CALHA, e nao da secao: e a referencia para
                        # decidir o que esta abaixo do rio e portanto fora dele
                        "z_calha": float(zt)})
+
+    # ---- DX MAIOR NO MEANDRO: a secao nasce ONDE ELA E POSSIVEL.
+    #
+    # O contrato exige as duas coisas ao mesmo tempo: ponta fora d'agua
+    # (largura >= need, medida) e edge line que nao dobra (largura <= K*R no
+    # lado de dentro da curva). Ha estacoes onde as duas nao cabem juntas --
+    # rio de 200 m de agua numa volta de raio 300 nao tem secao 1D valida
+    # ali. A resposta nao e escolher qual regra violar: e NAO POR SECAO ali.
+    # A estacao inviavel e descartada e o espacamento cresce sozinho no
+    # meandro fechado; so se forca uma (a contragosto, contada no relatorio)
+    # quando o vao passaria de GAP_MAX -- acima disso o proprio contrato
+    # reprovaria por vao.
+    GAP_MAX = 1400.0
+
+    def _viavel(q):
+        if not (np.isfinite(q["need_me"]) and np.isfinite(q["need_md"])):
+            return False
+        if np.isfinite(q["R"]):
+            lim = max(K_CURV * q["R"], MEIA_MIN)
+            if q["giro"] > 0 and q["need_me"] > lim:
+                return False
+            if q["giro"] < 0 and q["need_md"] > lim:
+                return False
+        return True
+
+    n_cand = len(secoes)
+    finais, n_forc = [], 0
+    ult_s = secoes[0]["s"] - a.dx if secoes else 0.0
+    for q in sorted(secoes, key=lambda w: w["s"]):
+        if _viavel(q):
+            finais.append(q)
+            ult_s = q["s"]
+        elif q["s"] - ult_s >= GAP_MAX:
+            finais.append(q)          # forcada: o vao ja ia reprovar
+            n_forc += 1
+            ult_s = q["s"]
+    secoes = finais
+    print(f"estacoes: {n_cand} candidatas -> {len(secoes)} viaveis "
+          f"({n_forc} forcadas por vao > {GAP_MAX:.0f} m); o dx cresce "
+          "sozinho onde need > K*R")
 
     print(f"secoes : {len(secoes)}   sem MDT utilizavel: {sem_dado}   "
           f"adotadas do legado (inteiras): {len(prontas)}   "
@@ -371,6 +489,10 @@ def main():
         if bom.sum() < 3:
             v[:] = np.nanmedian(v) if bom.any() else 20.0
         else:
+            if (~bom).any() and lado in ("d_esq", "d_dir"):
+                print(f"   {lado}: {int((~bom).sum())} secao(oes) sem margem "
+                      "medida -- interpolada de vizinhas boas (contrato, "
+                      "item 3)")
             v[~bom] = np.interp(np.flatnonzero(~bom), np.flatnonzero(bom),
                                 v[bom])
         sv = v.copy()
@@ -402,12 +524,15 @@ def main():
         # ENCOLHE: nenhuma secao fica mais larga do que o terreno mediu. Por
         # isso ele nunca inventa planicie -- no maximo deixa de usar parte da
         # que existe, e o relatorio diz quanto.
-        teto = a.taxa * a.dx
+        # com a selecao de estacoes o espacamento e VARIAVEL: o teto de taxa
+        # e por metro de rio, entao vale taxa * ds de cada par -- no meandro
+        # onde o dx cresceu, a largura pode variar mais entre vizinhas
+        ds_par = np.diff(np.array([q["s"] for q in secoes], float))
         lim = sv.copy()
         for i in range(1, len(lim)):
-            lim[i] = min(lim[i], lim[i - 1] + teto)
+            lim[i] = min(lim[i], lim[i - 1] + a.taxa * ds_par[i - 1])
         for i in range(len(lim) - 2, -1, -1):
-            lim[i] = min(lim[i], lim[i + 1] + teto)
+            lim[i] = min(lim[i], lim[i + 1] + a.taxa * ds_par[i])
         cortado = float(np.sum(sv - lim))
         if cortado > 1.0:
             print(f"      limite de taxa ({a.taxa:g} m/m): retirou "
@@ -443,6 +568,14 @@ def main():
         print(f"   limite de curvatura (K={K_CURV:g}): apertou {n_curv} secoes")
 
     def montar(s, me, md):
+        # O PISO E O `need` DA PROPRIA SECAO: a largura minima, medida, para
+        # a ponta nao terminar n'agua. A selecao de estacoes ja garantiu
+        # need <= K*R nas mantidas, entao este piso NAO briga com o limite de
+        # curvatura -- e o laco da edge line, que so encolhe, para aqui.
+        if np.isfinite(s.get("need_me", np.nan)):
+            me = max(me, s["need_me"] + PASSO)
+        if np.isfinite(s.get("need_md", np.nan)):
+            md = max(md, s["need_md"] + PASSO)
         """Perfil, cutline e margens de UMA secao, para as larguras dadas.
 
         Isolado em funcao porque a passada anti-dobra, mais abaixo, chama de
@@ -537,6 +670,15 @@ def main():
             # talvegue as duas podiam cair do MESMO lado do eixo, e era dai
             # que a bank line atravessava o rio.
             j = int(np.argmin(np.abs(sta - o_esq)))
+            lb = float(sta[max(j - 1, 0)])
+            rb = float(sta[min(j + 1, len(sta) - 1)])
+        # GARANTIA EXPLICITA do contrato (item 4): lb < estaca_do_eixo < rb.
+        # O snap direcional ja constroi assim; isto e o cinto alem do
+        # suspensorio -- se qualquer caminho futuro violar, conserta aqui e
+        # nenhuma Bank Sta sai do lado errado do eixo.
+        sta_eixo = o_esq
+        if not (lb < sta_eixo < rb):
+            j = int(np.argmin(np.abs(sta - sta_eixo)))
             lb = float(sta[max(j - 1, 0)])
             rb = float(sta[min(j + 1, len(sta) - 1)])
         s["lb"], s["rb"] = lb, rb
@@ -689,17 +831,37 @@ def main():
     # o rabo alem da ultima levantada (era a restinga de 224 m recebendo a
     # mare no lugar do canal do porto).
     if prontas:
-        pr = sorted((q["s"], q["zt"]) for q in secoes if q.get("pronta"))
+        pr = sorted((q["s"], q["zt"],
+                     float(q["sta"][-1] - q["sta"][0]))
+                    for q in secoes if q.get("pronta"))
         pr_s = np.array([q[0] for q in pr])
         pr_z = np.array([q[1] for q in pr])
+        pr_w = np.array([q[2] for q in pr])
         mantem, n_pente = [], 0
         for q in secoes:
             if q.get("pronta"):
                 mantem.append(q)
                 continue
-            # so na ZONA DE MARE: rio acima a secao de lamina carrega a
-            # varzea real do lidar, e o fundo dela e ancorado depois pelo
-            # `batimetria.py aplicar` -- cortar la jogaria fora a planicie.
+            # CONSISTENCIA DE LARGURA: secao do MDT de 300-700 m ENTRE duas
+            # levantadas de ~4 km faz a bank line saltar quilometros de lado
+            # e a cutline larga cruza-la varias vezes -- 17 Fatal "XS
+            # intersects > 2 banklines", todos entre RS 15k e 68k, a zona das
+            # prontas. Entre levantadas proximas (<= 2,5 km) so fica secao
+            # com pelo menos 30% da largura da menor vizinha; a transicao
+            # larga-estreita acontece UMA vez, na borda da zona.
+            estreita = False
+            if len(pr_s):
+                i_ = int(np.searchsorted(pr_s, q["s"]))
+                if 0 < i_ < len(pr_s) and pr_s[i_] - pr_s[i_ - 1] <= 2500.0:
+                    wq = float(np.asarray(q["sta"], float)[-1]
+                               - np.asarray(q["sta"], float)[0])
+                    if wq < 0.3 * min(pr_w[i_ - 1], pr_w[i_]):
+                        estreita = True
+            if estreita:
+                n_pente += 1
+                continue
+            # rio acima (fora da mare) a secao de lamina carrega a varzea
+            # real do lidar, e o fundo e ancorado depois pelo aplicar
             if q["zt"] >= 2.0:
                 mantem.append(q)
                 continue
