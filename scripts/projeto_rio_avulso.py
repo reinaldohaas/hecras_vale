@@ -32,8 +32,16 @@ from qc_secoes import ler_secoes    # noqa: E402
 from ras_io import escrever         # noqa: E402
 
 
-def hidrograma(u01, rio):
-    """Vazao horaria do contorno de montante daquele rio, na rede legada."""
+def hidrograma(u01, rio, tipo=r"Flow Hydrograph"):
+    """Vazao horaria daquele rio na rede legada.
+
+    Procura primeiro o hidrograma de MONTANTE (`Flow Hydrograph`). O
+    Itajai-Acu nao tem: na rede legada ele so recebe ENTRADA LATERAL ao longo
+    dos quatro reaches, porque nasce da juncao dos outros. Para ele o
+    chamador pede o tipo lateral, e o valor entra como vazao de montante --
+    o que superestima a cabeceira e subestima o resto, e por isso fica
+    impresso no relatorio.
+    """
     t = open(u01, encoding="latin-1", errors="replace").read() \
         .replace("\r", "").split("\n")
     ini = [i for i, l in enumerate(t) if l.startswith("Boundary Location=")]
@@ -42,7 +50,7 @@ def hidrograma(u01, rio):
         if p[0].strip() != rio:
             continue
         for j in range(a, b):
-            m = re.match(r"^Flow Hydrograph=\s*(\d+)", t[j])
+            m = re.match(r"^%s=\s*(\d+)" % tipo, t[j])
             if not m:
                 continue
             n = int(m.group(1))
@@ -87,13 +95,19 @@ def main():
     rio, rch = [x.strip() for x in rr.split("=", 1)[1].split(",")]
 
     Q = hidrograma(a.hidrograma, a.rio_fonte)
+    origem_q = "Flow Hydrograph de montante"
+    if Q is None:
+        Q = hidrograma(a.hidrograma, a.rio_fonte,
+                       r"Uniform Lateral Inflow Hydrograph")
+        origem_q = ("Uniform Lateral Inflow -- este rio NAO tem hidrograma de "
+                    "montante na rede legada")
     if Q is None:
         raise SystemExit(f"nao achei hidrograma de '{a.rio_fonte}' em "
                          f"{a.hidrograma}")
     print(f"geometria : {a.geom}")
     print(f"rio/reach : {rio} , {rch}   {len(S)} secoes")
     print(f"hidrograma: {len(Q)} horas   pico {Q.max():.1f} m3/s   "
-          f"(de {a.rio_fonte} na rede legada)")
+          f"({a.rio_fonte}, {origem_q})")
 
     z = np.array([float(d["z"].min()) for d in S])
     ch = np.array([float(d["len_ch"]) for d in S])

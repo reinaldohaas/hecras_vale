@@ -75,6 +75,8 @@ FOLGA_CALHA = 1.5     # m acima do talvegue = topo da margem
 DESCE_MAX = 0.30      # m que a secao pode descer abaixo do talvegue antes de parar
 JANELA_MARGEM = 3      # secoes para cada lado, na mediana movel da margem
 ALVO_SECAO = 8.0      # m acima do talvegue = onde a secao pode parar
+TAXA_LARGURA = 0.15   # quanto a meia-largura pode variar por metro de rio
+K_CURV = 0.80         # fracao do raio de curvatura admitida do lado de dentro
 EXTRA_EIXO = 40.0     # m de eixo alem da primeira e da ultima secao
 BUSCA = 500.0         # m; ate onde se procura terreno alto
 N_CALHA, N_PLANICIE = 0.032, 0.055
@@ -94,6 +96,29 @@ def eixo_do_rio(nome, caminho=EIXOS):
             return LineString(np.asarray(f["geometry"]["coordinates"], float))
     raise SystemExit(f"'{nome}' nao esta em {caminho}. Ha: "
                      f"{[f['properties'].get('nome') for f in d['features']]}")
+
+
+def curvatura(eixo, s, janela):
+    """Raio de curvatura e sinal do giro no ponto `s` do eixo.
+
+    Tres pontos a `janela` de distancia definem um circulo; o raio dele e o
+    raio de curvatura local, e o sinal do produto vetorial diz para que lado o
+    eixo vira. Janela curta demais mede ruido da polilinha, longa demais mede a
+    corda -- por isso ela vem proporcional ao espacamento das secoes.
+    """
+    a = max(s - janela, 0.0)
+    b = min(s + janela, eixo.length)
+    P0 = np.array(eixo.interpolate(a).coords[0])
+    P1 = np.array(eixo.interpolate(0.5 * (a + b)).coords[0])
+    P2 = np.array(eixo.interpolate(b).coords[0])
+    v1, v2 = P1 - P0, P2 - P1
+    cr = v1[0] * v2[1] - v1[1] * v2[0]
+    d01 = float(np.hypot(*(P1 - P0)))
+    d12 = float(np.hypot(*(P2 - P1)))
+    d02 = float(np.hypot(*(P2 - P0)))
+    if abs(cr) < 1e-9 or d01 * d12 * d02 == 0:
+        return np.inf, 0.0
+    return d01 * d12 * d02 / (2.0 * abs(cr)), float(np.sign(cr))
 
 
 def isotonica(z):
@@ -219,20 +244,24 @@ def main():
                            else MEIA_MAX, MEIA_MIN, MEIA_MAX))
         md = float(np.clip(abs(off[i_dir_sec]) if i_dir_sec is not None
                            else MEIA_MAX, MEIA_MIN, MEIA_MAX))
-        dentro = (off <= me) & (off >= -md) & np.isfinite(z)
-        if dentro.sum() < 8:
-            sem_dado += 1
-            continue
-        # estaca cresce da esquerda para a direita: sta = me - offset
-        ordem = np.argsort(-off[dentro])
-        sta = (me - off[dentro])[ordem]
-        zz = z[dentro][ordem]
-        A = p + me * n          # ponta ESQUERDA, estaca 0
-        B = p - md * n          # ponta DIREITA
+        # LIMITE DE CURVATURA, do lado de DENTRO da curva.
+        # Numa curva de raio R as secoes vizinhas convergem pelo lado interno e
+        # se encontram no centro de curvatura: passar de R ali faz a secao
+        # cruzar a vizinha e dobrar sobre o proprio rio, que e o que produz a
+        # auto-interseccao das edge lines. Medido nos seis rios, a relacao e
+        # direta -- Norte com secao de 128 m tem 2 erros, Sul com 208 m tem 15,
+        # Acu com 264 m tem 190 e Oeste com 460 m tem 303, e em ambos os piores
+        # 76% a 86% dos erros sao auto-interseccao de edge line.
+        R, giro = curvatura(eixo, s, max(2.0 * a.dx, 200.0))
+        if np.isfinite(R):
+            lim = K_CURV * R
+            if giro > 0:            # eixo vira a esquerda: lado interno e o +
+                me = min(me, max(lim, MEIA_MIN))
+            elif giro < 0:
+                md = min(md, max(lim, MEIA_MIN))
         secoes.append({"s": s, "rs": round(float(L - s), 2),
-                       "cut": (A, B), "sta": np.round(sta, 2),
-                       "z": np.round(zz, 2), "zt": float(zz.min()),
-                       "me": me, "off_t": float(off[i0]),
+                       "p": p, "n": n, "z_perfil": z, "zt_bruto": zt,
+                       "me": me, "md": md, "off_t": float(off[i0]),
                        "d_esq": (float(off[i_esq_calha] - off[i0])
                                  if i_esq_calha is not None else np.nan),
                        "d_dir": (float(off[i0] - off[i_dir_calha])
@@ -248,7 +277,12 @@ def main():
     # esses pontos e vira um zigue-zague que cruza o rio 82 vezes.
     # A mediana movel nao inventa nada: cada valor de saida E UMA DAS MEDIDAS
     # da vizinhanca. Filtra o salto e preserva a variacao real do rio.
-    for lado in ("d_esq", "d_dir"):
+    # A MEIA-LARGURA DA SECAO TAMBEM E RUIDOSA, e nao so a da calha. A edge
+    # line liga as PONTAS das secoes: onde a largura salta de uma para a
+    # outra, ela faz gancho e cruza. Medido nos rios ja gerados, o salto de
+    # largura entre vizinhas separa os limpos dos sujos com clareza --
+    # Norte 12 m de mediana e 2 erros, Acu 32 m e 190, Oeste 88 m e 303.
+    for lado in ("me", "md", "d_esq", "d_dir"):
         v = np.array([s[lado] for s in secoes], float)
         bom = np.isfinite(v)
         if bom.sum() < 3:
@@ -268,10 +302,66 @@ def main():
         print(f"   {lado}: salto entre vizinhas   bruto mediana "
               f"{np.median(bruto):.0f} m / max {bruto.max():.0f}   ->   "
               f"filtrado {np.median(filt):.0f} / {filt.max():.0f}")
-        for s, x in zip(secoes, sv):
+        # LIMITE DE TAXA, que e o que generaliza para qualquer rio.
+        # A mediana movel tira o pico isolado mas deixa a largura mudar de uma
+        # secao para a outra o quanto o terreno quiser. A edge line liga as
+        # PONTAS: se a meia-largura anda `D` metros para o lado enquanto o rio
+        # anda `dx` para a frente, a linha faz angulo `atan(D/dx)` com a secao,
+        # e a partir de certo ponto ela dobra e cruza a vizinha.
+        #
+        # Medido nos rios ja gerados, essa taxa separa os limpos dos sujos
+        # melhor do que qualquer largura absoluta:
+        #     Norte  12 m por secao (0,08)  ->    2 erros
+        #     Acu    32 m por secao (0,21)  ->  190 erros
+        #     Oeste  88 m por secao (0,59)  ->  303 erros
+        #
+        # O limite e aplicado em duas passadas, para frente e para tras, e SO
+        # ENCOLHE: nenhuma secao fica mais larga do que o terreno mediu. Por
+        # isso ele nunca inventa planicie -- no maximo deixa de usar parte da
+        # que existe, e o relatorio diz quanto.
+        teto = TAXA_LARGURA * a.dx
+        lim = sv.copy()
+        for i in range(1, len(lim)):
+            lim[i] = min(lim[i], lim[i - 1] + teto)
+        for i in range(len(lim) - 2, -1, -1):
+            lim[i] = min(lim[i], lim[i + 1] + teto)
+        cortado = float(np.sum(sv - lim))
+        if cortado > 1.0:
+            print(f"      limite de taxa ({TAXA_LARGURA:g} m/m): retirou "
+                  f"{cortado/max(len(lim),1):.1f} m por secao em media")
+        for s, x in zip(secoes, lim):
             s[lado] = float(x)
 
     for s in secoes:
+        me, md = s["me"], s["md"]
+        z = s["z_perfil"]
+        dentro = (off <= me) & (off >= -md) & np.isfinite(z)
+        # A SECAO TEM DE ALCANCAR O PROPRIO RIO, dos dois lados. Onde o MDT
+        # falta perto do eixo -- no Acu sao 109 secoes sem dado utilizavel, e o
+        # estuario tem buracos -- os pontos validos podem ficar todos de um
+        # lado: a cutline passa ao largo e o HEC-RAS acusa "XS doesn't
+        # intersect the associated Reach" junto com "XS intersects < 2
+        # banklines". Secao que nao chega no rio nao e secao: sai.
+        tem_esq = bool((dentro & (off > 0)).any())
+        tem_dir = bool((dentro & (off < 0)).any())
+        if dentro.sum() < 8 or not (tem_esq and tem_dir):
+            s["sta"] = None
+            continue
+        ordem = np.argsort(-off[dentro])           # estaca cresce esq -> dir
+        # A CUTLINE NASCE DO PERFIL, e nao da meia-largura pedida. Os pontos
+        # sao amostrados de 4 em 4 m e o primeiro e o ultimo raramente caem
+        # exatamente em `me` e `-md`: montar a cutline com os valores pedidos
+        # faz a polilinha ficar mais longa que a amplitude das estacas, e o
+        # HEC-RAS acusa "XS Profile length is different than Polyline length".
+        # Tomando as pontas do proprio perfil, os dois coincidem por
+        # construcao.
+        o_esq = float(off[dentro].max())
+        o_dir = float(off[dentro].min())
+        s["sta"] = np.round((o_esq - off[dentro])[ordem], 2)
+        s["z"] = np.round(z[dentro][ordem], 2)
+        s["zt"] = float(s["z"].min())
+        s["cut"] = (s["p"] + o_esq * s["n"], s["p"] + o_dir * s["n"])
+        me = o_esq
         sta = s["sta"]
         o_l = s["off_t"] + s["d_esq"]
         o_r = s["off_t"] - s["d_dir"]
@@ -290,6 +380,11 @@ def main():
             lb = float(sta[max(j - 1, 0)])
             rb = float(sta[min(j + 1, len(sta) - 1)])
         s["lb"], s["rb"] = lb, rb
+    antes = len(secoes)
+    secoes = [s for s in secoes if s.get("sta") is not None]
+    if len(secoes) < antes:
+        print(f"   descartadas por faixa vazia depois do filtro: "
+              f"{antes - len(secoes)}")
 
     # ---- talvegue: cru, ou isotonico
     zt = np.array([s["zt"] for s in secoes])
