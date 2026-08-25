@@ -92,8 +92,13 @@ TAXAS = [0.15, 0.10, 0.07, 0.05]     # do mais folgado ao mais apertado
 
 
 def roda(args, mostrar=(), aceitar_falha=False):
+    import time as _t
+    _t0 = _t.time()
     p = subprocess.run([PY] + args, cwd=RAIZ, capture_output=True, text=True,
                        encoding="utf-8", errors="replace")
+    _dt = _t.time() - _t0
+    if _dt > 10.0:
+        print(f"      [{os.path.basename(args[0]):<24} {_dt:6.0f} s]")
     saida = (p.stdout or "") + (p.stderr or "")
     if p.returncode != 0 and not aceitar_falha:
         print(saida[-1500:])
@@ -226,6 +231,14 @@ def construir(rio, pasta, limite, taxas, dx, cada):
         if n is None:
             print("   nao consegui ler o validador"); break
         print(f"   VALIDADOR: {n} mensagens, {fat} Fatal")
+        if melhor is not None and n >= melhor[0]:
+            # apertar a taxa NAO melhorou: parar de pagar reconstrucao +
+            # validador pelas taxas seguintes (no Acu as 4 davam as mesmas
+            # 50 mensagens -- ~10 min jogados fora por rio)
+            print(f"   taxa {taxa:g} nao melhorou ({n} >= {melhor[0]}); "
+                  "parando o aperto")
+            melhor = (n, fat, taxa)
+            break
         if melhor is None or n < melhor[0]:
             melhor = (n, fat, taxa)
         if n <= limite:
@@ -257,7 +270,7 @@ def construir(rio, pasta, limite, taxas, dx, cada):
         return {"rio": rio, "pasta": pasta, "erros": n, "fatal": fat,
                 "taxa": taxa, "status": "REPROVADO: " + motivo}
 
-    def _portoes(geom, rotulo):
+    def _portoes(geom, rotulo, ja_validado=None):
         """Portoes RECALIBRADOS PELA REFERENCIA (decisao do usuario, apos
         medir o legado 1983 na mesma regua: 348 dobras de edge, 556 bank x
         eixo, 129 Fatal, 12 GRAVES -- e ele RODA e serviu por decadas).
@@ -270,8 +283,14 @@ def construir(rio, pasta, limite, taxas, dx, cada):
         validador <= 26 (ref/5) -- afetam a superficie de interpolacao do
         MAPA (o aviso do Mapper), nao o solver. Devolve (motivo|None, nota).
         """
-        n_, fat_, _ = erros_de(roda(["scripts/ler_erros_geometria.py", geom]))
-        print(f"   [{rotulo}] validador: {n_} mensagens, {fat_} Fatal")
+        if ja_validado is not None:
+            n_, fat_ = ja_validado
+            print(f"   [{rotulo}] validador (reusado da taxa): {n_} "
+                  f"mensagens, {fat_} Fatal")
+        else:
+            n_, fat_, _ = erros_de(
+                roda(["scripts/ler_erros_geometria.py", geom]))
+            print(f"   [{rotulo}] validador: {n_} mensagens, {fat_} Fatal")
         qs = roda(["scripts/qc_perfis.py", geom], mostrar=("GRAVE",))
         mq = re.search(r"GRAVES (\d+)", qs)
         graves = int(mq.group(1)) if mq else -1
@@ -306,9 +325,11 @@ def construir(rio, pasta, limite, taxas, dx, cada):
     if os.path.exists(rep_csv):
         os.remove(rep_csv)
     descartadas = []
-    motivo, nota = _portoes(g, "g01")
+    motivo, nota = _portoes(g, "g01", ja_validado=(n, fat))
     volta = 0
-    while motivo is not None and volta < 4:
+    while (motivo is not None and volta < 2
+           and ("dobras" in motivo or "bank" in motivo
+                or "banklines" in motivo)):
         volta += 1
         novos = [r_ for r_ in alvos_de_reparo(
                      g, os.path.join(pasta, base + "_erros.csv"))
