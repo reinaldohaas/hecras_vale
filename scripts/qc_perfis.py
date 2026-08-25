@@ -69,7 +69,10 @@ def qc(caminho, folga=4.0, vao=800.0):
     rs_arr = np.array([d["rs"] for d in S])
     dif = -np.diff(rs_arr)
     for i in np.flatnonzero(dif > vao):
-        avisos.append((rs_arr[i], f"vao de {dif[i]:.0f} m ate a proxima"))
+        # o dobro do limiar e GRAVE (item 5 do contrato do usuario: "sem vao
+        # grande"); ate o dobro e aviso -- o proprio legado espaca ~1000 m
+        alvo = graves if dif[i] > 2 * vao else avisos
+        alvo.append((rs_arr[i], f"vao de {dif[i]:.0f} m ate a proxima"))
     return S, graves, avisos
 
 

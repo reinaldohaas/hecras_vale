@@ -188,34 +188,63 @@ def construir(rio, pasta, limite, taxas, dx, cada):
     if melhor is None:
         return None
     n, fat, taxa = melhor
-    if taxa != taxas[-1] and n > limite:
-        pass
     print(f"\n   melhor: {n} mensagens ({fat} Fatal) com taxa {taxa:g} m/m")
-    # ---- 3.5 QC de TODOS os perfis, de uma vez -- ponta n'agua, margens
-    # fora, vaos, RS repetida. Pedido do usuario depois de descobrir esses
-    # defeitos UM POR UM no RAS Mapper: o programa le tudo e acusa antes.
-    roda(["scripts/qc_perfis.py", g], mostrar=("GRAVES", "GRAVE ",))
 
-    ped = os.path.join("doc", f"batimetria_{os.path.basename(pasta)}.csv")
+    # ================= O CONTRATO DE ACEITE, do usuario, na letra =========
+    #   1. validador com Fatal -> NAO gera nem aponta g02;
+    #   2. as linhas sao medidas no HDF da geometria EM USO;
+    #   3. depois de escrever g02, o g02.hdf velho e removido -- HDF stale
+    #      nao vale como prova;
+    #   4. GRAVES do qc_perfis REPROVAM, nao so imprimem;
+    #   5. aprovado = 0 Fatal + 0 GRAVES + TOTAL 0 de linhas, no g01 E no g02.
+    # Reprovado fica reprovado NA TABELA, com o motivo -- e o projeto volta a
+    # apontar para o g01, para nao sobrar plano mirando geometria invalida.
+    base = os.path.basename(pasta)
+    g2 = os.path.join(pasta, base + ".g02")
+
+    def _reprova(motivo):
+        for fx in (g2, g2 + ".hdf"):
+            if os.path.exists(fx):
+                os.remove(fx)
+        roda(["scripts/projeto_rio_avulso.py", g, "--rio-fonte", rio],
+             mostrar=())
+        print(f"   REPROVADO: {motivo}")
+        return {"rio": rio, "pasta": pasta, "erros": n, "fatal": fat,
+                "taxa": taxa, "status": "REPROVADO: " + motivo}
+
+    def _portoes(geom, rotulo):
+        """0 Fatal, 0 GRAVES e TOTAL 0 nas linhas -- ou o motivo da reprova."""
+        n_, fat_, _ = erros_de(roda(["scripts/ler_erros_geometria.py", geom]))
+        print(f"   [{rotulo}] validador: {n_} mensagens, {fat_} Fatal")
+        if fat_:
+            return f"{fat_} Fatal no validador ({rotulo})"
+        qs = roda(["scripts/qc_perfis.py", geom], mostrar=("GRAVE",))
+        mq = re.search(r"GRAVES (\d+)", qs)
+        graves = int(mq.group(1)) if mq else -1
+        if graves != 0:
+            return f"{graves} GRAVES no qc_perfis ({rotulo})"
+        cs = roda(["scripts/conferir_edge_lines.py", geom + ".hdf"],
+                  mostrar=("bank line", "edge line"))
+        mt = re.search(r"TOTAL: (\d+)", cs)
+        tot = int(mt.group(1)) if mt else -1
+        if tot != 0:
+            return f"{tot} defeito(s) de edge/bank line ({rotulo})"
+        return None
+
+    motivo = _portoes(g, "g01")
+    if motivo:
+        return _reprova(motivo)
+
+    # ---- 5. batimetria do legado -> g02 (so chega aqui com g01 limpo)
+    ped = os.path.join("doc", f"batimetria_{base}.csv")
     roda(["scripts/batimetria.py", "pedir", g, "--cada", str(cada),
           "--saida", ped], mostrar=("pontos    :",))
-
-    # ---- 5. batimetria do legado -> g02. O detector de ficcao do
-    # batimetria_do_legado ja descartou as ancoras do trecho SINTETICO (a
-    # reta de 8,00 m/km com residuo de milimetros nas cabeceiras do Acu e do
-    # Benedito -- "relevo DEM", como o titulo do legado avisa), e o aplicar
-    # nao interpola por cima do vao: ali o MDT fica valendo. `eixo_alto`
-    # continua medindo a diferenca lamina-fundo, agora so para RELATAR onde o
-    # legado nao presta -- nao barra mais nada, porque o que se aplicaria ali
-    # ja e o MDT.
     roda(["scripts/batimetria_do_legado.py", ped, "--rio", rio],
          mostrar=("casados", "REBAIXAMENTO", "ATENCAO", "SINTETICO"))
-    g2 = os.path.join(pasta, os.path.basename(pasta) + ".g02")
     alto = eixo_alto(g, rio)
     if alto is not None:
         km0, km1, reb = alto
-        fig = os.path.join("doc", "figuras",
-                           f"eixo_alto_{os.path.basename(pasta)}.png")
+        fig = os.path.join("doc", "figuras", f"eixo_alto_{base}.png")
         roda(["scripts/diagnostico_eixo_alto.py", "--rios", rio,
               "--saida", fig])
         print(f"   legado sintetico de {km0:.0f} a {km1:.0f} km "
@@ -226,9 +255,15 @@ def construir(rio, pasta, limite, taxas, dx, cada):
          mostrar=("contradeclives", "declividade", "leito bate", "VAO"))
     roda(["scripts/projeto_rio_avulso.py", g2, "--rio-fonte", rio],
          mostrar=("jusante   :",))
-    print(f"   batimetria aplicada -> {g2}")
+    if os.path.exists(g2 + ".hdf"):
+        os.remove(g2 + ".hdf")        # item 3 do contrato: stale nao prova
+    motivo = _portoes(g2, "g02")
+    if motivo:
+        return _reprova(motivo)
+    print("   APROVADO: g02 com 0 Fatal, 0 GRAVES e 0 defeitos de linha")
     return {"rio": rio, "pasta": pasta, "erros": n, "fatal": fat,
-            "taxa": taxa, "pedido": ped, "eixo_alto": alto, "g02": True}
+            "taxa": taxa, "pedido": ped, "eixo_alto": alto,
+            "status": "APROVADO g02"}
 
 
 def terreno(pastas, nome="vale30"):
@@ -335,10 +370,13 @@ def main():
                 roda(["scripts/projeto_rio_avulso.py", g, "--rio-fonte",
                       r["rio"], "--terreno", thdf], mostrar=("terreno   :",))
 
-    # ---- 9: a edge line, medida NA QUE O RAS CONSTRUIU
+    # ---- 9: as linhas, medidas no HDF da geometria EM USO (item 2 do
+    # contrato de aceite): g02.hdf quando o rio foi aprovado com g02, g01.hdf
+    # quando reprovado (o projeto voltou a apontar o g01)
     for r in res:
-        h = os.path.join(r["pasta"],
-                         os.path.basename(r["pasta"]) + ".g01.hdf")
+        base_ = os.path.join(r["pasta"], os.path.basename(r["pasta"]))
+        h = base_ + (".g02.hdf" if os.path.exists(base_ + ".g02.hdf")
+                     else ".g01.hdf")
         r["dobras"] = None
         if os.path.exists(h):
             m = re.search(r"TOTAL: (\d+)",
@@ -348,18 +386,12 @@ def main():
 
     print(f"\n{'='*68}\nRESUMO\n{'='*68}")
     print(f"{'rio':<16}{'erros':>7}{'Fatal':>7}{'taxa':>7}{'dobras':>8}"
-          f"   batimetria")
+          f"   veredito")
     for r in res:
         d = r.get("dobras")
-        if r.get("eixo_alto"):
-            k0, k1, _ = r["eixo_alto"]
-            bat = f"g02 (MDT em {k0:.0f}-{k1:.0f} km: legado sintetico)"
-        elif r.get("g02"):
-            bat = "g02 aplicado"
-        else:
-            bat = "?"
         print(f"{r['rio']:<16}{r['erros']:>7}{r['fatal']:>7}"
-              f"{r['taxa']:>7.2f}{('?' if d is None else str(d)):>8}   {bat}")
+              f"{r['taxa']:>7.2f}{('?' if d is None else str(d)):>8}   "
+              f"{r.get('status', '?')}")
     ruins = [r for r in res if r["erros"] > a.limite]
     if ruins:
         print(f"\nacima do limite de {a.limite}: "
