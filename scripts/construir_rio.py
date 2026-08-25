@@ -233,6 +233,37 @@ def terreno(pastas, nome="vale30"):
     if not geoms:
         print("   nenhuma geometria -- nada a fazer")
         return None
+
+    # ---- IDEMPOTENCIA: refazer 765 folhas so quando o dominio CRESCEU.
+    # A decisao "precisa reconstruir?" e do software, nao de quem chama com
+    # flag: se o raster existente ainda contem todas as geometrias com pelo
+    # menos 500 m de folga, nada a refazer -- o religar (passo 8) continua.
+    # A folga de construcao e 2000 m; exigir 500 m aqui tolera a geometria
+    # crescer ate 1500 m para dentro da folga antiga sem disparar o warp.
+    raiz0 = os.path.dirname(os.path.dirname(os.path.abspath(geoms[0])))
+    pt0 = os.path.join(raiz0, "Terrain")
+    tif0 = os.path.join(pt0, "MDT_SIGSC_30m.tif")
+    h0 = os.path.join(pt0, nome + "_Terreno.hdf")
+    if os.path.exists(tif0) and os.path.exists(h0):
+        try:
+            import rasterio
+            from terreno_30m import dominio
+            (x0, y0, x1, y1), _ = dominio(
+                geoms if len(geoms) > 1 else geoms[0], 500.0)
+            with rasterio.open(tif0) as s_:
+                b = s_.bounds
+            if (b.left <= x0 and b.bottom <= y0
+                    and b.right >= x1 and b.top >= y1):
+                print(f"   terreno existente cobre o dominio "
+                      f"({(x1-x0)/1000:.0f} x {(y1-y0)/1000:.0f} km dentro "
+                      f"de {(b.right-b.left)/1000:.0f} x "
+                      f"{(b.top-b.bottom)/1000:.0f} km) -- nada a refazer")
+                return h0
+            print("   o dominio cresceu alem do terreno existente -- "
+                  "refazendo")
+        except Exception as e:                   # noqa: BLE001
+            print(f"   nao deu para conferir o terreno existente ({e}) -- "
+                  "refazendo")
     roda(["scripts/terreno_30m.py"] + geoms + ["--nome", nome],
          mostrar=("dominio   :", "fonte     :", "raster:", "cobertura",
                   "celulas entre", "OK    ", "FALTA"))
