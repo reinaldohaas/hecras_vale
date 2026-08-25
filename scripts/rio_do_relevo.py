@@ -57,7 +57,7 @@ import os
 import sys
 
 import numpy as np
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, DIR)
@@ -77,7 +77,12 @@ JANELA_MARGEM = 3      # secoes para cada lado, na mediana movel da margem
 ALVO_SECAO = 8.0      # m acima do talvegue = onde a secao pode parar
 TAXA_LARGURA = 0.15   # quanto a meia-largura pode variar por metro de rio
 K_CURV = 0.50         # fracao do raio de curvatura admitida do lado de dentro
-EXTRA_EIXO = 40.0     # m de eixo alem da primeira e da ultima secao
+EXTRA_EIXO = 150.0   # m de eixo alem da primeira e da ultima secao; nunca
+                     # menos que UM espacamento -- com 40 m o Oeste levava
+                     # 'XS must intersect exactly one Reach' na primeira
+                     # secao, com a interseccao medindo 40,00 m do inicio
+                     # em todo teste geometrico que montei. Nao descobri a
+                     # tolerancia que o RAS usa; medi que 150 m limpa.
 BUSCA = 500.0         # m; ate onde se procura terreno alto
 N_CALHA, N_PLANICIE = 0.032, 0.055
 WKT = ('PROJCS["SIRGAS_2000_UTM_Zone_22S",GEOGCS["GCS_SIRGAS_2000",'
@@ -460,14 +465,43 @@ def main():
                     maus.update((i, i + 1, j, j + 1))
         return maus
 
+    def recuos(pts, k):
+        """Pontas que ANDAM PARA TRAS ao longo do eixo.
+
+        A poligonal das pontas nao e a edge line que o HEC-RAS constroi: no
+        Oeste ele monta 862 vertices para 380 secoes, densificando o traco, e
+        o cruzamento aparece SO na versao densificada -- meu teste de corda
+        dava zero enquanto o validador acusava dois pontos de auto-
+        interseccao. Lida a edge line do proprio HDF, a dobra estava onde as
+        pontas direitas de RS 30548 e 30398 avancam cem metros para fora e a
+        linha volta por cima do caminho de ida.
+
+        O que descreve isso e a PROJECAO da ponta sobre o eixo: se ela recua,
+        a edge line anda para tras, e densificada ela se cruza. Condicao mais
+        apertada que a corda, e que converge -- encolher puxa a ponta para o
+        eixo, e sobre o eixo a ordem e monotona por construcao.
+        """
+        pr = np.array([eixo.project(Point(q)) for q in pts])
+        maus = set()
+        for i in np.where(np.diff(pr) <= 0)[0]:
+            i = int(i)
+            # encolhe quem esta mais para fora; empate, os dois.
+            a = abs(secoes[i]["o_esq" if k == 0 else "o_dir"])
+            b = abs(secoes[i + 1]["o_esq" if k == 0 else "o_dir"])
+            if a >= b:
+                maus.add(i)
+            if b >= a:
+                maus.add(i + 1)
+        return maus
+
     PISO = 3.0 * PASSO           # nenhuma secao encolhe abaixo disto
     n_enc, voltas, restou = 0, 0, 0
-    while voltas < 25:
+    while voltas < 40:
         voltas += 1
         maus = set()
         for lado, k in (("me", 0), ("md", 1)):
             pts = [tuple(s["cut"][k]) for s in secoes]
-            for i in dobras(pts):
+            for i in dobras(pts) | recuos(pts, k):
                 maus.add((i, lado))
         if not maus:
             break
@@ -492,9 +526,10 @@ def main():
         restou = len(maus)
     pts_e = [tuple(s["cut"][0]) for s in secoes]
     pts_d = [tuple(s["cut"][1]) for s in secoes]
-    sobra = len(dobras(pts_e)) + len(dobras(pts_d))
+    sobra = (len(dobras(pts_e)) + len(dobras(pts_d))
+             + len(recuos(pts_e, 0)) + len(recuos(pts_d, 1)))
     print(f"edge line: {n_enc} encolhimentos em {voltas} passadas   "
-          f"cruzamentos restantes {sobra}"
+          f"cruzamentos+recuos restantes {sobra}"
           + ("   (no piso de %.0f m)" % PISO if sobra else ""))
 
     # ---- talvegue: cru, ou isotonico
@@ -540,7 +575,8 @@ def main():
     d0 /= max(float(np.hypot(*d0)), 1e-9)
     d1 = cc[-1] - cc[-2]
     d1 /= max(float(np.hypot(*d1)), 1e-9)
-    cc = np.vstack([cc[0] + EXTRA_EIXO * d0, cc, cc[-1] + EXTRA_EIXO * d1])
+    folga = max(EXTRA_EIXO, a.dx)
+    cc = np.vstack([cc[0] + folga * d0, cc, cc[-1] + folga * d1])
     c = [tuple(q) for q in cc]
     l.append(f"Reach XY= {len(c)} ")
     ss = [f"{x:16.4f}{y:16.4f}" for x, y in c]
