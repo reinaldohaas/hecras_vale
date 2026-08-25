@@ -216,19 +216,22 @@ def main():
     LEG_XY = 1200.0         # m; sanidade contra casamento grosseiramente errado
     _leg = secoes_levantadas(LEGADO, a.rio, completas=True) or []
     _leg_rs = np.array([d["rs"] for d in _leg]) if _leg else np.array([])
-    _s_base = np.array([b[0] for b in base])
-    _dono = (np.array([int(np.argmin(np.abs((L - _s_base) - r)))
-                       for r in _leg_rs]) if len(_leg_rs) else np.array([]))
+    _leg_usada = set()
 
-    def adotar(k, s, p, fundo_max=None):
-        """A secao levantada cuja estacao-dona e `k`, inteira, ou None.
+    def adotar(s, p, fundo_max=None):
+        """A secao levantada mais proxima em RS, inteira e AINDA NAO USADA.
 
-        Com `fundo_max`, so adota se o fundo levantado esta ABAIXO dele --
-        e o criterio da zona de mare: o lidar mede a lamina (~0 m) e o
-        levantamento sabe que o canal desce a -10,85; se o legado nao for
-        mais fundo que o que o MDT ja ve, nao ha razao para trocar.
+        O conjunto de usadas garante que cada levantada entra UMA vez (duas
+        estacoes com a mesma cutline seria secao duplicada no mapa). Com
+        `fundo_max`, so adota se o fundo levantado esta ABAIXO dele -- e o
+        criterio da zona de mare: o lidar mede a lamina e o levantamento
+        sabe que o canal desce; se o legado nao for mais fundo que o que o
+        MDT ja ve, nao ha razao para trocar.
         """
-        for j in np.flatnonzero(_dono == k) if len(_dono) else []:
+        ordem_j = np.argsort(np.abs(_leg_rs - (L - s))) if len(_leg_rs) else []
+        for j in ordem_j[:3]:
+            if int(j) in _leg_usada:
+                continue
             d = _leg[int(j)]
             if abs(d["rs"] - (L - s)) > LEG_RS:
                 continue
@@ -238,6 +241,7 @@ def main():
             zt_leg = float(d["z"][m].min() if m.any() else d["z"].min())
             if fundo_max is not None and zt_leg >= fundo_max:
                 continue
+            _leg_usada.add(int(j))
             return {"s": s, "rs": round(float(L - s), 2), "pronta": True,
                     "sta": np.asarray(d["sta"], float),
                     "z": np.asarray(d["z"], float),
@@ -260,7 +264,7 @@ def main():
         # 1500 m. Centro com menos de metade das amostras finitas nao e
         # medida: vai para a adocao do legado, ou fora.
         if float(np.isfinite(z[centro]).mean()) < 0.5:
-            d = adotar(k, s, p)
+            d = adotar(s, p)
             if d is not None:
                 prontas.append(d)
             else:
@@ -274,7 +278,7 @@ def main():
         # dele, a secao levantada vale mais que o respingo.
         zt_c = float(np.nanmin(np.where(centro, z, np.nan)))
         if zt_c < 2.0:
-            d = adotar(k, s, p, fundo_max=zt_c - 2.0)
+            d = adotar(s, p, fundo_max=zt_c - 2.0)
             if d is not None:
                 prontas.append(d)
                 continue
@@ -365,6 +369,13 @@ def main():
     # outra, ela faz gancho e cruza. Medido nos rios ja gerados, o salto de
     # largura entre vizinhas separa os limpos dos sujos com clareza --
     # Norte 12 m de mediana e 2 erros, Acu 32 m e 190, Oeste 88 m e 303.
+    # a margem CRUA de cada secao fica guardada antes do filtro: e ela, e nao
+    # a mediana da vizinhanca, que diz onde ESTA SECAO sai da agua -- o piso
+    # de largura do montar usa a crua (a filtrada, numa secao larga cercada
+    # de estreitas, encolhia o piso e a ponta ficava dentro d'agua)
+    for s in secoes:
+        s["d_esq_raw"] = s["d_esq"]
+        s["d_dir_raw"] = s["d_dir"]
     for lado in ("me", "md", "d_esq", "d_dir"):
         v = np.array([s[lado] for s in secoes], float)
         bom = np.isfinite(v)
@@ -443,6 +454,43 @@ def main():
         print(f"   limite de curvatura (K={K_CURV:g}): apertou {n_curv} secoes")
 
     def montar(s, me, md):
+        # O PISO DA LARGURA E A CALHA MEDIDA DA PROPRIA SECAO, nao os 60 m de
+        # MEIA_MIN -- que foram calibrados no Mirim (calha de 40-60 m) e nao
+        # servem ao Acu (calha de 100-250 m). Com o piso constante, o limite
+        # de curvatura nas voltas fechadas e o laco da edge line cortavam a
+        # secao PARA DENTRO DA PROPRIA CALHA: no Acu, 367 de 1086 secoes
+        # terminavam a menos de 1 m acima do talvegue -- a ponta dentro
+        # d'agua, sem barranco nenhum, agua vazando na primeira cheia (visto
+        # no RAS Mapper pelo usuario, RS ~106100). Nenhum corte pode entrar
+        # na calha: quem quiser encolher mais que isso aparece no relatorio.
+        de = s.get("d_esq_raw", s.get("d_esq", np.nan))
+        dd = s.get("d_dir_raw", s.get("d_dir", np.nan))
+        if np.isfinite(de):
+            me = max(me, s["off_t"] + de + 2 * PASSO)
+        if np.isfinite(dd):
+            md = max(md, dd - s["off_t"] + 2 * PASSO)
+        # E CRESCE ATE SAIR D'AGUA. O piso pela margem crua resolve onde a
+        # margem foi MEDIDA; onde ela nao foi (agua larga, vazio no MDT, ou
+        # anda() que nao subiu), a garantia e direta: enquanto uma ponta do
+        # perfil ficar a menos de FOLGA_CALHA do fundo, alarga daquele lado,
+        # ate no maximo a borda do grid. Secao que nem assim sai d'agua e o
+        # qc_perfis.py que acusa -- nao passa calada.
+        z = s["z_perfil"]
+        for _ in range(12):
+            dt = (off <= me) & (off >= -md) & np.isfinite(z)
+            if dt.sum() < 8:
+                break
+            zz = z[dt]
+            zt_t = float(zz.min())
+            cres = False
+            if zz[-1] - zt_t < FOLGA_CALHA and me < float(off.max()):
+                me = min(me + 20 * PASSO, float(off.max()))
+                cres = True
+            if zz[0] - zt_t < FOLGA_CALHA and md < float(-off.min()):
+                md = min(md + 20 * PASSO, float(-off.min()))
+                cres = True
+            if not cres:
+                break
         """Perfil, cutline e margens de UMA secao, para as larguras dadas.
 
         Isolado em funcao porque a passada anti-dobra, mais abaixo, chama de
@@ -697,12 +745,26 @@ def main():
             if q.get("pronta"):
                 mantem.append(q)
                 continue
-            # so na ZONA DE MARE: rio acima a secao de lamina carrega a
-            # varzea real do lidar, e o fundo dela e ancorado depois pelo
-            # `batimetria.py aplicar` -- cortar la jogaria fora a planicie.
-            if q["zt"] >= 2.0:
+            # cai a secao que NAO SEGURA AGUA: ou e mare (zt < 2 m), ou e a
+            # que mesmo depois de crescer ate a borda do grid termina com a
+            # ponta a menos de FOLGA_CALHA do fundo -- rio largo com vazio
+            # d'agua alem do grid (RS 73-75k, Blumenau-Gaspar). Secao sadia
+            # de rio acima carrega a varzea real do lidar e fica -- o fundo
+            # dela e ancorado depois pelo `batimetria.py aplicar`.
+            zq = np.asarray(q["z"], float)
+            molhada = float(min(zq[0], zq[-1]) - zq.min()) < FOLGA_CALHA
+            if q["zt"] >= 2.0 and not molhada:
                 mantem.append(q)
                 continue
+            # molhada: antes de decidir cair, tenta TROCAR pela levantada
+            # mais proxima ainda nao usada (RS 73-75k: rio largo com vazio,
+            # sem terra no grid -- mas o legado R3 tem a secao inteira)
+            if molhada and "p" in q:
+                d_ = adotar(q["s"], q["p"])
+                if d_ is not None:
+                    mantem.append(d_)
+                    n_pente += 1
+                    continue
             i = int(np.searchsorted(pr_s, q["s"]))
             cima = i - 1 if i > 0 else None
             baixo = i if i < len(pr_s) else None

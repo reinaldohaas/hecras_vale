@@ -191,6 +191,11 @@ def construir(rio, pasta, limite, taxas, dx, cada):
     if taxa != taxas[-1] and n > limite:
         pass
     print(f"\n   melhor: {n} mensagens ({fat} Fatal) com taxa {taxa:g} m/m")
+    # ---- 3.5 QC de TODOS os perfis, de uma vez -- ponta n'agua, margens
+    # fora, vaos, RS repetida. Pedido do usuario depois de descobrir esses
+    # defeitos UM POR UM no RAS Mapper: o programa le tudo e acusa antes.
+    roda(["scripts/qc_perfis.py", g], mostrar=("GRAVES", "GRAVE ",))
+
     ped = os.path.join("doc", f"batimetria_{os.path.basename(pasta)}.csv")
     roda(["scripts/batimetria.py", "pedir", g, "--cada", str(cada),
           "--saida", ped], mostrar=("pontos    :",))
