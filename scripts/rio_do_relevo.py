@@ -1164,23 +1164,31 @@ def main():
               f"nenhum vao passar de {GAP_MAX:.0f} m")
 
     # ---- SECOES INTERPOLADAS ENTRE AS LEVANTADAS DA ZONA DE MARE.
-    # As levantadas sao reais e irregulares (bancos de areia, pocos): a 1000 m
-    # de espacamento a AREA de escoamento salta ate +-40% entre vizinhas (e
-    # -56% na secao do contorno) -- um acordeao que o pico da cheia transforma
-    # em oscilacao em qualquer dt (medido: instavel a 15 s aqui; o modelo do
-    # Antigravity, com areas variando +2%/secao, roda a 60 s). O remedio e o
-    # padrao do proprio HEC-RAS ("XS Interpolation"): entre cada par de
-    # levantadas vizinhas, perfis INTERPOLADOS linearmente ao longo do rio, a
-    # cada ~250 m. Nao inventa cota: cada ponto e mistura das duas medidas.
-    def _reamostra(d, fr):
+    # As levantadas sao reais e irregulares: a 1000 m a AREA salta +-40%
+    # entre vizinhas e o pico oscila em qualquer dt. Remedio padrao ("XS
+    # Interpolation" do HEC-RAS): perfis interpolados a ~250 m entre cada
+    # par de levantadas. PRIMEIRA versao misturava as PONTAS das cutlines --
+    # entre duas cutlines nao paralelas (curva) isso abre leques que se
+    # cruzam, e o usuario viu a camada Errors vermelha no Mapper. Agora a
+    # interpolada nasce como toda secao: ORTOGONAL AO EIXO na estacao dela;
+    # so o PERFIL e mistura das duas medidas, alinhadas pelo cruzamento de
+    # cada uma com o eixo (lado esquerdo com lado esquerdo, direito com
+    # direito).
+    def _perfil_alinhado(d):
+        """(u, z): estacas relativas ao cruzamento com o eixo (u<0=esq)."""
+        from shapely.geometry import LineString as _LS
         st = np.asarray(d["sta"], float)
         zz = np.asarray(d["z"], float)
-        w = st[-1] - st[0]
-        return np.interp(fr * w + st[0], st, zz), w
+        g_ = _LS([d["cut"][0], d["cut"][-1]]).intersection(eixo)
+        if g_.is_empty or g_.geom_type != "Point":
+            return None
+        A_ = np.asarray(d["cut"][0], float)
+        sta_e = float(np.hypot(g_.x - A_[0], g_.y - A_[1]))
+        return st - sta_e, zz
 
     interp_novas = []
     ordem_m = sorted(secoes, key=lambda q: q["s"])
-    FR = np.linspace(0.0, 1.0, 81)
+    NF = 40                       # pontos por lado
     for qa, qb in zip(ordem_m[:-1], ordem_m[1:]):
         if not (qa.get("pronta") and qb.get("pronta")):
             continue
@@ -1188,50 +1196,69 @@ def main():
         n_i = int(ds_ // 250.0)
         if n_i < 1:
             continue
-        za, wa = _reamostra(qa, FR)
-        zb, wb = _reamostra(qb, FR)
-        A0 = np.asarray(qa["cut"][0], float)
-        A1 = np.asarray(qa["cut"][-1], float)
-        B0 = np.asarray(qb["cut"][0], float)
-        B1 = np.asarray(qb["cut"][-1], float)
-        la_, ra_ = float(qa["lb"]), float(qa["rb"])
-        lb_, rb_ = float(qb["lb"]), float(qb["rb"])
-        sta0a = float(np.asarray(qa["sta"], float)[0])
-        sta0b = float(np.asarray(qb["sta"], float)[0])
+        pa = _perfil_alinhado(qa)
+        pb = _perfil_alinhado(qb)
+        if pa is None or pb is None:
+            continue
+        ua, za = pa
+        ub, zb = pb
         for k_ in range(1, n_i + 1):
             t = k_ / (n_i + 1.0)
-            wi = (1 - t) * wa + t * wb
-            zi = (1 - t) * za + t * zb
-            sti = np.round(FR * wi, 2)
-            sti, iu = np.unique(sti, return_index=True)
-            zi = np.round(zi[iu], 2)
             si = qa["s"] + t * ds_
+            # ortogonal ao eixo, como toda secao
+            pt = np.array(eixo.interpolate(si).coords[0])
+            q0 = np.array(eixo.interpolate(max(si - JANELA, 0.0)).coords[0])
+            q1 = np.array(eixo.interpolate(min(si + JANELA, L)).coords[0])
+            tg = q1 - q0
+            ntg = float(np.hypot(*tg))
+            if ntg < 1e-6:
+                continue
+            tg /= ntg
+            nrm = np.array([-tg[1], tg[0]])
+            # extensao de cada lado: mistura das extensoes dos pais
+            uL = (1 - t) * ua[0] + t * ub[0]        # esquerda (negativo)
+            uR = (1 - t) * ua[-1] + t * ub[-1]      # direita (positivo)
+            # perfil: cada lado amostrado em fracoes iguais do proprio lado
+            frL = np.linspace(1.0, 0.0, NF, endpoint=False)
+            frR = np.linspace(0.0, 1.0, NF + 1)
+            ui = np.r_[uL * frL, uR * frR[1:], 0.0]
+            ui = np.unique(np.round(ui, 2))
+            def _z_em(u_, uu, zz):
+                return np.interp(np.clip(u_, uu[0], uu[-1]), uu, zz)
+            zi = np.round((1 - t) * _z_em(ui, ua, za)
+                          + t * _z_em(ui, ub, zb), 2)
+            # u<0 = esquerda = offset POSITIVO; estaca cresce esq->dir
+            sti = np.round(ui - uL, 2)
+            sti, iu = np.unique(sti, return_index=True)
+            zi = zi[iu]
+            cut0 = tuple(pt + (-uL) * nrm)     # ponta esquerda
+            cut1 = tuple(pt + (-uR) * nrm)     # ponta direita
+            # bancos: mistura por lado, em coordenada u (relativa ao
+            # cruzamento com o eixo), depois snap em estaca real
+            lqa = float(qa["lb"]) + ua[0] - np.asarray(qa["sta"], float)[0]
+            lqb = float(qb["lb"]) + ub[0] - np.asarray(qb["sta"], float)[0]
+            rqa = float(qa["rb"]) + ua[0] - np.asarray(qa["sta"], float)[0]
+            rqb = float(qb["rb"]) + ub[0] - np.asarray(qb["sta"], float)[0]
+            lb_i = ((1 - t) * lqa + t * lqb) - uL
+            rb_i = ((1 - t) * rqa + t * rqb) - uL
+            cand = sti[sti <= lb_i]
+            lb_i = float(cand.max()) if len(cand) else float(sti[0])
+            cand = sti[sti >= rb_i]
+            rb_i = float(cand.min()) if len(cand) else float(sti[-1])
+            if rb_i <= lb_i:
+                jx = int(np.searchsorted(sti, lb_i))
+                lb_i = float(sti[max(jx - 1, 0)])
+                rb_i = float(sti[min(jx + 1, len(sti) - 1)])
             interp_novas.append({
                 "s": si, "rs": round(float(L - si), 2), "pronta": True,
                 "interp": True, "sta": sti, "z": zi,
-                "lb": round((1 - t) * (la_ - sta0a) + t * (lb_ - sta0b), 2),
-                "rb": round((1 - t) * (ra_ - sta0a) + t * (rb_ - sta0b), 2),
-                "cut": (tuple((1 - t) * A0 + t * B0),
-                        tuple((1 - t) * A1 + t * B1)),
+                "lb": lb_i, "rb": rb_i, "cut": (cut0, cut1),
                 "zt": float(zi.min())})
     if interp_novas:
-        # BANK STA SEMPRE NUMA ESTACA EXISTENTE (a licao das 744 em cascata:
-        # "Right bank station not in station elevation data" aborta o
-        # preprocessador). Snap direcional para dentro do perfil.
-        for q in interp_novas:
-            st = q["sta"]
-            cand = st[st <= q["lb"]]
-            q["lb"] = float(cand.max()) if len(cand) else float(st[0])
-            cand = st[st >= q["rb"]]
-            q["rb"] = float(cand.min()) if len(cand) else float(st[-1])
-            if q["rb"] <= q["lb"]:
-                j_ = int(np.searchsorted(st, q["lb"]))
-                q["lb"] = float(st[max(j_ - 1, 0)])
-                q["rb"] = float(st[min(j_ + 1, len(st) - 1)])
         secoes = sorted(secoes + interp_novas, key=lambda q: q["s"])
-        print(f"   interpoladas: {len(interp_novas)} secao(oes) entre "
-              "levantadas vizinhas (mistura linear das duas medidas, "
-              "~250 m — o 'XS Interpolation' do proprio HEC-RAS)")
+        print(f"   interpoladas: {len(interp_novas)} secao(oes) ORTOGONAIS "
+              "ao eixo entre levantadas vizinhas (perfil = mistura das duas "
+              "medidas alinhadas pelo eixo)")
 
     # ---- escreve
     os.makedirs(a.saida, exist_ok=True)
