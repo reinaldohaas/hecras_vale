@@ -126,6 +126,58 @@ def eixo_do_rio(nome, caminho=EIXOS):
                      f"{[f['properties'].get('nome') for f in d['features']]}")
 
 
+# rio -> canal artificial REAL que substitui o trecho final do eixo natural.
+# So o Mirim tem: o Canal Retificado de Itajai, construido exatamente para
+# desviar cheia -- o eixo natural desce 19 km de meandro onde o rio corta
+# ~7,5 km de canal (lacuna registrada ha dias na memoria do projeto). A
+# fusao e a do gerador do Antigravity (a_scripts/gerar_mirim.py), que
+# resolveu isto primeiro: projeta-se a bifurcacao no eixo natural, corta-se
+# ali, e o canal entra como trecho final.
+CANAIS = {"Itajai_Mirim": "dados_estruturas/canal_itajai_mirim.geojson"}
+
+
+def unificar_com_canal(eixo, rio):
+    """Eixo natural ate a bifurcacao + canal artificial ate a foz.
+
+    O canal vem em WGS84 (lon/lat) e e reprojetado para SIRGAS 2000 UTM 22S.
+    O ramo natural de jusante (o meandro que o canal curto-circuita) fica de
+    fora do eixo -- em cheia e o canal que conduz, e foi para isso que ele
+    foi construido. Modelar os dois bracos e decisao futura (segundo reach).
+    """
+    arq = CANAIS.get(rio)
+    if not arq or not os.path.exists(arq):
+        return eixo
+    from pyproj import Transformer
+    from shapely.ops import linemerge, substring
+    d = json.load(open(arq, encoding="utf-8"))
+    tr = Transformer.from_crs("EPSG:4326", "EPSG:31982", always_xy=True)
+    segs = []
+    for f in d["features"]:
+        c = np.asarray(f["geometry"]["coordinates"], float)
+        if c.ndim == 2:
+            x, y = tr.transform(c[:, 0], c[:, 1])
+            segs.append(LineString(np.c_[x, y]))
+    canal = linemerge(segs)
+    if canal.geom_type != "LineString":
+        print(f"   canal de {arq}: nao emendou numa linha so -- ignorado")
+        return eixo
+    # canal orientado de montante (bifurcacao) para jusante (foz): a ponta
+    # mais proxima do eixo natural e a bifurcacao
+    p0, p1 = Point(canal.coords[0]), Point(canal.coords[-1])
+    if eixo.distance(p1) < eixo.distance(p0):
+        canal = LineString(canal.coords[::-1])
+        p0 = Point(canal.coords[0])
+    s_bif = float(eixo.project(p0))
+    montante = substring(eixo, 0.0, s_bif)
+    novo = LineString(list(montante.coords) + list(canal.coords))
+    print(f"eixo   : CANAL RETIFICADO incorporado ({arq})")
+    print(f"         natural {eixo.length/1000:.2f} km -> montante "
+          f"{montante.length/1000:.2f} + canal {canal.length/1000:.2f} = "
+          f"{novo.length/1000:.2f} km   (bifurcacao a "
+          f"{eixo.distance(p0):.0f} m do eixo natural)")
+    return novo
+
+
 def curvatura(eixo, s, janela):
     """Raio de curvatura e sinal do giro no ponto `s` do eixo.
 
@@ -190,6 +242,7 @@ def main():
     a = ap.parse_args()
 
     eixo = eixo_do_rio(a.rio)
+    eixo = unificar_com_canal(eixo, a.rio)
     L = eixo.length
     # candidatas sempre no passo fino; quem decide o espacamento FINAL e a
     # variabilidade medida (ver a selecao de estacoes adiante)
