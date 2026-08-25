@@ -35,10 +35,20 @@ O QUE E MEDIDO, E COMO
   margens     andando para fora do talvegue, o primeiro ponto de cada lado que
               sobe `FOLGA_CALHA` acima dele. E o topo do encaixe, medido.
 
-  meia-largura  continua para fora ate subir `ALVO_SECAO` acima do talvegue,
-              com teto em `MEIA_MAX`. Onde a varzea e plana o teto manda, e o
-              relatorio diz em quantas secoes isso aconteceu -- ali a secao
-              1D nao contem a cheia, e isso pede armazenamento ou 2D.
+  meia-largura  continua para fora ate subir `ALVO_SECAO` (20 m) acima do
+              talvegue, com teto em `MEIA_MAX`. A subida era 8 m e deixava
+              146 secoes terminando sem barranco; o usuario apontou que fora
+              da baixada meandrica estender nao custa nada, e escolheu 20 m.
+              Onde a varzea e plana o teto ainda manda, e o relatorio diz em
+              quantas secoes -- ali a secao 1D nao contem a cheia, e isso
+              pede armazenamento ou 2D.
+
+  espacamento  ADAPTATIVO pela variabilidade MEDIDA (era 150 m fixos, escolha
+              sem justificativa hidraulica): candidatas a cada DX_MIN, e a
+              secao nasce a DX_MIN onde largura/talvegue mudam rapido, a DX
+              (500 m) no comum, a DX_MAX (1000 m) no uniforme -- como o
+              legado, que roda com ~1000-1500 m. Secao frequente demais no
+              meandro e FONTE de dobra de edge line e de custo de solver.
 
   Manning     `N_CALHA` e `N_PLANICIE`, constantes e declaradas. Nao ha dado de
               rugosidade nesta bacia; fingir que ha seria o mesmo erro.
@@ -66,7 +76,15 @@ from mdt_sigsc import MosaicoSigsc, tiles_do_dominio   # noqa: E402
 from ras_io import escrever                            # noqa: E402
 
 EIXOS = "eixos_do_relevo.geojson"
-DX = 150.0            # m entre secoes
+DX = 500.0            # m; espacamento-BASE entre secoes. Era 150, escolha
+                      # minha sem justificativa hidraulica -- o legado roda
+                      # com ~1000-1500 m, e secao frequente demais no meandro
+                      # e FONTE de dobra de edge line (mais pontas ligadas em
+                      # angulo fechado) e de custo de solver. O espacamento e
+                      # ADAPTATIVO: DX_MIN onde a largura/talvegue medidos
+                      # mudam rapido, DX_MAX onde e uniforme.
+DX_MIN = 250.0        # m; passo das CANDIDATAS e piso do espacamento
+DX_MAX = 1000.0       # m; teto do espacamento no trecho uniforme
 PASSO = 4.0           # m entre pontos amostrados na cutline
 JANELA = 60.0         # m para cada lado, ao medir a tangente do eixo
 MEIA_MAX = 400.0      # m; teto da meia-largura
@@ -75,7 +93,12 @@ FOLGA_CALHA = 1.5     # m acima do talvegue = topo da margem
 DESCE_MAX = 0.30
 DESCE_FORA = 0.30     # m abaixo do fundo da calha; abaixo disso e outro vale
 JANELA_MARGEM = 3      # secoes para cada lado, na mediana movel da margem
-ALVO_SECAO = 8.0      # m acima do talvegue = onde a secao pode parar
+ALVO_SECAO = 20.0     # m acima do talvegue = onde a secao pode parar. Era 8
+                      # e produzia 146 secoes terminando sem barranco; o
+                      # usuario apontou: fora da baixada meandrica, estender
+                      # nao custa nada -- a encosta e ingreme e a largura
+                      # extra garante conter a cheia. 20 m foi a escolha dele
+                      # (AskUserQuestion, 25/08/2026).
 EXIGE_SECO = 2.0      # m acima do talvegue que a PONTA precisa ter (contrato:
                       # ponta <= 1 m e GRAVE no qc_perfis; 2 da folga medida)
 MARGEM_AFAST = 8.0    # m; margem nao pode ser colada ao talvegue (ruido)
@@ -173,11 +196,14 @@ def main():
 
     eixo = eixo_do_rio(a.rio)
     L = eixo.length
-    est = np.arange(0.0, L, a.dx)
+    # candidatas sempre no passo fino; quem decide o espacamento FINAL e a
+    # variabilidade medida (ver a selecao de estacoes adiante)
+    est = np.arange(0.0, L, DX_MIN)
     if L - est[-1] > 20.0:
         est = np.append(est, L)
-    print(f"rio    : {a.rio}   eixo {L/1000:.2f} km   {len(est)} secoes "
-          f"a cada {a.dx:g} m")
+    print(f"rio    : {a.rio}   eixo {L/1000:.2f} km   {len(est)} candidatas "
+          f"a cada {DX_MIN:g} m (espacamento final {DX_MIN:g}-{DX_MAX:g} m "
+          f"pela variabilidade, base {a.dx:g})")
 
     # ---- geometria das cutlines e amostragem do MDT
     off = np.arange(-BUSCA, BUSCA + PASSO / 2, PASSO)
@@ -508,21 +534,49 @@ def main():
                 return False
         return True
 
+    # ---- ESPACAMENTO PELA VARIABILIDADE MEDIDA (decisao do usuario,
+    # 25/08/2026): denso (DX_MIN) onde a largura necessaria ou o talvegue
+    # mudam rapido entre candidatas vizinhas; base (a.dx) no comum; esparso
+    # (DX_MAX) no uniforme. Os limiares sao os mesmos ja usados no filtro de
+    # taxa (largura) e no relatorio de declividade (talvegue) -- nada novo
+    # inventado, so aplicado ANTES, na escolha de onde a secao nasce.
     n_cand = len(secoes)
+    ordem_c = sorted(secoes, key=lambda w: w["s"])
+    largo = []
+    for q in ordem_c:
+        nm, nd = q.get("need_me", np.nan), q.get("need_md", np.nan)
+        largo.append((nm if np.isfinite(nm) else 0.0)
+                     + (nd if np.isfinite(nd) else 0.0))
+    alvo_dx = []
+    for i, q in enumerate(ordem_c):
+        j0x, j1x = max(0, i - 1), min(len(ordem_c) - 1, i + 1)
+        ds_ = max(ordem_c[j1x]["s"] - ordem_c[j0x]["s"], 1.0)
+        var_w = abs(largo[j1x] - largo[j0x]) / ds_
+        var_z = abs(ordem_c[j1x]["zt_bruto"] - ordem_c[j0x]["zt_bruto"]) / ds_
+        if var_w > TAXA_LARGURA or var_z > 0.02:
+            alvo_dx.append(DX_MIN)
+        elif var_w < 0.05 and var_z < 0.005:
+            alvo_dx.append(DX_MAX)
+        else:
+            alvo_dx.append(a.dx)
     finais, n_forc = [], 0
-    ult_s = secoes[0]["s"] - a.dx if secoes else 0.0
-    for q in sorted(secoes, key=lambda w: w["s"]):
-        if _viavel(q):
+    conta = {DX_MIN: 0, a.dx: 0, DX_MAX: 0}
+    ult_s = ordem_c[0]["s"] - DX_MAX if ordem_c else 0.0
+    for q, alvo_ in zip(ordem_c, alvo_dx):
+        if _viavel(q) and q["s"] - ult_s >= alvo_ - 1.0:
             finais.append(q)
+            conta[alvo_] = conta.get(alvo_, 0) + 1
             ult_s = q["s"]
         elif q["s"] - ult_s >= GAP_MAX:
             finais.append(q)          # forcada: o vao ja ia reprovar
             n_forc += 1
             ult_s = q["s"]
     secoes = finais
-    print(f"estacoes: {n_cand} candidatas -> {len(secoes)} viaveis "
-          f"({n_forc} forcadas por vao > {GAP_MAX:.0f} m); o dx cresce "
-          "sozinho onde need > K*R")
+    print(f"estacoes: {n_cand} candidatas -> {len(secoes)} escolhidas "
+          f"[{conta.get(DX_MIN,0)} a {DX_MIN:g} m, {conta.get(a.dx,0)} a "
+          f"{a.dx:g} m, {conta.get(DX_MAX,0)} a {DX_MAX:g} m; "
+          f"{n_forc} forcadas por vao > {GAP_MAX:.0f} m]; o dx cresce "
+          "sozinho onde need > K*R ou o vale e uniforme")
 
     print(f"secoes : {len(secoes)}   sem MDT utilizavel: {sem_dado}   "
           f"adotadas do legado (inteiras): {len(prontas)}   "

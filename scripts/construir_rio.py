@@ -416,7 +416,8 @@ def main():
                     help="mensagens do validador aceitas antes de apertar")
     ap.add_argument("--taxa", type=float, default=None,
                     help="fixa a taxa em vez de deixar o laco procurar")
-    ap.add_argument("--dx", type=float, default=150.0)
+    ap.add_argument("--dx", type=float, default=500.0,
+                    help="espacamento-base; o gerador adapta entre 250 e 1000 m")
     ap.add_argument("--cada", type=float, default=2000.0)
     ap.add_argument("--sem-terreno", action="store_true",
                     help="pula as etapas 5 a 7; o modelo abre sem relevo")
