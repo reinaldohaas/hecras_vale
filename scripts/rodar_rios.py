@@ -38,6 +38,17 @@ import re
 import sys
 import time
 
+# POR QUE PROCESSO, E NAO THREAD.
+#
+#   `ras_commander` guarda um objeto `ras` GLOBAL no modulo, e `init_ras_project`
+#   mexe nele mesmo quando se passa `ras_object=`. Com varios rios em THREADS o
+#   global e um so, compartilhado, e os projetos se atropelam: rodando os cinco
+#   juntos, o init do `itajai_norte` foi ler `itajai_norte\itajai_acu.u01` -- o
+#   arquivo de OUTRO rio -- e tres dos cinco terminaram SEM `.bco01`. Processo
+#   separado tem seu proprio import de `ras_commander`, seu proprio global, e
+#   nada vaza de um rio para o outro. O solver ja e um Ras.exe a parte; o pool
+#   de processos so garante que o SETUP de cada rio tambem seja isolado.
+
 DIR = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.dirname(DIR)
 sys.path.insert(0, DIR)
@@ -65,25 +76,47 @@ def um(pasta, cores):
 
 
 def medir(pasta, nome):
-    """Erro de volume e iteracoes, do computeMsgs -- que sempre existe."""
+    """Erro de volume e iteracoes, lidos do `.bco01`.
+
+    O HEC-RAS NAO gera aqui o `.p01.computeMsgs.txt` que a versao antiga
+    procurava -- por isso a tabela saia toda com `-`. O que interessa esta no
+    `.bco01`, o log textual do solver:
+
+      erro de volume    no bloco "Total Volume Accounting (for the entire
+                        model)", na linha logo abaixo do cabecalho
+                        "Error   Percent Error". Ha um bloco parecido so para
+                        a "1D Flow Area"; queremos o do MODELO INTEIRO.
+      iteracoes         cada passo do solver imprime uma ou mais linhas
+                        `<i> <Reach> <valores...>`, onde `<i>` e a iteracao
+                        (0,1,2,...) dentro daquele passo. O maximo desse `<i>`
+                        em toda a corrida diz o pior caso de convergencia: 40
+                        e o teto (nunca convergiu), 6 e folgado.
+      falhou            se o bloco de volume nem existe, a corrida nao chegou
+                        ao fim -- sinal mais confiavel que caçar uma frase.
+
+    Serve a qualquer rio: o nome do reach entra como `\\w+`, nao fixo.
+    """
     out = {"vol": None, "volpct": None, "iter": None, "falhou": None}
-    msg = os.path.join(pasta, nome + ".p01.computeMsgs.txt")
-    if not os.path.exists(msg):
+    bco = os.path.join(pasta, nome + ".bco01")
+    if not os.path.exists(bco):
+        out["falhou"] = True
         return out
-    t = open(msg, encoding="latin-1", errors="replace").read()
-    m = re.search(r"Volume Accounting Error in 1000 m\^3:\s*([-\d.]+)", t)
-    if m:
-        out["vol"] = float(m.group(1))
-    m = re.search(r"Volume Accounting Error as percentage:\s*([-\d.]+)", t)
-    if m:
-        out["volpct"] = float(m.group(1))
-    # a ultima coluna das linhas do solver e a contagem de iteracoes. Contar
-    # so as linhas 0 e 1 -- que foi o meu erro antes -- da maximo 2 quando o
-    # verdadeiro e 40.
-    it = [int(x) for x in re.findall(r"\s(\d+)\s*$", t, re.M)]
+    t = open(bco, encoding="latin-1", errors="replace").read()
+
+    i = t.find("Total Volume Accounting")
+    if i != -1:
+        m = re.search(r"Error\s+Percent Error\s*\n\s*\*+\s+\*+\s*\n"
+                      r"\s*([-\d.]+)\s+([-\d.]+)", t[i:i + 800])
+        if m:
+            out["vol"] = float(m.group(1))
+            out["volpct"] = float(m.group(2))
+
+    it = [int(x) for x in
+          re.findall(r"^\s*(\d+)\s+\w+\s+[\d.]+\s+[\d.]+\s+[\d.]+", t, re.M)]
     if it:
         out["iter"] = max(it)
-    out["falhou"] = "Solution Solver Failed" in t
+
+    out["falhou"] = out["vol"] is None or "Solution Solver Failed" in t
     return out
 
 
@@ -112,7 +145,7 @@ def main():
 
     t0 = time.time()
     res = []
-    with cf.ThreadPoolExecutor(max_workers=a.workers) as ex:
+    with cf.ProcessPoolExecutor(max_workers=a.workers) as ex:
         fut = {ex.submit(um, p, a.cores): p for p in pastas}
         for f in cf.as_completed(fut):
             r = f.result()
