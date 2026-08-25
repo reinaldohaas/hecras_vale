@@ -10,12 +10,26 @@ Faz TUDO, em ordem, e a validacao decide se as etapas anteriores valem:
       1. geometria do MDT SIG-SC 1 m          rio_do_relevo.py
       2. projeto com projecao e contorno      projeto_rio_avulso.py
       3. VALIDACAO SEM RODAR O SOLVER         ler_erros_geometria.py
-      4. pedido de batimetria                 batimetria.py
+      4. pedido de batimetria                 batimetria.py pedir
+      5. BATIMETRIA DO LEGADO -> g02          batimetria_do_legado.py +
+         com PORTEIRO DE EIXO ALTO            batimetria.py aplicar
     uma vez, no fim
-      5. terreno sobre a UNIAO dos rios       terreno_30m.py
-      6. limpeza do vazio negativo            limpar_vazio_negativo.py
-      7. religa o terreno em cada projeto     projeto_rio_avulso.py
-      8. confere a edge line NO HDF DO RAS    conferir_edge_lines.py
+      6. terreno sobre a UNIAO dos rios       terreno_30m.py
+      7. limpeza do vazio negativo            limpar_vazio_negativo.py
+      8. religa o terreno em cada projeto     projeto_rio_avulso.py
+      9. confere a edge line NO HDF DO RAS    conferir_edge_lines.py
+
+O PORTEIRO DE EIXO ALTO (passo 5)
+
+  Antes de ancorar a batimetria, o pipeline compara o talvegue lido do MDT com
+  o fundo levantado de 1983. Onde o eixo esquematico corre pela ENCOSTA de um
+  vale encaixado, a lamina do MDT fica dezenas a centenas de metros acima do
+  fundo, e ancorar ali cavaria um canion -- foi o que deixou o Benedito
+  inviavel (rebaixamento mediano 104 m) e mandou o solver do Acu a
+  instabilidade (55 m no R1). Rio com trecho assim NAO ganha g02: o pipeline
+  imprime a faixa em km, gera a figura (diagnostico_eixo_alto.py) e marca na
+  tabela final "REFAZER EIXO". O g02 velho, se existir, e removido -- rodar o
+  pipeline duas vezes tem de dar o mesmo estado.
 
 O TERRENO E DA BACIA, E NAO DE UM RIO
 
@@ -96,6 +110,56 @@ def erros_de(saida):
     return int(m.group(2)), int(fat.group(1)) if fat else 0, saida
 
 
+LIMIAR_EIXO = 25.0     # m; rebaixamento acima disto = eixo pela encosta
+TRECHO_EIXO = 1.0      # km; menos que isto e blip de uma secao, nao eixo
+
+
+def eixo_alto(g01, rio, limiar=LIMIAR_EIXO, trecho_km=TRECHO_EIXO):
+    """(km_ini, km_fim, reb_max) do trecho onde ancorar cavaria um canion.
+
+    Compara o talvegue do MDT (lamina) com o fundo levantado do legado, ao
+    longo do rio. Rebaixamento maior que `limiar` nao e batimetria: a calha
+    real destes rios tem ~11 m, e um pedido de 25+ m diz que o eixo corre
+    pela encosta e a secao pegou o vale errado.
+
+    O criterio e o TRECHO CONTIGUO, nao o ponto. Medido nos seis rios: os que
+    rodam bem tem no maximo blips isolados de 0,0-0,2 km um pouco acima do
+    limiar (Mirim 25,1 m numa secao; Norte 26,8 m em 200 m), enquanto os
+    quebrados tem 20,6 km (Acu R1, ate 117 m) e 24,6 km (Benedito, ate 284 m).
+    Trecho menor que `trecho_km` nao barra. Devolve None se o rio e sadio.
+    """
+    import numpy as np
+    from qc_secoes import ler_secoes
+    from batimetria_do_legado import secoes_levantadas, LEGADO
+    S = ler_secoes(g01)
+    S.sort(key=lambda d: -d["rs"])
+    rs = np.array([d["rs"] for d in S])
+    z = np.array([float(np.asarray(d["z"], float).min()) for d in S])
+    ch = np.array([float(d["len_ch"]) for d in S])
+    x = np.r_[0.0, np.cumsum(ch[:-1])]
+    L = secoes_levantadas(LEGADO, rio)
+    if L is None:
+        return None
+    o = np.argsort(-L[:, 0])
+    fundo = np.interp(x, np.interp(-L[o, 0], -rs, x), L[o, 3])
+    reb = z - fundo
+    m = reb > limiar
+    if not m.any():
+        return None
+    # trechos contiguos de m; so conta o que tiver extensao >= trecho_km
+    corta = np.flatnonzero(np.diff(m.astype(int)))
+    ini = np.r_[0, corta + 1]
+    fim = np.r_[corta, len(m) - 1]
+    ruins = [(x[i], x[f]) for i, f in zip(ini, fim)
+             if m[i] and (x[f] - x[i]) / 1000 >= trecho_km]
+    if not ruins:
+        return None
+    x0 = min(r[0] for r in ruins)
+    x1 = max(r[1] for r in ruins)
+    dentro = m & (x >= x0) & (x <= x1)
+    return float(x0 / 1000), float(x1 / 1000), float(reb[dentro].max())
+
+
 def construir(rio, pasta, limite, taxas, dx, cada):
     print(f"\n{'='*68}\n{rio}\n{'='*68}")
     g = os.path.join(pasta, os.path.basename(pasta) + ".g01")
@@ -128,8 +192,34 @@ def construir(rio, pasta, limite, taxas, dx, cada):
     ped = os.path.join("doc", f"batimetria_{os.path.basename(pasta)}.csv")
     roda(["scripts/batimetria.py", "pedir", g, "--cada", str(cada),
           "--saida", ped], mostrar=("pontos    :",))
+
+    # ---- 5. batimetria do legado -> g02, atras do porteiro de eixo alto
+    roda(["scripts/batimetria_do_legado.py", ped, "--rio", rio],
+         mostrar=("casados", "REBAIXAMENTO", "ATENCAO"))
+    g2 = os.path.join(pasta, os.path.basename(pasta) + ".g02")
+    alto = eixo_alto(g, rio)
+    if alto is None:
+        roda(["scripts/batimetria.py", "aplicar", g, "--pontos", ped,
+              "--saida", "g02"],
+             mostrar=("contradeclives", "declividade", "leito bate"))
+        roda(["scripts/projeto_rio_avulso.py", g2, "--rio-fonte", rio],
+             mostrar=("jusante   :",))
+        print(f"   batimetria aplicada -> {g2}")
+    else:
+        km0, km1, reb = alto
+        fig = os.path.join("doc", "figuras",
+                           f"eixo_alto_{os.path.basename(pasta)}.png")
+        roda(["scripts/diagnostico_eixo_alto.py", "--rios", rio,
+              "--saida", fig])
+        # determinismo: sem g02 valido, nao pode sobrar um g02 velho no lugar
+        if os.path.exists(g2):
+            os.remove(g2)
+        print(f"   EIXO ALTO de {km0:.0f} a {km1:.0f} km (rebaixamento ate "
+              f"{reb:.0f} m): g02 NAO aplicado -- refazer o eixo pelo "
+              f"talvegue do MDT. Figura: {fig}")
     return {"rio": rio, "pasta": pasta, "erros": n, "fatal": fat,
-            "taxa": taxa, "pedido": ped}
+            "taxa": taxa, "pedido": ped, "eixo_alto": alto,
+            "g02": alto is None}
 
 
 def terreno(pastas, nome="vale30"):
@@ -189,18 +279,23 @@ def main():
         if r:
             res.append(r)
 
-    # ---- 5 a 7: terreno da bacia, depois das geometrias
+    # ---- 6 a 8: terreno da bacia, depois das geometrias
     if res and not a.sem_terreno:
         thdf = terreno([r["pasta"] for r in res])
         if thdf:
             print("\n   religando o terreno em cada projeto")
             for r in res:
-                g = os.path.join(r["pasta"],
-                                 os.path.basename(r["pasta"]) + ".g01")
+                # A GEOMETRIA EM USO manda: religar com o g01 quando o rio tem
+                # g02 reescreveria `Geom File=g01` no projeto, e o plano
+                # voltaria a rodar SEM batimetria -- o mesmo defeito, calado,
+                # que ja custou uma rodada inteira (item 3 do RETOMAR).
+                base = os.path.join(r["pasta"], os.path.basename(r["pasta"]))
+                g = base + (".g02" if os.path.exists(base + ".g02")
+                            else ".g01")
                 roda(["scripts/projeto_rio_avulso.py", g, "--rio-fonte",
                       r["rio"], "--terreno", thdf], mostrar=("terreno   :",))
 
-    # ---- 8: a edge line, medida NA QUE O RAS CONSTRUIU
+    # ---- 9: a edge line, medida NA QUE O RAS CONSTRUIU
     for r in res:
         h = os.path.join(r["pasta"],
                          os.path.basename(r["pasta"]) + ".g01.hdf")
@@ -212,12 +307,20 @@ def main():
                 r["dobras"] = int(m.group(1))
 
     print(f"\n{'='*68}\nRESUMO\n{'='*68}")
-    print(f"{'rio':<16}{'pasta':<26}{'erros':>7}{'Fatal':>7}{'taxa':>8}"
-          f"{'dobras':>8}")
+    print(f"{'rio':<16}{'erros':>7}{'Fatal':>7}{'taxa':>7}{'dobras':>8}"
+          f"   batimetria")
     for r in res:
         d = r.get("dobras")
-        print(f"{r['rio']:<16}{r['pasta']:<26}{r['erros']:>7}{r['fatal']:>7}"
-              f"{r['taxa']:>8.2f}{('?' if d is None else str(d)):>8}")
+        if r.get("g02"):
+            bat = "g02 aplicado"
+        elif r.get("eixo_alto"):
+            k0, k1, reb = r["eixo_alto"]
+            bat = (f"REFAZER EIXO ({k0:.0f}-{k1:.0f} km, "
+                   f"reb ate {reb:.0f} m)")
+        else:
+            bat = "?"
+        print(f"{r['rio']:<16}{r['erros']:>7}{r['fatal']:>7}"
+              f"{r['taxa']:>7.2f}{('?' if d is None else str(d)):>8}   {bat}")
     ruins = [r for r in res if r["erros"] > a.limite]
     if ruins:
         print(f"\nacima do limite de {a.limite}: "

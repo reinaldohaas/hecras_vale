@@ -29,13 +29,20 @@ minimizar cheias.
     batimetria não pôde rebaixar deixam degraus locais).
   - Açu `iter 40  252%` — **falha**, ver "eixo alto" abaixo.
 
-- **Batimetria do legado aplicada em Mirim, Oeste, Sul, Norte, Açu.** Fluxo:
+- **UM comando faz tudo, do MDT ao g02 — usar SEMPRE ele, nunca os scripts
+  soltos** (regra do usuário: fazer um software e usá-lo, não SER o software):
 
-      .venv/Scripts/python.exe scripts/batimetria_do_legado.py doc/batimetria_<rio>.csv --rio <Rio>
-      .venv/Scripts/python.exe scripts/batimetria.py aplicar modelo/<rio>/<rio>.g01 --pontos doc/batimetria_<rio>.csv --saida g02
-      .venv/Scripts/python.exe scripts/projeto_rio_avulso.py modelo/<rio>/<rio>.g02 --rio-fonte <Rio>
+      .venv/Scripts/python.exe scripts/construir_rio.py --todos
 
-  Oeste/Sul/Norte: contradeclives → 0, saudável. Açu e Benedito: ver abaixo.
+  O `construir_rio.py` agora inclui o passo 5: preenche a batimetria do
+  legado, passa o PORTEIRO DE EIXO ALTO, aplica o g02 e reaponta o projeto.
+  O porteiro barra rio com trecho contíguo ≥ 1 km pedindo rebaixar > 25 m
+  (critério medido: sadios têm blips de 0,0–0,2 km; quebrados têm 20,6 e
+  24,6 km), gera a figura e remove g02 velho — duas rodadas dão o mesmo
+  estado. Verificado: Mirim sai `g02 aplicado` (77 casados, 117
+  contradeclives→0); Benedito sai `REFAZER EIXO (0–25 km, reb até 284 m)`
+  sem g02. O passo 8 (religar terreno) foi corrigido para reapontar ao g02
+  quando existe — antes reescrevia `Geom File=g01` calado.
 
 - **A rede MONTA e VALIDA (mas o solver não fecha ainda).**
 
@@ -81,28 +88,42 @@ O EIXO de cabeceira do Açu e do Benedito seguindo o talvegue do MDT (acumulaç�
 de fluxo), recortar as seções nesse eixo, e só então ancorar no levantamento —
 que a jusante já bate.
 
+## Segundo defeito achado depois: a FOZ do Açu sem MDT
+
+A foz do Açu tem um vão de 1500 m entre seções (…2000, 1550, **[vão]**, 50, 0)
+colado no contorno de maré. Não é espaçamento escolhido: o grid nasce regular
+(1165 seções a 150 m, mesmo `--dx` do Mirim), mas o `rio_do_relevo.py`
+descartou **109 seções "sem MDT utilizável"** — o estuário é lâmina d'água, e
+no MDT SIG-SC lâmina = 0.0 = vazio. O legado tem o estuário levantado (Açu R4:
+RS 5534→75, regular). **Conserto DENTRO do `rio_do_relevo.py`** (regra: corrigir
+no software que já é usado, não criar script ao lado): onde o MDT é
+inutilizável, cair para a seção do legado se houver uma próxima.
+
 ## O que fazer agora, nesta ordem
 
 1. **Refazer o eixo de cabeceira do Açu (R1) e do Benedito pelo talvegue do
    MDT** (acumulação de fluxo do relevo), não pela linha esquemática do legado.
-   Recortar as seções, reaplicar batimetria (a jusante já bate). É o que
-   destrava o Açu — e, com ele, a rede inteira.
-2. **Rodar a rede e fechar o balanço.** Com o Açu estável, `montar_rede.py` +
+   DENTRO da fonte de eixo que o `rio_do_relevo.py` lê — não como script
+   avulso. Aceite: o porteiro de eixo alto do `construir_rio.py` passa a dar
+   "sadio" nos dois, e o Açu isolado converge.
+2. **Foz sem MDT → seção do legado**, dentro do `rio_do_relevo.py` (ver seção
+   acima). Aceite: foz do Açu sem vão > 300 m.
+3. **Rodar a rede e fechar o balanço.** Com o Açu estável, `montar_rede.py` +
    `rodar_rios.py itajai_rede`. Vigiar a condição inicial: a rede começou com
    185 hm³ nos canais (plausível para calha funda de 174 km) e drenava o
    excesso — se sobrar erro depois de estável, é warmup/restart.
-3. **Benedito na rede** depois do eixo: ele reativa a junção Indaial (Açu passa
+4. **Benedito na rede** depois do eixo: ele reativa a junção Indaial (Açu passa
    a ter 4 reaches, como no legado).
-4. **Barragens na rede + calibração de 1983 sem a Norte.** As barragens entram
+5. **Barragens na rede + calibração de 1983 sem a Norte.** As barragens entram
    como hidrograma roteado nas cabeceiras (`reservatorio.py` → `montar()` de
    `projeto_rede.py` aceita `q_override`). Cuidado: o Canal Retificado precisa
    de nome de rio próprio (`Canal_Retif`), senão dá 1.401 erros de bankline.
-5. **Sistema de decisão / visualização.** Cenários (natural / 1983 Sul+Oeste /
+6. **Sistema de decisão / visualização.** Cenários (natural / 1983 Sul+Oeste /
    atual três) → rodar a rede → pico de cota nos pontos críticos
    (`barragens_itajai.json`: Rio do Sul, Blumenau, Itajaí, com cotas de
    alerta/emergência). Comparar RELATIVO (redução de pico) é robusto ao erro; o
    ABSOLUTO precisa do zero da régua de cada ponto (dado externo, não no repo).
-6. **Projeto JICA:** dados externos (regras de operação, estruturas) não estão
+7. **Projeto JICA:** dados externos (regras de operação, estruturas) não estão
    no repo — pedir/localizar antes.
 
 ## Estado dos scripts novos desta rodada
