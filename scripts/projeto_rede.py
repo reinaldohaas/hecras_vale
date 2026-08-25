@@ -151,7 +151,14 @@ def montar(geom, hidro=HIDRO, terreno=None, q_override=None):
            "UNET Froude Reduction=True", "UNET Froude Limit= 0.8 ",
            "UNET Froude Power= 4 ", "UNET ZTol= 0.02 ", "UNET ZSATol= 0.02 ",
            "UNET MxIter= 40 ", "UNET Theta Warmup= 1 ",
-           "Computation Interval=15SEC", "Output Interval=1HOUR",
+           # dt=5 s: com o espacamento adaptativo (ate 1000-1250 m no
+           # estuario) o pico da cheia sobre o canal de mare foi
+           # instavel a 15 s -- explosao as 65,25 h, na chegada do
+           # pico (Q oscilando a +459.578 m3/s, WSE 135 m a 2 km da
+           # foz, Out=0 em 192 h). A corrida boa de 01:23 aguentava
+           # 15 s porque tinha secoes a 150 m ali. 5 s e tambem o
+           # que o gerador do Antigravity usa, estavel.
+           "Computation Interval=5SEC", "Output Interval=1HOUR",
            "Instantaneous Interval=1HOUR", "Mapping Interval=1HOUR",
            "Run HTab=-1", "Run UNet=-1", "Run PostProcess=-1",
            "Run RASMapper=-1", "UNET D1 Cores= 0 "]
