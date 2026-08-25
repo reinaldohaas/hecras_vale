@@ -91,11 +91,11 @@ RIOS = ["Itajai_Acu", "Itajai_Mirim", "Itajai_Norte", "Itajai_Sul",
 TAXAS = [0.15, 0.10, 0.07, 0.05]     # do mais folgado ao mais apertado
 
 
-def roda(args, mostrar=()):
+def roda(args, mostrar=(), aceitar_falha=False):
     p = subprocess.run([PY] + args, cwd=RAIZ, capture_output=True, text=True,
                        encoding="utf-8", errors="replace")
     saida = (p.stdout or "") + (p.stderr or "")
-    if p.returncode != 0:
+    if p.returncode != 0 and not aceitar_falha:
         print(saida[-1500:])
         raise SystemExit(f"falhou: {' '.join(args)}")
     for l in saida.split("\n"):
@@ -162,6 +162,51 @@ def eixo_alto(g01, rio, limiar=LIMIAR_EIXO, trecho_km=TRECHO_EIXO):
     return float(x0 / 1000), float(x1 / 1000), float(reb[dentro].max())
 
 
+
+def alvos_de_reparo(g, csv_erros):
+    """RS a descartar, lidos DOS DEFEITOS MEDIDOS -- e nao de palpite.
+
+    Duas fontes, as duas do proprio HEC-RAS:
+      - as XS dos Fatal "XS intersects > N banklines" (RS no proprio erro);
+      - para cada DOBRA da edge line lida do `.g01.hdf` (a linha densificada
+        que o RAS constroi -- a licao do Mirim: medir nela, nunca no proxy),
+        a secao MAIS ESTREITA entre as 3 mais proximas do ponto da dobra.
+    """
+    import csv as _csv
+    import h5py
+    import numpy as np
+    from qc_secoes import ler_secoes
+    from conferir_edge_lines import cruzamentos
+    alvos = set()
+    if os.path.exists(csv_erros):
+        for r in _csv.DictReader(open(csv_erros, encoding="utf-8"),
+                                 delimiter=";"):
+            if "intersects >" in r.get("mensagem", ""):
+                m = re.search(r"\(([\d.]+)\)", r.get("onde", ""))
+                if m:
+                    alvos.add(round(float(m.group(1)), 2))
+    h = g + ".hdf"
+    if os.path.exists(h):
+        S = ler_secoes(g)
+        C = np.array([np.asarray(d["cut"], float).mean(0) for d in S])
+        W = np.array([float(d["sta"][-1] - d["sta"][0]) for d in S])
+        RS = np.array([d["rs"] for d in S])
+        with h5py.File(h, "r") as f:
+            cam = "/Geometry/River Edge Lines"
+            if cam + "/Polyline Info" in f:
+                info = f[cam + "/Polyline Info"][:]
+                pts = f[cam + "/Polyline Points"][:]
+                for l in info:
+                    P = pts[int(l[0]):int(l[0]) + int(l[1])]
+                    for i, _j in cruzamentos(P):
+                        pm = 0.5 * (P[i] + P[i + 1])
+                        d2 = np.hypot(C[:, 0] - pm[0], C[:, 1] - pm[1])
+                        viz = np.argsort(d2)[:3]
+                        k = int(viz[int(np.argmin(W[viz]))])
+                        alvos.add(round(float(RS[k]), 2))
+    return sorted(alvos)
+
+
 def construir(rio, pasta, limite, taxas, dx, cada):
     print(f"\n{'='*68}\n{rio}\n{'='*68}")
     g = os.path.join(pasta, os.path.basename(pasta) + ".g01")
@@ -224,16 +269,50 @@ def construir(rio, pasta, limite, taxas, dx, cada):
         if graves != 0:
             return f"{graves} GRAVES no qc_perfis ({rotulo})"
         cs = roda(["scripts/conferir_edge_lines.py", geom + ".hdf"],
-                  mostrar=("bank line", "edge line"))
+                  mostrar=("bank line", "edge line"),
+                  aceitar_falha=True)
         mt = re.search(r"TOTAL: (\d+)", cs)
         tot = int(mt.group(1)) if mt else -1
         if tot != 0:
             return f"{tot} defeito(s) de edge/bank line ({rotulo})"
         return None
 
+    # ---- LACO DE REPARO: o que eu (o assistente) vinha fazendo na mao --
+    # rodar, medir a dobra no HDF, escolher a secao, rodar de novo -- vira
+    # software: reprova por linha => le os defeitos medidos => descarta as
+    # participantes (CSV deterministico, como o rede_descartes) => reconstroi
+    # e re-mede, ate limpar ou esgotar 4 voltas.
+    rep_csv = os.path.join("doc", f"reparo_{base}.csv")
+    if os.path.exists(rep_csv):
+        os.remove(rep_csv)
+    descartadas = []
     motivo = _portoes(g, "g01")
-    if motivo:
-        return _reprova(motivo)
+    volta = 0
+    while motivo is not None and volta < 4:
+        volta += 1
+        novos = [r_ for r_ in alvos_de_reparo(
+                     g, os.path.join(pasta, base + "_erros.csv"))
+                 if r_ not in descartadas]
+        if not novos:
+            return _reprova(motivo + " -- reparo sem alvo novo")
+        descartadas += novos
+        import csv as _csv
+        with open(rep_csv, "w", newline="", encoding="utf-8") as f_:
+            w_ = _csv.writer(f_, delimiter=";")
+            w_.writerow(["rs"])
+            for x_ in descartadas:
+                w_.writerow([x_])
+        print(f"   REPARO {volta}: +{len(novos)} secao(oes) participante(s) "
+              f"de defeito de linha descartada(s) (total "
+              f"{len(descartadas)}) -> {rep_csv}")
+        roda(["scripts/rio_do_relevo.py", "--rio", rio, "--saida", pasta,
+              "--dx", str(dx), "--taxa", str(taxa), "--monotono",
+              "--excluir", rep_csv], mostrar=("reparo:", "secoes :"))
+        roda(["scripts/projeto_rio_avulso.py", g, "--rio-fonte", rio],
+             mostrar=())
+        motivo = _portoes(g, "g01")
+    if motivo is not None:
+        return _reprova(motivo + f" -- apos {volta} volta(s) de reparo")
 
     # ---- 5. batimetria do legado -> g02 (so chega aqui com g01 limpo)
     ped = os.path.join("doc", f"batimetria_{base}.csv")
@@ -380,7 +459,8 @@ def main():
         r["dobras"] = None
         if os.path.exists(h):
             m = re.search(r"TOTAL: (\d+)",
-                          roda(["scripts/conferir_edge_lines.py", h]))
+                          roda(["scripts/conferir_edge_lines.py", h],
+                               aceitar_falha=True))
             if m:
                 r["dobras"] = int(m.group(1))
 

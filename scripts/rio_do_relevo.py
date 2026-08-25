@@ -165,6 +165,10 @@ def main():
                     help="quanto a meia-largura pode variar por metro de rio")
     ap.add_argument("--monotono", action="store_true",
                     help="ajusta o talvegue por regressao isotonica")
+    ap.add_argument("--excluir", default=None,
+                    help="CSV com coluna rs: secoes que o laco de REPARO do "
+                         "construir_rio mandou descartar (participantes de "
+                         "dobra de edge line medida no HDF do RAS)")
     a = ap.parse_args()
 
     eixo = eixo_do_rio(a.rio)
@@ -250,24 +254,55 @@ def main():
             # mais proximo ate conter o eixo, sem tocar cota nenhuma. Cutline
             # que nem cruza o eixo nao vira secao.
             from shapely.geometry import LineString as _LS
-            _g = _LS([d["cut"][0], d["cut"][-1]]).intersection(eixo)
-            if _g.is_empty or _g.geom_type != "Point":
+            _A = np.asarray(d["cut"][0], float)
+            _B = np.asarray(d["cut"][-1], float)
+            _g = _LS([_A, _B]).intersection(eixo)
+            stt = np.asarray(d["sta"], float)
+            zz_ = np.asarray(d["z"], float)
+            _crz = ([] if _g.is_empty else
+                    [_g] if _g.geom_type == "Point" else
+                    [q_ for q_ in getattr(_g, "geoms", []) 
+                     if q_.geom_type == "Point"])
+            if not _crz:
                 continue
-            _sta_e = float(np.hypot(_g.x - d["cut"][0][0],
-                                    _g.y - d["cut"][0][1]))
+            _stas = sorted(float(np.hypot(q_.x - _A[0], q_.y - _A[1]))
+                           for q_ in _crz)
+            # RECORTE NO 2o CRUZAMENTO (ataque aos 17 Fatal "XS intersects >
+            # 2 banklines"): a cutline levantada de 4 km atravessa o BRACO
+            # VIZINHO do meandro -- ali ela cruza o eixo de novo, e as bank
+            # lines de la. Fica a janela em torno do cruzamento mais proximo
+            # do centro da calha levantada, aparada 30 m antes dos cruzamentos
+            # adjacentes; canal e margens deste braco ficam INTEIROS.
+            _cc = 0.5 * (float(d["lb"]) + float(d["rb"]))
+            _sta_e = min(_stas, key=lambda x_: abs(x_ - _cc))
+            _lo = max([x_ for x_ in _stas if x_ < _sta_e], default=None)
+            _hi = min([x_ for x_ in _stas if x_ > _sta_e], default=None)
+            j0_ = 0 if _lo is None else int(np.searchsorted(stt, _lo + 30.0))
+            j1_ = len(stt) if _hi is None else int(
+                np.searchsorted(stt, _hi - 30.0))
+            if j1_ - j0_ < 8:
+                continue
+            if j0_ > 0 or j1_ < len(stt):
+                frac0 = (stt[j0_] - stt[0]) / max(stt[-1] - stt[0], 1e-9)
+                frac1 = (stt[j1_ - 1] - stt[0]) / max(stt[-1] - stt[0], 1e-9)
+                _A2 = _A + frac0 * (_B - _A)
+                _B2 = _A + frac1 * (_B - _A)
+                stt = stt[j0_:j1_]
+                zz_ = zz_[j0_:j1_]
+                d = dict(d, sta=stt, z=zz_, cut=(tuple(_A2), tuple(_B2)))
             lb_, rb_ = float(d["lb"]), float(d["rb"])
-            if not (lb_ < _sta_e < rb_):
-                # o banco esticado tem de cair NUMA ESTACA EXISTENTE do
-                # perfil: Bank Sta fora do Sta/Elev derruba o preprocessador
-                # ("Right bank station not in station elevation data" nas 7
-                # prontas, e SEM bank/edge line no HDF vieram 744 Fatal em
-                # cascata). Snap direcional para a estaca real alem do eixo.
-                stt = np.asarray(d["sta"], float)
-                if _sta_e <= lb_:
-                    cand = stt[stt < _sta_e]
+            lb_ = max(lb_, float(stt[0]))
+            rb_ = min(rb_, float(stt[-1]))
+            # bancos SEMPRE em estaca existente, com FOLGA DO EIXO: snap sem
+            # folga punha o banco EM CIMA do eixo e a bank line corria 1 km
+            # colinear a centerline (10 "cruzamentos" que eram sobreposicao,
+            # km 169,2-170,1). 20 m de folga num canal de 2 km nao e nada.
+            if not (lb_ < _sta_e - 20.0 and _sta_e + 20.0 < rb_):
+                if not (lb_ < _sta_e - 20.0):
+                    cand = stt[stt < _sta_e - 20.0]
                     lb_ = float(cand.max()) if len(cand) else float(stt[0])
-                else:
-                    cand = stt[stt > _sta_e]
+                if not (_sta_e + 20.0 < rb_):
+                    cand = stt[stt > _sta_e + 20.0]
                     rb_ = float(cand.min()) if len(cand) else float(stt[-1])
             return {"s": s, "rs": round(float(L - s), 2), "pronta": True,
                     "sta": np.asarray(d["sta"], float),
@@ -376,8 +411,30 @@ def main():
         # a estaca 0 fica no offset MAIS POSITIVO e cresce descendo o offset.
         # Ter escrito ao contrario custou "XS is reversed" em 293 das 294
         # secoes, e bank line atravessando o rio em todo o trecho.
-        i_esq_calha = anda(+1, FOLGA_CALHA, persistente=True)
-        i_dir_calha = anda(-1, FOLGA_CALHA, persistente=True)
+        # ---- MARGEM PELA IMAGEM, quando a agua e visivel. Ideia do usuario:
+        # "as bank lines nao poderiam ser pegas de imagem de satelite?" -- e a
+        # imagem ja esta DENTRO do MDT: no SIG-SC a agua e o VAZIO (0.0 =
+        # nodata), co-registrada com o terreno, da mesma aquisicao. Onde ha um
+        # trecho vazio de agua perto do eixo, a MARGEM MEDIDA e a borda dele:
+        # primeiro pixel de terra de cada lado. So onde o lidar devolveu
+        # lamina (canal estreito, sem vazio) vale o criterio de subida.
+        i_esq_calha = i_dir_calha = None
+        nanm = ~np.isfinite(z)
+        if nanm.any():
+            corte = np.flatnonzero(np.diff(nanm.astype(int)))
+            ini_r = np.r_[0, corte + 1]
+            fim_r = np.r_[corte, len(z) - 1]
+            runs = [(i_, f_) for i_, f_ in zip(ini_r, fim_r)
+                    if nanm[i_] and (f_ - i_ + 1) >= 3
+                    and abs(off[(i_ + f_) // 2]) <= 100.0]
+            if runs:
+                i_, f_ = min(runs, key=lambda r_: abs(off[(r_[0] + r_[1]) // 2]))
+                if f_ + 1 < len(z) and i_ - 1 >= 0:
+                    # borda + (esquerda) e borda - (direita) do vazio d'agua
+                    i_esq_calha, i_dir_calha = f_ + 1, i_ - 1
+        if i_esq_calha is None:
+            i_esq_calha = anda(+1, FOLGA_CALHA, persistente=True)
+            i_dir_calha = anda(-1, FOLGA_CALHA, persistente=True)
         i_esq_sec = anda(+1, ALVO_SECAO)
         i_dir_sec = anda(-1, ALVO_SECAO)
 
@@ -597,6 +654,7 @@ def main():
         # Cortar no divisor NAO altera cota nenhuma: so encurta a secao. O que
         # ficou de fora nao vira cota inventada -- vira area de armazenamento,
         # se for o caso, e isso e decisao de modelagem e nao de amostragem.
+        invalida = False
         inv = s.get("z_calha")
         if inv is not None:
             i0 = int(np.argmin(np.abs(off - s["off_t"])))
@@ -608,12 +666,21 @@ def main():
                     if j < 0 or j >= len(off) or abs(off[j] - s["off_t"]) > lim:
                         break
                     if np.isfinite(z[j]) and z[j] < inv - DESCE_FORA:
-                        novo = abs(off[j - sinal] - s["off_t"])
-                        if sinal > 0:
-                            me = min(me, s["off_t"] + novo)
+                        seco = None
+                        for k in range(j - sinal, i0, -sinal):
+                            if np.isfinite(z[k]) and z[k] >= inv + EXIGE_SECO:
+                                seco = k
+                                break
+                        if seco is None:
+                            invalida = True
+                        elif sinal > 0:
+                            me = min(me, max(float(off[seco]), PASSO))
                         else:
-                            md = min(md, novo - s["off_t"])
+                            md = min(md, max(float(-off[seco]), PASSO))
                         break
+        if invalida:
+            s["sta"] = None
+            return False
         dentro = (off <= me) & (off >= -md) & np.isfinite(z)
         # A SECAO TEM DE ALCANCAR O PROPRIO RIO, dos dois lados. Onde o MDT
         # falta perto do eixo -- no Acu sao 109 secoes sem dado utilizavel, e o
@@ -638,6 +705,9 @@ def main():
         s["sta"] = np.round((o_esq - off[dentro])[ordem], 2)
         s["z"] = np.round(z[dentro][ordem], 2)
         s["zt"] = float(s["z"].min())
+        if min(float(s["z"][0]), float(s["z"][-1])) < s["zt"] + EXIGE_SECO:
+            s["sta"] = None
+            return False
         s["cut"] = (s["p"] + o_esq * s["n"], s["p"] + o_dir * s["n"])
         sta = s["sta"]
         # A CALHA TEM DE CONTER O EIXO. As margens sao medidas a partir do
@@ -821,6 +891,27 @@ def main():
     # ruido a filtrar, e batimetria levantada nao se "corrige" por regressao.
     if prontas:
         secoes = sorted(secoes + prontas, key=lambda q: q["s"])
+        existentes = [q["s"] for q in secoes if q.get("pronta")]
+        levantadas = sorted((q for q in secoes if q.get("pronta")),
+                            key=lambda q: q["s"])
+        resgate = []
+        for a_, b_ in zip(levantadas[:-1], levantadas[1:]):
+            if b_["s"] - a_["s"] <= 1600.0:
+                continue
+            for k_, (s_, p_) in enumerate(base):
+                if not (a_["s"] + 50.0 < s_ < b_["s"] - 50.0):
+                    continue
+                if any(abs(s_ - e_) < 50.0 for e_ in existentes):
+                    continue
+                d_ = adotar(k_, s_, p_)
+                if d_ is None:
+                    continue
+                resgate.append(d_)
+                existentes.append(d_["s"])
+        if resgate:
+            secoes = sorted(secoes + resgate, key=lambda q: q["s"])
+            print(f"   legado: {len(resgate)} secao(oes) intermediaria(s) "
+                  "resgatada(s) para fechar vao entre levantadas")
 
     # ---- NA ZONA ADOTADA, O PENTE DE LAMINA CAI. Entre duas secoes
     # levantadas vizinhas o MDT ainda gerava secoes de lamina (fundo ~0,0)
@@ -889,6 +980,21 @@ def main():
             print(f"   pente de lamina na zona adotada: {n_pente} secao(oes) "
                   "do MDT descartada(s) entre/junto a secoes levantadas")
         secoes = mantem
+
+    # ---- REPARO: descarta as secoes que o laco do construir_rio marcou
+    # (participantes de dobra da edge line MEDIDA no HDF do RAS -- a licao do
+    # Mirim no nivel da linha verdadeira: imposto e conferido, nao proxy).
+    if a.excluir and os.path.exists(a.excluir):
+        import csv as _csv
+        _exc = [float(r_["rs"]) for r_ in
+                _csv.DictReader(open(a.excluir, encoding="utf-8"),
+                                delimiter=";")]
+        if _exc:
+            antes_ = len(secoes)
+            secoes = [q for q in secoes
+                      if min(abs(q["rs"] - e_) for e_ in _exc) > 1.0]
+            print(f"   reparo: {antes_ - len(secoes)} secao(oes) descartada(s)"
+                  f" pela lista {a.excluir}")
 
     # ---- PONTA DEGENERADA NAO RECEBE CONTORNO. Na boca do porto sobrava uma
     # secao de 76 m de largura e 9 cm de fundo -- um respingo de borda d'agua
