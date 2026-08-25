@@ -90,6 +90,10 @@ def main():
 
     pasta = os.path.dirname(a.geom)
     nome = os.path.basename(a.geom).split(".")[0]
+    # A EXTENSAO DA GEOMETRIA MANDA. Depois de aplicar a batimetria a geometria
+    # vira `.g02`, e um plano com "Geom File=g01" roda a versao SEM leito --
+    # calado, e com os mesmos 92% de erro de volume.
+    ext = os.path.basename(a.geom).split(".")[-1]
     S = ler_secoes(a.geom)
     S.sort(key=lambda d: -d["rs"])
     t = open(a.geom, encoding="latin-1", errors="replace").read() \
@@ -121,7 +125,7 @@ def main():
           f"{decl:.5f} nos ultimos {len(S)-k} trechos")
 
     prj = [f"Proj Title={nome}", "Current Plan=p01",
-           "Default Exp/Contr=0.3,0.1", "SI Units", "Geom File=g01",
+           "Default Exp/Contr=0.3,0.1", "SI Units", f"Geom File={ext}",
            "Unsteady File=u01", "Plan File=p01",
            "Y Axis Title=Elevation", "X Axis Title(PF)=Main Channel Distance",
            "X Axis Title(XS)=Station", "BEGIN DESCRIPTION:",
@@ -137,10 +141,11 @@ def main():
     p01 = [f"Plan Title={nome}", "Program Version=7.01",
            f"Short Identifier={nome[:16]:<16}",
            "Simulation Date=01AUG2026,0000,08AUG2026,2300",
-           "Geom File=g01", "Flow File=u01", "Mixed Flow Regime",
+           f"Geom File={ext}", "Flow File=u01", "Mixed Flow Regime",
            "UNET Froude Reduction=True", "UNET Froude Limit= 0.8 ",
            "UNET Froude Power= 4 ", "UNET ZTol= 0.02 ", "UNET ZSATol= 0.02 ",
-           "UNET MxIter= 40 ", "Computation Interval=15SEC",
+           "UNET MxIter= 40 ", "UNET Theta Warmup= 1 ",
+           "Computation Interval=15SEC",
            "Output Interval=1HOUR", "Instantaneous Interval=1HOUR",
            "Mapping Interval=1HOUR", "Run HTab=-1", "Run UNet=-1",
            "Run PostProcess=-1", "Run RASMapper=-1", "UNET D1 Cores= 0 "]
@@ -148,7 +153,13 @@ def main():
 
     rs0, rs1 = S[0]["rs"], S[-1]["rs"]
     u01 = [f"Flow Title={nome}", "Program Version=7.01", "Use Restart= 0 ",
-           f"Initial RS={rio:<16.16},{rch:<16.16},{rs0:.2f},{Q[0]:.2f}",
+           # `Initial Flow Loc=`, e NAO `Initial RS=`. Escrevi a chave errada
+           # e o HEC-RAS ignorou a condicao inicial inteira, calado: o rio de
+           # 114 km partia com vazao ~zero e o solver batia nas 40 iteracoes em
+           # 6.892 dos 6.900 passos, do primeiro ao ultimo. A grafia certa esta
+           # no proprio modelo legado que roda -- `legado/Itajai_Rede_1983.u01`
+           # linha 11 -- e a RS vai em campo de 8 sem casas decimais.
+           f"Initial Flow Loc={rio:<16.16},{rch:<16.16},{rs0:<8.0f},{Q[0]:.0f}",
            "",
            f"Boundary Location={rio:<16.16},{rch:<16.16},{rs0:<8.2f},"
            f"{'':<8},{'':<16},{'':<16}",
@@ -244,7 +255,7 @@ def main():
     import xml.etree.ElementTree as ET
     ET.parse(os.path.join(pasta, f"{nome}.rasmap"))
     print("   rasmap: XML valido")
-    for e in ("prj", "p01", "u01", "g01", "rasmap"):
+    for e in ("prj", "p01", "u01", ext, "rasmap"):
         p = os.path.join(pasta, f"{nome}.{e}")
         ok = os.path.exists(p)
         print(f"   {'OK   ' if ok else 'FALTA'} {nome}.{e}"

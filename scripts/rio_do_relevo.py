@@ -72,7 +72,8 @@ JANELA = 60.0         # m para cada lado, ao medir a tangente do eixo
 MEIA_MAX = 400.0      # m; teto da meia-largura
 MEIA_MIN = 60.0       # m; piso, para a secao nunca degenerar
 FOLGA_CALHA = 1.5     # m acima do talvegue = topo da margem
-DESCE_MAX = 0.30      # m que a secao pode descer abaixo do talvegue antes de parar
+DESCE_MAX = 0.30
+DESCE_FORA = 0.30     # m abaixo do fundo da calha; abaixo disso e outro vale
 JANELA_MARGEM = 3      # secoes para cada lado, na mediana movel da margem
 ALVO_SECAO = 8.0      # m acima do talvegue = onde a secao pode parar
 TAXA_LARGURA = 0.15   # quanto a meia-largura pode variar por metro de rio
@@ -272,7 +273,10 @@ def main():
                        "d_esq": (float(off[i_esq_calha] - off[i0])
                                  if i_esq_calha is not None else np.nan),
                        "d_dir": (float(off[i0] - off[i_dir_calha])
-                                 if i_dir_calha is not None else np.nan)})
+                                 if i_dir_calha is not None else np.nan),
+                       # fundo DA CALHA, e nao da secao: e a referencia para
+                       # decidir o que esta abaixo do rio e portanto fora dele
+                       "z_calha": float(zt)})
 
     print(f"secoes : {len(secoes)}   sem MDT utilizavel: {sem_dado}   "
           f"pararam no teto de {MEIA_MAX:g} m: {no_teto}")
@@ -373,6 +377,38 @@ def main():
         novo -- com largura menor e so nas secoes culpadas.
         """
         z = s["z_perfil"]
+        # A SECAO PARA NO DIVISOR, E NAO NA LARGURA PEDIDA.
+        #
+        # Andando do talvegue para fora, o terreno sobe ate um divisor e depois
+        # DESCE -- para o vale vizinho, para uma cava, para o proprio rio noutro
+        # meandro. O que esta depois do divisor nao troca agua com esta secao
+        # nesta cota, e o HEC-RAS nao sabe disso: ele ve um ponto baixo dentro
+        # da secao, enche primeiro, e o solver passa a procurar nivel numa
+        # secao com dois fundos. Medido no Mirim: 309 das 765 secoes tinham o
+        # ponto mais baixo FORA da calha, uma delas 27,43 m abaixo do fundo --
+        # e a rodada batia nas 40 iteracoes em todo instante e terminava com
+        # "Solution Solver Failed" e 92,38% de erro de volume.
+        #
+        # Cortar no divisor NAO altera cota nenhuma: so encurta a secao. O que
+        # ficou de fora nao vira cota inventada -- vira area de armazenamento,
+        # se for o caso, e isso e decisao de modelagem e nao de amostragem.
+        inv = s.get("z_calha")
+        if inv is not None:
+            i0 = int(np.argmin(np.abs(off - s["off_t"])))
+            for sinal in (+1, -1):
+                lim = me if sinal > 0 else md
+                j = i0
+                while True:
+                    j += sinal
+                    if j < 0 or j >= len(off) or abs(off[j] - s["off_t"]) > lim:
+                        break
+                    if np.isfinite(z[j]) and z[j] < inv - DESCE_FORA:
+                        novo = abs(off[j - sinal] - s["off_t"])
+                        if sinal > 0:
+                            me = min(me, s["off_t"] + novo)
+                        else:
+                            md = min(md, novo - s["off_t"])
+                        break
         dentro = (off <= me) & (off >= -md) & np.isfinite(z)
         # A SECAO TEM DE ALCANCAR O PROPRIO RIO, dos dois lados. Onde o MDT
         # falta perto do eixo -- no Acu sao 109 secoes sem dado utilizavel, e o
