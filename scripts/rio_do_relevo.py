@@ -43,12 +43,10 @@ O QUE E MEDIDO, E COMO
               quantas secoes -- ali a secao 1D nao contem a cheia, e isso
               pede armazenamento ou 2D.
 
-  espacamento  ADAPTATIVO pela variabilidade MEDIDA (era 150 m fixos, escolha
-              sem justificativa hidraulica): candidatas a cada DX_MIN, e a
-              secao nasce a DX_MIN onde largura/talvegue mudam rapido, a DX
-              (500 m) no comum, a DX_MAX (1000 m) no uniforme -- como o
-              legado, que roda com ~1000-1500 m. Secao frequente demais no
-              meandro e FONTE de dobra de edge line e de custo de solver.
+  espacamento  ADAPTATIVO pela variabilidade MEDIDA: candidatas a cada DX_MIN,
+              e a secao nasce a DX_MIN onde largura/talvegue mudam rapido, a
+              DX no comum, a DX_MAX (1000 m) no uniforme. O Açu mostrou que
+              500 m de base abre vaos graves depois dos filtros; 150 m fica.
 
   Manning     `N_CALHA` e `N_PLANICIE`, constantes e declaradas. Nao ha dado de
               rugosidade nesta bacia; fingir que ha seria o mesmo erro.
@@ -76,13 +74,10 @@ from mdt_sigsc import MosaicoSigsc, tiles_do_dominio   # noqa: E402
 from ras_io import escrever                            # noqa: E402
 
 EIXOS = "eixos_do_relevo.geojson"
-DX = 500.0            # m; espacamento-BASE entre secoes. Era 150, escolha
-                      # minha sem justificativa hidraulica -- o legado roda
-                      # com ~1000-1500 m, e secao frequente demais no meandro
-                      # e FONTE de dobra de edge line (mais pontas ligadas em
-                      # angulo fechado) e de custo de solver. O espacamento e
+DX = 150.0            # m; espacamento-BASE entre secoes. O espacamento e
                       # ADAPTATIVO: DX_MIN onde a largura/talvegue medidos
-                      # mudam rapido, DX_MAX onde e uniforme.
+                      # mudam rapido, DX_MAX onde e uniforme. Testado no Açu:
+                      # 500 m deixava vaos graves depois dos filtros finais.
 DX_MIN = 250.0        # m; passo das CANDIDATAS e piso do espacamento
 DX_MAX = 1000.0       # m; teto do espacamento no trecho uniforme
 PASSO = 4.0           # m entre pontos amostrados na cutline
@@ -542,6 +537,7 @@ def main():
     # inventado, so aplicado ANTES, na escolha de onde a secao nasce.
     n_cand = len(secoes)
     ordem_c = sorted(secoes, key=lambda w: w["s"])
+    todos_cand = list(ordem_c)   # para tapar vaos reabertos pelas podas
     largo = []
     for q in ordem_c:
         nm, nd = q.get("need_me", np.nan), q.get("need_md", np.nan)
@@ -1038,12 +1034,14 @@ def main():
     # ---- REPARO: descarta as secoes que o laco do construir_rio marcou
     # (participantes de dobra da edge line MEDIDA no HDF do RAS -- a licao do
     # Mirim no nivel da linha verdadeira: imposto e conferido, nao proxy).
+    exc_rs = []
     if a.excluir and os.path.exists(a.excluir):
         import csv as _csv
         _exc = [float(r_["rs"]) for r_ in
                 _csv.DictReader(open(a.excluir, encoding="utf-8"),
                                 delimiter=";")]
         if _exc:
+            exc_rs = _exc
             antes_ = len(secoes)
             secoes = [q for q in secoes
                       if min(abs(q["rs"] - e_) for e_ in _exc) > 1.0]
@@ -1068,6 +1066,49 @@ def main():
             print(f"   ponta de {lado_} degenerada descartada: RS "
                   f"{s_['rs']:.1f} ({_ext(s_):.0f} m de largura, vizinhas "
                   f"{med:.0f} m)")
+
+    # ---- VAO REABERTO PELAS PODAS E TAPADO DE VOLTA. A selecao respeita
+    # GAP_MAX, mas o pente, a consistencia de largura, a ponta degenerada e o
+    # --excluir removem secoes DEPOIS dela e reabriam vaos de 1750-2000 m --
+    # os 7 GRAVES que sobraram na rodada do usuario. Aqui, para cada par de
+    # vizinhas alem de GAP_MAX, volta a melhor candidata MEDIDA de dentro do
+    # vao (viavel de preferencia; nunca uma que o reparo mandou excluir),
+    # montada na hora, ate nenhum vao exceder.
+    n_tapa = 0
+    mudou = True
+    while mudou:
+        mudou = False
+        secoes.sort(key=lambda q: q["s"])
+        for i in range(len(secoes) - 1):
+            s0, s1 = secoes[i]["s"], secoes[i + 1]["s"]
+            if s1 - s0 <= GAP_MAX:
+                continue
+            usados = {round(q["rs"], 2) for q in secoes}
+            cand = [q for q in todos_cand
+                    if s0 + 1.0 < q["s"] < s1 - 1.0
+                    and round(q["rs"], 2) not in usados
+                    and not any(abs(q["rs"] - e_) <= 1.0 for e_ in exc_rs)]
+            if not cand:
+                continue
+            meio = 0.5 * (s0 + s1)
+            cand.sort(key=lambda q: (0 if _viavel(q) else 1,
+                                     abs(q["s"] - meio)))
+            posto = None
+            for q in cand:
+                montar(q, q["me"], q["md"])
+                if q.get("sta") is not None:
+                    posto = q
+                    break
+            if posto is None:
+                continue
+            secoes.append(posto)
+            n_tapa += 1
+            mudou = True
+            break
+    if n_tapa:
+        secoes.sort(key=lambda q: q["s"])
+        print(f"   vaos tapados: {n_tapa} secao(oes) reinstalada(s) para "
+              f"nenhum vao passar de {GAP_MAX:.0f} m")
 
     # ---- escreve
     os.makedirs(a.saida, exist_ok=True)

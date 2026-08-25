@@ -104,6 +104,19 @@ O conserto está NO PIPELINE, medido nos seis rios:
   maré) cai. Foz do Açu: 8 últimas seções levantadas, fundo −10,1→−10,8,
   4,2–4,4 km de largura.
 
+## Estado 25/08 (tarde): Açu aprovável, contrato calibrado pela referência
+
+Rodada do usuário 14:27 com o gerador redesenhado (500 m adaptativo, subida
+20 m): **222 seções, 0 pontas n'água, GRAVES 7 (só vãos), bank lines 0/0,
+41 dobras de edge**. Referência (legado 1983, mesma régua): 348 dobras, 556
+bank×eixo, 129 Fatal, 12 GRAVES — e roda. O aviso do Mapper sobre edge lines
+é da superfície de MAPA, não do solver; a referência o exibe 8× pior.
+
+Decisões do usuário: portões DUROS = GRAVES 0 + bank 0/0; dobras/Fatal são
+MACIOS (aceitos ≤ referência/5 = 70/26, relatados no veredito). Os 7 vãos
+eram podas reabrindo espaçamento depois da seleção — o gerador agora TAPA
+vãos > 1400 m reinstalando a melhor candidata medida. Seguir para a REDE.
+
 ## O que fazer agora, nesta ordem
 
 1. **Rodar o pipeline inteiro** (`construir_rio.py --todos`) — o usuário roda

@@ -258,24 +258,44 @@ def construir(rio, pasta, limite, taxas, dx, cada):
                 "taxa": taxa, "status": "REPROVADO: " + motivo}
 
     def _portoes(geom, rotulo):
-        """0 Fatal, 0 GRAVES e TOTAL 0 nas linhas -- ou o motivo da reprova."""
+        """Portoes RECALIBRADOS PELA REFERENCIA (decisao do usuario, apos
+        medir o legado 1983 na mesma regua: 348 dobras de edge, 556 bank x
+        eixo, 129 Fatal, 12 GRAVES -- e ele RODA e serviu por decadas).
+
+        DUROS (reprovam): GRAVES do qc_perfis = 0; bank lines com 0
+        auto-interseccao e 0 cruzamento do eixo -- itens FISICOS, que
+        adulteram a hidraulica.
+
+        MACIOS (aceitos com relato): dobras de edge <= 70 (ref/5) e Fatal do
+        validador <= 26 (ref/5) -- afetam a superficie de interpolacao do
+        MAPA (o aviso do Mapper), nao o solver. Devolve (motivo|None, nota).
+        """
         n_, fat_, _ = erros_de(roda(["scripts/ler_erros_geometria.py", geom]))
         print(f"   [{rotulo}] validador: {n_} mensagens, {fat_} Fatal")
-        if fat_:
-            return f"{fat_} Fatal no validador ({rotulo})"
         qs = roda(["scripts/qc_perfis.py", geom], mostrar=("GRAVE",))
         mq = re.search(r"GRAVES (\d+)", qs)
         graves = int(mq.group(1)) if mq else -1
         if graves != 0:
-            return f"{graves} GRAVES no qc_perfis ({rotulo})"
+            return f"{graves} GRAVES no qc_perfis ({rotulo})", ""
         cs = roda(["scripts/conferir_edge_lines.py", geom + ".hdf"],
                   mostrar=("bank line", "edge line"),
                   aceitar_falha=True)
-        mt = re.search(r"TOTAL: (\d+)", cs)
-        tot = int(mt.group(1)) if mt else -1
-        if tot != 0:
-            return f"{tot} defeito(s) de edge/bank line ({rotulo})"
-        return None
+        b_auto = sum(int(x) for x in
+                     re.findall(r"(\d+) auto-interseccao", cs))
+        b_eixo = sum(int(x) for x in
+                     re.findall(r"(\d+) cruzamento\(s\) do eixo", cs))
+        dobras = sum(int(x) for x in re.findall(
+            r"edge line \d+:\s+\d+ vertices\s+(\d+) cruzamento", cs))
+        if b_auto or b_eixo:
+            return (f"bank lines sujas (auto {b_auto}, eixo {b_eixo}) "
+                    f"({rotulo})"), ""
+        if dobras > 70:
+            return f"{dobras} dobras de edge > ref/5=70 ({rotulo})", ""
+        if fat_ > 26:
+            return f"{fat_} Fatal no validador > ref/5=26 ({rotulo})", ""
+        nota = (f"{dobras} dobras e {fat_} Fatal aceitos "
+                f"(<= ref/5; referencia 348/129)")
+        return None, nota
 
     # ---- LACO DE REPARO: o que eu (o assistente) vinha fazendo na mao --
     # rodar, medir a dobra no HDF, escolher a secao, rodar de novo -- vira
@@ -286,7 +306,7 @@ def construir(rio, pasta, limite, taxas, dx, cada):
     if os.path.exists(rep_csv):
         os.remove(rep_csv)
     descartadas = []
-    motivo = _portoes(g, "g01")
+    motivo, nota = _portoes(g, "g01")
     volta = 0
     while motivo is not None and volta < 4:
         volta += 1
@@ -310,7 +330,7 @@ def construir(rio, pasta, limite, taxas, dx, cada):
               "--excluir", rep_csv], mostrar=("reparo:", "secoes :"))
         roda(["scripts/projeto_rio_avulso.py", g, "--rio-fonte", rio],
              mostrar=())
-        motivo = _portoes(g, "g01")
+        motivo, nota = _portoes(g, "g01")
     if motivo is not None:
         return _reprova(motivo + f" -- apos {volta} volta(s) de reparo")
 
@@ -336,13 +356,13 @@ def construir(rio, pasta, limite, taxas, dx, cada):
          mostrar=("jusante   :",))
     if os.path.exists(g2 + ".hdf"):
         os.remove(g2 + ".hdf")        # item 3 do contrato: stale nao prova
-    motivo = _portoes(g2, "g02")
+    motivo, nota = _portoes(g2, "g02")
     if motivo:
         return _reprova(motivo)
-    print("   APROVADO: g02 com 0 Fatal, 0 GRAVES e 0 defeitos de linha")
+    print(f"   APROVADO: g02 -- GRAVES 0, bank 0/0; {nota}")
     return {"rio": rio, "pasta": pasta, "erros": n, "fatal": fat,
             "taxa": taxa, "pedido": ped, "eixo_alto": alto,
-            "status": "APROVADO g02"}
+            "status": f"APROVADO g02 ({nota})"}
 
 
 def terreno(pastas, nome="vale30"):
@@ -416,7 +436,7 @@ def main():
                     help="mensagens do validador aceitas antes de apertar")
     ap.add_argument("--taxa", type=float, default=None,
                     help="fixa a taxa em vez de deixar o laco procurar")
-    ap.add_argument("--dx", type=float, default=500.0,
+    ap.add_argument("--dx", type=float, default=150.0,
                     help="espacamento-base; o gerador adapta entre 250 e 1000 m")
     ap.add_argument("--cada", type=float, default=2000.0)
     ap.add_argument("--sem-terreno", action="store_true",
