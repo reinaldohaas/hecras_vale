@@ -62,7 +62,9 @@ def qc(caminho, folga=4.0, vao=800.0):
                                f"{st[-1]:.0f})"))
         if len(st) > 500:
             graves.append((rs, f"{len(st)} pontos (limite 500)"))
-        r2 = round(rs, 2)
+        # a chave leva rio e reach: TODO tributario termina em RS 75 na foz,
+        # e uma chave so por RS acusava "repetida" entre rios diferentes
+        r2 = (d.get("rio"), d.get("reach"), round(rs, 2))
         if r2 in rs_vistos:
             graves.append((rs, "RS repetida"))
         rs_vistos[r2] = True

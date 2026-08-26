@@ -17,7 +17,7 @@ Initial Flow Loc=Itajai_Sul      ,R1              ,87266.95,5
 Initial Flow Loc=Itajai_Mirim    ,R1              ,158948.4,5
 Initial Flow Loc=Benedito        ,R1              ,29016.24,4
 Initial Flow Loc=Benedito        ,R2              ,10377.74,4
-Initial Flow Loc=Cedros          ,R1              ,27556.84,4
+Initial Flow Loc=Cedros          ,R1              ,30106.84,4
 Initial Flow Loc=Trombudo        ,R1              ,40375.35,4
 Initial Flow Loc=Iraputa         ,R1              ,47435.5 ,4
 Initial Flow Loc=Taio            ,R1              ,26008.52,4
@@ -174,7 +174,7 @@ Fixed Start Date/Time=01AUG2026,0000
 Is Critical Boundary=False
 Critical Boundary Flow=
 
-Boundary Location=Cedros          ,R1              ,27556.84,        ,                ,                
+Boundary Location=Cedros          ,R1              ,30106.84,        ,                ,                
 Interval=1HOUR
 Flow Hydrograph= 192 
     4.00    4.00    4.00    4.00    4.00    4.00    4.00    4.00    4.00    4.00
@@ -522,7 +522,7 @@ Use DSS=False
 Use Fixed Start Time=True
 Fixed Start Date/Time=01AUG2026,0000
 
-Boundary Location=Cedros          ,R1              ,27406.84,155.83  ,                ,                
+Boundary Location=Cedros          ,R1              ,29956.84,155.83  ,                ,                
 Interval=1HOUR
 Uniform Lateral Inflow Hydrograph= 192 
     4.39    4.39    4.39    4.42    4.48    4.60    4.79    5.10    5.54    6.13
@@ -606,7 +606,7 @@ Use DSS=False
 Use Fixed Start Time=True
 Fixed Start Date/Time=01AUG2026,0000
 
-Boundary Location=Taio            ,R1              ,25708.52,567.06  ,                ,                
+Boundary Location=Taio            ,R1              ,26008.52,567.06  ,                ,                
 Interval=1HOUR
 Uniform Lateral Inflow Hydrograph= 192 
     3.37    3.37    3.38    3.39    3.44    3.53    3.68    3.92    4.25    4.71

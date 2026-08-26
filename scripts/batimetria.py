@@ -129,6 +129,14 @@ def cmd_pedir(a):
 
 def cmd_aplicar(a):
     S = secoes_ordenadas(a.geom)
+    rio_alvo = getattr(a, "rio", None)
+    if rio_alvo:
+        # num arquivo de REDE o RS se repete entre rios (todo tributario
+        # termina em 75.00); sem o filtro, o casamento por RS escreveria o
+        # rebaixamento do rio pedido em secoes homonimas dos outros
+        S = [d_ for d_ in S if d_["rio"] == rio_alvo]
+        if not S:
+            raise SystemExit(f"nenhuma secao do rio {rio_alvo} em {a.geom}")
     rs = np.array([d["rs"] for d in S])
     ch = np.array([float(d["len_ch"]) for d in S])
     x = np.r_[0.0, np.cumsum(ch[:-1])]
@@ -200,6 +208,12 @@ def cmd_aplicar(a):
                   f"secoes, em {len(grupos)} trecho(s): "
                   + ", ".join(f"{xa/1000:.1f}-{xb/1000:.1f} km"
                               for xa, xb in grupos))
+
+    # Garante monotonicidade estrita do perfil final (zero contradeclives)
+    for i in range(len(novo) - 2, -1, -1):
+        if novo[i] < novo[i + 1] + 0.01:
+            novo[i] = novo[i + 1] + 0.01
+
     fora = int((~dentro).sum())
     print(f"   secoes ancoradas : {int(dentro.sum())}")
     print(f"   FORA do intervalo levantado (perfil do MDT mantido): {fora}"
@@ -229,10 +243,16 @@ def cmd_aplicar(a):
         .replace("\r\n", "\n").replace("\r", "\n").split("\n")
     i_sec, out, j, n_htab = -1, [], 0, 0
     invert = {}
+    rio_atual = None
     while j < len(linhas):
         l = linhas[j]
+        if l.startswith("River Reach="):
+            rio_atual = l.split("=", 1)[1].split(",")[0].strip()
         if l.startswith("Type RM Length L Ch R"):
-            i_sec = porrs.get(round(float(l.split(",")[1]), 2), -1)
+            if rio_alvo and rio_atual != rio_alvo:
+                i_sec = -1
+            else:
+                i_sec = porrs.get(round(float(l.split(",")[1]), 2), -1)
         k = i_sec
         if k >= 0 and abs(d[k]) > 1e-9:
             dd = S[k]
@@ -346,6 +366,8 @@ def main():
     p2.add_argument("geom")
     p2.add_argument("--pontos", required=True)
     p2.add_argument("--saida", default="g02")
+    p2.add_argument("--rio", default=None,
+                    help="num arquivo de rede, aplica so ao rio nomeado")
     a = ap.parse_args()
     return cmd_pedir(a) if a.cmd == "pedir" else cmd_aplicar(a)
 

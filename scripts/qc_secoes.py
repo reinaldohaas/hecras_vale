@@ -88,6 +88,11 @@ def ler_secoes(g01):
             j = i + 1
             while j < len(linhas) and not linhas[j].startswith("Type RM Length"):
                 s = linhas[j]
+                if s.startswith("River Reach="):
+                    # cabecalho do PROXIMO reach: devolve ao laco de fora,
+                    # senao o rio/reach nunca atualiza e toda secao sai
+                    # atribuida ao primeiro rio do arquivo
+                    break
                 if s.startswith("#Sta/Elev"):
                     v = _bloco(linhas, j, 8)
                     d["sta"] = np.array(v[0::2]); d["z"] = np.array(v[1::2])

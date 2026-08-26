@@ -284,9 +284,11 @@ def main(argv):
         Lg = round(float(np.hypot(*(nB - nA))), 2)
         if len(ns) > 1 and abs(ns[-1] - Lg) < 0.5 and Lg > ns[-2] + TOL:
             ns[-1] = Lg
+        # a comparacao e no VALOR JA ARREDONDADO a 2 casas (o formato do
+        # arquivo): duas estacas a 0,006 m viram duplicata depois do %8.2f
         keep = [0]
         for k in range(1, len(ns)):
-            if ns[k] > ns[keep[-1]] + TOL:
+            if round(ns[k], 2) > round(ns[keep[-1]], 2):
                 keep.append(k)
         ns, nz = ns[keep], nz[keep]
         tirado.append(L - (s1 - s0))

@@ -438,12 +438,7 @@
     </Layer>
   </Results>
   <MapLayers />
-  <Terrains Checked="True" Expanded="True">
-    <Layer Name="Terreno" Type="TerrainLayer" Checked="True" Filename=".\Terrain\taha_ai_Terreno.hdf">
-      <ResampleMethod>near</ResampleMethod>
-      <Surface On="True" />
-    </Layer>
-  </Terrains>
+  <Terrains />
   <CurrentView>
     <MaxX>734392.51125524</MaxX>
     <MinX>728527.744682291</MinX>
