@@ -132,13 +132,20 @@ def main(argv):
     inserir = {}          # indice da secao de MONTANTE -> [blocos]
     previsto = 0
     for rio, reach, r0, r1 in trechos:
+        # so secoes de verdade (tipo 1); estruturas (barragem = tipo 5)
+        # nem entram no par nem podem ficar ENTRE um par interpolado
         idx = [i for i, d in enumerate(S)
                if d["rio"] == rio and d["reach"] == reach
-               and r0 <= d["rs"] <= r1]
+               and r0 <= d["rs"] <= r1 and d["tipo"] == "1"]
+        estruturas = [d["rs"] for d in S
+                      if d["rio"] == rio and d["reach"] == reach
+                      and d["tipo"] != "1"]
         idx.sort(key=lambda i: -S[i]["rs"])
         n_ins = 0
         for a, b in zip(idx, idx[1:]):
             A, B = S[a], S[b]
+            if any(B["rs"] < rs_e < A["rs"] for rs_e in estruturas):
+                continue
             zA = float(np.asarray(A["z"], float).min())
             zB = float(np.asarray(B["z"], float).min())
             salto = zA - zB
@@ -153,7 +160,11 @@ def main(argv):
                 sta, z, lb, rb = misturar(A, B, w)
                 rs_k = A["rs"] - k * comp
                 blocos.append((rs_k, comp, sta, z, lb, rb))
-            inserir[a] = blocos
+            # chave por (rio, reach, RS): o indice de ler_secoes NAO
+            # acompanha o arquivo quando ha estruturas (sem Sta/Elev
+            # elas nem entram na lista) -- foi a dessincronia que
+            # reescreveu o cabecalho da barragem
+            inserir[(rio, reach, round(A["rs"], 2))] = blocos
             n_ins += n
         print(f"   {rio} {reach} RS {r0:.0f}-{r1:.0f}: {len(idx)} secoes, "
               f"+{n_ins} interpoladas")
@@ -166,11 +177,16 @@ def main(argv):
     linhas = open(entrada, encoding="latin-1", errors="replace").read() \
         .replace("\r\n", "\n").replace("\r", "\n").split("\n")
     # mann da secao corrente para herdar
-    saida, j, i_sec = [], 0, -1
+    saida, j = [], 0
+    rio_c = reach_c = None
     mann_atual = (0.06, 0.045, 0.06)
     pendente = None
     while j < len(linhas):
         l = linhas[j]
+        if l.startswith("River Reach="):
+            p = l.split("=", 1)[1].split(",")
+            rio_c = p[0].strip()
+            reach_c = p[1].strip() if len(p) > 1 else ""
         if l.startswith("Type RM Length L Ch R"):
             # antes de abrir a proxima secao, descarrega interpoladas
             if pendente is not None:
@@ -178,11 +194,14 @@ def main(argv):
                     saida += bloco_secao(rs_k, comp, sta, z, lb, rb,
                                          mann_atual) + [""]
                 pendente = None
-            i_sec += 1
-            if i_sec in inserir:
-                pendente = inserir[i_sec]
+            p = l.split("=", 1)[1].split(",")
+            try:
+                chave = (rio_c, reach_c, round(float(p[1]), 2))
+            except ValueError:
+                chave = None
+            if chave in inserir and p[0].strip() == "1":
+                pendente = inserir.pop(chave)
                 # encurta os comprimentos da secao de montante
-                p = l.split("=", 1)[1].split(",")
                 comp = pendente[0][1]
                 saida.append("Type RM Length L Ch R = 1 ,%s,%g,%g,%g"
                              % (p[1].strip(), comp, comp, comp))
@@ -213,6 +232,14 @@ def main(argv):
     escrever(novo, "\n".join(saida))
 
     print(f"\nCONFERENCIA (relendo o arquivo gravado)")
+    if inserir:
+        print(f"   AVISO: {len(inserir)} chaves nao encontradas no "
+              f"arquivo: {list(inserir)[:3]}")
+    t_novo = open(novo, encoding="latin-1", errors="replace").read()
+    t_vel = open(entrada, encoding="latin-1", errors="replace").read()
+    n5v = t_vel.count("Type RM Length L Ch R = 5")
+    n5n = t_novo.count("Type RM Length L Ch R = 5")
+    print(f"   estruturas (Type 5): {n5v} -> {n5n}   (nao pode mudar)")
     B2 = ler_secoes(novo)
     print(f"   secoes: {len(S)} -> {len(B2)}   "
           f"(previsto {len(S) + previsto})")

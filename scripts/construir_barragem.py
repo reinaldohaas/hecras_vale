@@ -82,27 +82,31 @@ def main(argv):
     f0, f1 = ct - fenda / 2, ct + fenda / 2
     dist = (monte["rs"] - rs) * 0.9              # m ate a secao de montante
 
-    perfil = [(s0, topo), (v0 - 0.01, topo), (v0, crista),
-              (f0 - 0.01, crista), (f0, leito), (f1, leito),
-              (f1 + 0.01, crista), (v1, crista), (v1 + 0.01, topo),
+    # degrau vertical = estacao repetida, como no BaldEagle.g01 oficial
+    perfil = [(s0, topo), (v0, topo), (v0, crista),
+              (f0, crista), (f0, leito), (f1, leito),
+              (f1, crista), (v1, crista), (v1, topo),
               (s1, topo)]
     print(f"{nome}: {rio} {reach} RS {rs:.0f}")
     print(f"   entre RS {monte['rs']:.1f} e {jusante['rs']:.1f}")
     print(f"   leito {leito:.2f}  fenda {fenda:.2f} m  vertedouro "
           f"{crista:.2f} m x {v1-v0:.0f} m  topo {topo:.2f} m")
 
-    bloco = ["Type RM Length L Ch R = 3 ,%s,0,0,0" % (f"{rs:.0f}"),
+    # ordem e grafia copiadas do BaldEagle.g01 (exemplo oficial HEC):
+    # Type 5, comprimentos em branco, SE antes da linha de parametros,
+    # cabecalho "IW Dist,..." SEM '=' e valores na linha seguinte
+    bloco = ["Type RM Length L Ch R = 5 ,%-8s,,," % (f"{rs:.0f}"),
              "BEGIN DESCRIPTION:",
              nome + " -- JICA 2011 Anexo A",
              "END DESCRIPTION:",
-             "IW Pilot Flow= 0 ",
-             "IW Dist,WD,Coef,Skew,MaxSub,Min El,Is Ogee,SpillHt,DesHd=",
-             "%g,%g,%g,,0.95,,0,," % (max(dist, 10.0), 10.0, coef),
+             "IW Pilot Flow=0",
              "#Inline Weir SE= %d " % len(perfil)]
     v = []
     for a, b in perfil:
         v += [a, b]
     bloco += _col(v, 8, 2)
+    bloco += ["IW Dist,WD,Coef,Skew,MaxSub,Min_El,Is_Ogee,SpillHt,DesHd",
+              "%g,%g,%g,0,0.95,, 0 ,,,," % (max(dist, 10.0), 10.0, coef)]
 
     linhas = open(entrada, encoding="latin-1", errors="replace").read() \
         .replace("\r\n", "\n").replace("\r", "\n").split("\n")

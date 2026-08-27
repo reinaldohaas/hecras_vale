@@ -113,6 +113,24 @@ def main(argv):
                 if float(m.group(3)) > corte else m.group(0))
     t = re.sub(r"Initial Flow Loc=(%s\s*),(%s\s*),([\d.]+)\s*,(.*)"
                % (re.escape(rio), re.escape(rch)), ifl, t)
+
+    # o RAS PROIBE lateral comecando na secao de topo do reach: lateral
+    # movida para o topo desce para a SEGUNDA secao
+    segundo = sorted((s["rs"] for s in resto), reverse=True)[1]
+    seg_txt = ("%.2f" % segundo).rstrip("0").rstrip(".")
+    partes = re.split(r"(?=^Boundary Location=)", t, flags=re.M)
+    for k, b in enumerate(partes):
+        if ("Uniform Lateral Inflow" in b
+                and re.match(r"Boundary Location=%s\s*,%s\s*,%s\s*,"
+                             % (re.escape(rio), re.escape(rch),
+                                re.escape(rs_txt)), b)):
+            partes[k] = b.replace(
+                b.split("\n")[0],
+                re.sub(r"^(Boundary Location=[^,]+,[^,]+,)[^,]+"
+                       % (), r"\g<1>%-8s" % seg_txt,
+                       b.split("\n")[0]), 1)
+            print(f"   lateral no topo movida para RS {seg_txt}")
+    t = "".join(partes)
     escrever(u01, t)
     print(f"   u01: contorno e inicial de {rio} movidos para RS {rs_txt}"
           f"   (backup .antes_da_amputacao)")

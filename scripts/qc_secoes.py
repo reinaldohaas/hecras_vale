@@ -82,8 +82,10 @@ def ler_secoes(g01):
             reach = p[1].strip() if len(p) > 1 else ""
         elif l.startswith("Type RM Length L Ch R"):
             p = [x.strip() for x in l.split("=", 1)[1].split(",")]
+            # estruturas (Type 5 = barragem inline) tem comprimentos
+            # vazios: ",,," -- tolerar
             d = {"rio": rio, "reach": reach, "tipo": p[0], "rs": float(p[1]),
-                 "len_ch": float(p[3]) if len(p) > 3 else np.nan,
+                 "len_ch": float(p[3]) if len(p) > 3 and p[3] else np.nan,
                  "lb": None, "rb": None}
             j = i + 1
             while j < len(linhas) and not linhas[j].startswith("Type RM Length"):

@@ -75,6 +75,19 @@ FORMA_DOADA = {
     "Rio_do_Testo": "83660000_Benedito_Novo_vazao.csv",
     "Itajai_Acu":   "83800002_Blumenau_vazao.csv",
 }
+
+# fracao do total do sistema que entra pela CABECEIRA do tronco principal
+# = area de drenagem na estacao / area na foz (ANA). Repartir por picos
+# sinteticos sub-alimentava as cabeceiras: Taio simulava 23 m3/s onde a
+# regua marcou 922 (medido em 27/08, rodada de 212 h). O resto do sistema
+# segue nos outros contornos na proporcao dos picos sinteticos.
+FRACAO_TOPO = {
+    "Itajai_Oeste":   1570.0 / 2300.0,   # Taio no topo do dominio
+    "Itajai_Sul":      434.0 / 1990.0,   # Saltinho perto do topo
+    "Itajai_Mirim":   1240.0 / 1676.0,   # topo amputado ~Brusque
+    "Rio_Benedito":    717.0 / 1064.0,   # topo amputado ~Benedito Novo
+    "Rio_dos_Cedros":            1.00,   # topo amputado ~Arrozeira (=foz)
+}
 MARE_MEDIA, MARE_AMP, MARE_T = 0.30, 0.50, 12.42
 
 
@@ -154,11 +167,15 @@ def main(argv):
             rio_sistema[r] = s
 
     soma_sist = {}
+    pico_topo = {}
     for i in info:
         if i and i["tipo"] != "Stage Hydrograph" \
                 and i["rio"] in rio_sistema:
             s = rio_sistema[i["rio"]]
             soma_sist[s] = soma_sist.get(s, 0.0) + i["pico"]
+            if i["tipo"] == "Flow Hydrograph" \
+                    and i["rio"] == SISTEMAS[s][0][0]:
+                pico_topo[s] = pico_topo.get(s, 0.0) + i["pico"]
 
     obs = {s: serie_obs(pasta, arq) * razao
            for s, (rios, arq, razao) in SISTEMAS.items()}
@@ -183,7 +200,16 @@ def main(argv):
         else:
             if rio in rio_sistema:
                 s = rio_sistema[rio]
-                fr = i["pico"] / max(soma_sist[s], 1e-9)
+                f = FRACAO_TOPO.get(SISTEMAS[s][0][0])
+                topo = (tipo == "Flow Hydrograph"
+                        and rio == SISTEMAS[s][0][0])
+                if f is None:
+                    fr = i["pico"] / max(soma_sist[s], 1e-9)
+                elif topo:
+                    fr = f
+                else:
+                    fr = (1 - f) * i["pico"] / max(
+                        soma_sist[s] - pico_topo.get(s, 0.0), 1e-9)
                 serie = obs[s] * fr
             elif rio in formas:
                 f = formas[rio]
