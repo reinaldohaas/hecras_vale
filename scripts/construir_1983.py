@@ -52,6 +52,12 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY = sys.executable
 SCRIPTS = os.path.join(RAIZ, "scripts")
 
+# sem Library\bin no PATH o numpy do miniforge crasha CALADO (exit 127);
+# arma aqui para este processo e para todos os filhos
+_LIB = os.path.join(os.path.dirname(PY), "Library", "bin")
+if os.path.isdir(_LIB) and _LIB not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = _LIB + os.pathsep + os.environ.get("PATH", "")
+
 
 def _arg(argv, chave, padrao=None, tipo=str):
     return tipo(argv[argv.index(chave) + 1]) if chave in argv else padrao
