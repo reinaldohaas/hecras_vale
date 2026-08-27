@@ -6,8 +6,9 @@
   </Features>
   <Geometries Checked="True" Expanded="True">
     <Layer Name="taha_ai - eixo do relevo Copernicus" Type="RASGeometry" Checked="True" Expanded="True" Filename=".\taha_ai.g01.hdf">
-      <Layer Type="RASRiver" Checked="True" Expanded="True" />
+      <Layer Type="RASRiver" Expanded="True" />
       <Layer Type="RASXS" Expanded="True" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
+      <Layer Type="RASEdgeLines" Checked="True" />
       <Layer Type="RASD2FlowArea">
         <DataColumnGroupVisibilities>
           <DataColumnGroupVisibility DisplayName="Feature Parameters" IsVisible="False" />
@@ -139,7 +140,6 @@
         <ResampleMethod>near</ResampleMethod>
         <Surface On="True" />
       </Layer>
-      <Layer Type="RASErrors" Checked="True" />
     </Layer>
   </Geometries>
   <Plans Checked="True">
@@ -155,8 +155,18 @@
   <Results Checked="True" Expanded="True">
     <Layer Name="TAJAI" Type="RASResults" Checked="True" Expanded="True" Filename=".\taha_ai.p01.hdf">
       <Layer Name="Event Conditions" Type="RASEventConditions" Filename=".\taha_ai.p01.hdf" />
-      <Layer Type="RASGeometry" Checked="True" Expanded="True" Filename=".\taha_ai.p01.hdf">
+      <Layer Type="RASGeometry" Checked="True" Filename=".\taha_ai.p01.hdf">
         <Layer Type="RASXS" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
+        <Layer Type="RASD2FlowArea">
+          <DataColumnGroupVisibilities>
+            <DataColumnGroupVisibility DisplayName="Feature Parameters" IsVisible="False" />
+          </DataColumnGroupVisibilities>
+        </Layer>
+        <Layer Type="MeshPerimeterLayer">
+          <DataColumnGroupVisibilities>
+            <DataColumnGroupVisibility DisplayName="Feature Parameters" IsVisible="True" />
+          </DataColumnGroupVisibilities>
+        </Layer>
         <Layer Name="Culvert Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
         <Layer Name="Culvert Barrels" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Bridges/Culverts" />
         <Layer Name="Gate Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
@@ -279,8 +289,8 @@
           <Surface On="True" />
         </Layer>
       </Layer>
-      <Layer Name="Plan" Type="RASPlan" Checked="True" Expanded="True" Filename=".\taha_ai.p01.hdf" GeometryHDF=".\taha_ai.p01.hdf">
-        <Layer Name="Encroachments" Type="RASEncroachments" Checked="True" Expanded="True" Filename=".\taha_ai.p01.hdf" />
+      <Layer Name="Plan" Type="RASPlan" Checked="True" Filename=".\taha_ai.p01.hdf" GeometryHDF=".\taha_ai.p01.hdf">
+        <Layer Name="Encroachments" Type="RASEncroachments" Checked="True" Filename=".\taha_ai.p01.hdf" />
         <Layer Name="Zones" Type="RASEncroachmentZones" Checked="True" Filename=".\taha_ai.p01.hdf" />
         <Layer Name="Regions" Type="RASEncroachmentPolygons" Checked="True" Filename=".\taha_ai.p01.hdf" />
       </Layer>
@@ -307,10 +317,10 @@
     </Layer>
   </Terrains>
   <CurrentView>
-    <MaxX>779393.918529091</MaxX>
-    <MinX>632276.93210297</MinX>
-    <MaxY>7091327.77553263</MaxY>
-    <MinY>6976162.54253239</MinY>
+    <MaxX>680323.106566392</MaxX>
+    <MinX>664225.714627555</MinX>
+    <MaxY>7024625.7054836</MaxY>
+    <MinY>7012024.4421056</MinY>
   </CurrentView>
   <VelocitySettings>
     <Density>1.5</Density>

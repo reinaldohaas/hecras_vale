@@ -7,13 +7,7 @@
   <Geometries Checked="True" Expanded="True">
     <Layer Name="taha_ai - eixo do relevo Copernicus" Type="RASGeometry" Checked="True" Expanded="True" Filename=".\taha_ai.g01.hdf">
       <Layer Type="RASRiver" Checked="True" Expanded="True" />
-      <Layer Type="RASJunction" Checked="True" />
-      <Layer Type="RASBankLines" Checked="True" />
-      <Layer Type="FlowPaths" Checked="True" />
-      <Layer Type="RiverStations" Checked="True" />
-      <Layer Type="RASXS" Checked="True" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
-      <Layer Type="RASEdgeLines" Checked="True" />
-      <Layer Type="BlockedObstructionLayer" Checked="True" />
+      <Layer Type="RASXS" Expanded="True" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
       <Layer Type="RASD2FlowArea">
         <DataColumnGroupVisibilities>
           <DataColumnGroupVisibility DisplayName="Feature Parameters" IsVisible="False" />
@@ -161,18 +155,8 @@
   <Results Checked="True" Expanded="True">
     <Layer Name="TAJAI" Type="RASResults" Checked="True" Expanded="True" Filename=".\taha_ai.p01.hdf">
       <Layer Name="Event Conditions" Type="RASEventConditions" Filename=".\taha_ai.p01.hdf" />
-      <Layer Type="RASGeometry" Filename=".\taha_ai.p01.hdf">
+      <Layer Type="RASGeometry" Checked="True" Expanded="True" Filename=".\taha_ai.p01.hdf">
         <Layer Type="RASXS" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
-        <Layer Type="RASD2FlowArea">
-          <DataColumnGroupVisibilities>
-            <DataColumnGroupVisibility DisplayName="Feature Parameters" IsVisible="False" />
-          </DataColumnGroupVisibilities>
-        </Layer>
-        <Layer Type="MeshPerimeterLayer">
-          <DataColumnGroupVisibilities>
-            <DataColumnGroupVisibility DisplayName="Feature Parameters" IsVisible="True" />
-          </DataColumnGroupVisibilities>
-        </Layer>
         <Layer Name="Culvert Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
         <Layer Name="Culvert Barrels" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Bridges/Culverts" />
         <Layer Name="Gate Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
@@ -295,10 +279,10 @@
           <Surface On="True" />
         </Layer>
       </Layer>
-      <Layer Name="Plan" Type="RASPlan" Filename=".\taha_ai.p01.hdf" GeometryHDF=".\taha_ai.p01.hdf">
-        <Layer Name="Encroachments" Type="RASEncroachments" Filename=".\taha_ai.p01.hdf" />
-        <Layer Name="Zones" Type="RASEncroachmentZones" Filename=".\taha_ai.p01.hdf" />
-        <Layer Name="Regions" Type="RASEncroachmentPolygons" Filename=".\taha_ai.p01.hdf" />
+      <Layer Name="Plan" Type="RASPlan" Checked="True" Expanded="True" Filename=".\taha_ai.p01.hdf" GeometryHDF=".\taha_ai.p01.hdf">
+        <Layer Name="Encroachments" Type="RASEncroachments" Checked="True" Expanded="True" Filename=".\taha_ai.p01.hdf" />
+        <Layer Name="Zones" Type="RASEncroachmentZones" Checked="True" Filename=".\taha_ai.p01.hdf" />
+        <Layer Name="Regions" Type="RASEncroachmentPolygons" Checked="True" Filename=".\taha_ai.p01.hdf" />
       </Layer>
       <Layer Name="Depth" Type="RASResultsMap" Checked="True">
         <MapParameters MapType="depth" ProfileIndex="2147483647" ProfileName="Max" />
@@ -306,13 +290,13 @@
       <Layer Name="WSE" Type="RASResultsMap" Checked="True">
         <MapParameters MapType="elevation" ProfileIndex="2147483647" ProfileName="Max" />
       </Layer>
-      <Layer Name="Velocity" Type="RASResultsMap">
+      <Layer Name="Velocity" Type="RASResultsMap" Checked="True">
         <MapParameters MapType="velocity" ProfileIndex="2147483647" ProfileName="Max" />
       </Layer>
     </Layer>
   </Results>
   <MapLayers Checked="True" Expanded="True">
-    <Layer Name="Google Map" Type="WMSLayer" Checked="True" Filename="%LocalAppData%\HEC\Mapping\5.1\XML\Google Map.xml">
+    <Layer Name="Google Map" Type="WMSLayer" Filename="%LocalAppData%\HEC\Mapping\5.1\XML\Google Map.xml">
       <ResampleMethod>near</ResampleMethod>
     </Layer>
   </MapLayers>
@@ -323,10 +307,10 @@
     </Layer>
   </Terrains>
   <CurrentView>
-    <MaxX>672325.680844517</MaxX>
-    <MinX>654439.689801389</MinX>
-    <MaxY>7024225.36181311</MaxY>
-    <MinY>7010223.9580598</MinY>
+    <MaxX>779393.918529091</MaxX>
+    <MinX>632276.93210297</MinX>
+    <MaxY>7091327.77553263</MaxY>
+    <MinY>6976162.54253239</MinY>
   </CurrentView>
   <VelocitySettings>
     <Density>1.5</Density>
