@@ -15,9 +15,11 @@ O DEFEITO
 
 O QUE SE FAZ
 
-  Largura-alvo por secao = lamina do SIG-SC interpolada na quilometragem
-  da secao (mediana movel de `--janela-km`), vezes `--fator` (lamina e o
-  PISO; 2x aproxima margens plenas), nunca abaixo de `--minimo`.
+  Largura-alvo por secao, interpolada na quilometragem (mediana movel de
+  `--janela-km`), nunca abaixo de `--minimo`. Fonte preferida: poligono
+  RIOS_DUPLOS da FBDS (`--fbds`, largura real margem a margem, vezes
+  `--fator-fbds`~1.1). Rio sem poligono: lamina do SIG-SC (`--medidas`)
+  vezes `--fator` (lamina e PISO -- dossel esconde agua do laser).
 
   So age se o canal atual for mais de `--somente-acima` vezes o alvo.
   O canal novo e centrado no talvegue da secao:
@@ -46,8 +48,12 @@ from corrigir_cutlines import _col, _arg               # noqa: E402
 from ras_io import escrever                            # noqa: E402
 
 
-def serie_medida(pasta, rio, janela_km, cada_km=0.5):
-    """(dist_km ordenado, lamina suavizada) ou None."""
+def serie_medida(pasta, rio, janela_km, fator, cada_km=0.5):
+    """(dist_km ordenado, largura-alvo suavizada) ou None.
+
+    O fator multiplica a serie ANTES da suavizacao: cada fonte traz o
+    seu (poligono FBDS ja e margem a margem, fator ~1.1; lamina do MDT
+    e piso, fator ~1.3)."""
     arq = os.path.join(pasta, f"{rio}.csv")
     if not os.path.exists(arq):
         return None
@@ -55,7 +61,7 @@ def serie_medida(pasta, rio, janela_km, cada_km=0.5):
     for r in csv.reader(open(arq, encoding="utf-8"), delimiter=";"):
         if r[0] == "dist_foz_km" or not r[1]:
             continue
-        pares.append((float(r[0]), float(r[1])))
+        pares.append((float(r[0]), float(r[1]) * fator))
     if len(pares) < 3:
         return None
     pares.sort()
@@ -121,6 +127,8 @@ def main(argv):
     entrada = argv[0]
     ext = _arg(argv, "--saida", "g95")
     pasta = _arg(argv, "--medidas", "doc/larguras_sigsc")
+    pasta_fbds = _arg(argv, "--fbds", "doc/larguras_fbds")
+    fator_fbds = _arg(argv, "--fator-fbds", 1.1, float)
     fator = _arg(argv, "--fator", 2.0, float)
     minimo = _arg(argv, "--minimo", 15.0, float)
     somente = _arg(argv, "--somente-acima", 1.3, float)
@@ -141,18 +149,30 @@ def main(argv):
 
     S = ler_secoes(entrada)
     rios = sorted({d["rio"] for d in S})
-    medidas = {r: serie_medida(pasta, r, janela) for r in rios}
+    # alvo = MAXIMO das duas reguas em cada km: o poligono FBDS corrige a
+    # lamina onde o dossel esconde a agua do laser, e a lamina segura o
+    # alvo onde a FBDS tem buraco de cobertura (o g96 morreu em 12,8 h
+    # com o Norte espremido a 22 m por interpolacao sobre buraco)
+    medidas, fonte = {}, {}
+    for r in rios:
+        fb = serie_medida(pasta_fbds, r, janela, fator_fbds) \
+            if pasta_fbds else None
+        la = serie_medida(pasta, r, janela, fator)
+        medidas[r] = (fb, la)
+        fonte[r] = ("FBDS+lam" if fb is not None and la is not None
+                    else "FBDS" if fb is not None
+                    else "lamina" if la is not None else "-")
     print(f"entrada: {entrada}   (intocada)")
     print(f"saida  : {novo}")
-    print(f"alvo   : lamina SIG-SC (mediana movel {janela:.0f} km) "
-          f"x {fator}, piso {minimo:.0f} m\n")
+    print(f"alvo   : max(poligono FBDS x {fator_fbds}, lamina x {fator}) "
+          f"(mediana movel {janela:.0f} km); piso {minimo:.0f} m\n")
 
     novos = {}
     por_rio = {}
     for i, d in enumerate(S):
         rio = d["rio"]
-        m = medidas.get(rio)
-        if m is None:
+        fb, la = medidas.get(rio, (None, None))
+        if fb is None and la is None:
             continue
         km = d["rs"] / 1000.0
         if rio in poupados and km <= poupados[rio]:
@@ -161,7 +181,8 @@ def main(argv):
         z = np.asarray(d["z"], float)
         lb, rb = float(d["lb"]), float(d["rb"])
         atual = rb - lb
-        alvo = max(minimo, float(np.interp(km, m[0], m[1])) * fator)
+        alvo = max([minimo] + [float(np.interp(km, m[0], m[1]))
+                               for m in (fb, la) if m is not None])
         alvo = min(alvo, atual)
         if atual < somente * alvo:
             continue
@@ -172,10 +193,12 @@ def main(argv):
         e[1].append(atual)
         e[2].append(nb_r - nb_l)
 
-    print(f"{'rio':16s} {'secoes':>6s} {'antes med':>9s} {'depois med':>10s}")
+    print(f"{'rio':16s} {'fonte':>7s} {'secoes':>6s} {'antes med':>9s} "
+          f"{'depois med':>10s}")
     for rio in sorted(por_rio):
         n, a, b = por_rio[rio]
-        print(f"{rio:16s} {n:6d} {np.median(a):8.0f}m {np.median(b):9.0f}m")
+        print(f"{rio:16s} {fonte.get(rio, '-'):>7s} {n:6d} "
+              f"{np.median(a):8.0f}m {np.median(b):9.0f}m")
     if not novos:
         print("nada a encolher")
         return

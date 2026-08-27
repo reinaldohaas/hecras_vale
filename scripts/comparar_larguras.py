@@ -99,6 +99,16 @@ def main(argv):
                 ax.plot([p[0] for p in ca], [p[1] for p in ca], ".",
                         color="seagreen", ms=3, alpha=0.6,
                         label="calha plena (crivel)")
+        arq_fbds = os.path.join("doc/larguras_fbds", f"{rio}.csv")
+        if os.path.exists(arq_fbds):
+            fb = [(float(r[0]), float(r[1]))
+                  for r in csv.reader(open(arq_fbds, encoding="utf-8"),
+                                      delimiter=";")
+                  if r[0] != "dist_foz_km" and r[1]]
+            if fb:
+                ax.plot([p[0] for p in fb], [p[1] for p in fb], ".",
+                        color="darkorange", ms=3, alpha=0.8,
+                        label="poligono FBDS")
             m_mod = float(np.median(ws))
             m_lam = float(np.median([p[1] for p in med]))
             print(f"{rio:16s} {m_mod:10.0f} {m_lam:10.0f} "

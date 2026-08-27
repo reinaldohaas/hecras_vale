@@ -47,6 +47,10 @@ DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, DIR)
 from ras_io import escrever            # noqa: E402
 
+
+# 01/07 mesmo: aquecer desde 20/06 em vazao baixa foi TESTADO (27/08) e
+# explodiu na hora 17 com erro de 5511% -- vazao baixa e o pior regime
+# desta rede (lamina fina), nao um assentamento
 INICIO = datetime.date(1983, 7, 1)
 FIM = datetime.date(1983, 8, 5)
 
@@ -160,7 +164,7 @@ def main(argv):
            for s, (rios, arq, razao) in SISTEMAS.items()}
     formas = {r: serie_obs(pasta, a) for r, a in FORMA_DOADA.items()}
     dias = (FIM - INICIO).days + 1
-    data_ini = "01JUL1983"
+    data_ini = INICIO.strftime("%d%b1983").upper()
 
     total_entrando = 0.0
     novo_blocos = []
@@ -205,7 +209,7 @@ def main(argv):
 
     tp = open(p01, encoding="latin-1", errors="replace").read()
     tp = re.sub(r"Simulation Date=.*",
-                "Simulation Date=01JUL1983,0000,31JUL1983,2300", tp, 1)
+                "Simulation Date=%s,0000,31JUL1983,2300" % data_ini, tp, 1)
     escrever(p01, tp)
 
     print(f"contornos observados gravados em {u01}")

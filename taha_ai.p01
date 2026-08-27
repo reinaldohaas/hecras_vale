@@ -7,11 +7,12 @@ Simulation Date=01JUL1983,0000,31JUL1983,2300
 UNET ZTol= 0.02 
 UNET ZSATol= 0.02 
 UNET MxIter= 40 
+UNET MaxInSteps= 200 
 Mixed Flow Regime
 UNET Froude Reduction=True
-UNET Froude Limit= 0.8 
-UNET Froude Power= 4 
-Computation Interval=30SEC
+UNET Froude Limit= 0.5 
+UNET Froude Power= 2 
+Computation Interval=1MIN
 Output Interval=1HOUR
 Instantaneous Interval=1HOUR
 Mapping Interval=1HOUR

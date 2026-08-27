@@ -126,7 +126,7 @@ dist_foz_km;largura_lamina_m;largura_calha_plena_m;cota_espelho;obs
 56.70;;;;sem margem
 56.20;11;32;268.89;
 55.70;;;;sem margem
-55.20;262;462;269.29;
+55.20;;;269.29;acima do teto
 54.70;;;;sem margem
 54.20;;;;sem margem
 53.70;;;;sem margem
@@ -202,7 +202,7 @@ dist_foz_km;largura_lamina_m;largura_calha_plena_m;cota_espelho;obs
 18.70;;;;sem margem
 18.20;;;;sem margem
 17.70;;;;sem margem
-17.20;110;195;237.82;
+17.20;;;237.82;acima do teto
 16.70;62;90;236.86;
 16.20;5;77;237.16;
 15.70;;;;sem margem
@@ -212,7 +212,7 @@ dist_foz_km;largura_lamina_m;largura_calha_plena_m;cota_espelho;obs
 13.70;;;;sem margem
 13.20;;;;sem margem
 12.70;;;;sem margem
-12.20;121;304;191.75;
+12.20;;;191.75;acima do teto
 11.70;;;;sem margem
 11.20;;;;sem margem
 10.70;;;;sem margem
