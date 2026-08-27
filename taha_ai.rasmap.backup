@@ -6,12 +6,12 @@
   </Features>
   <Geometries Checked="True" Expanded="True">
     <Layer Name="taha_ai - eixo do relevo Copernicus" Type="RASGeometry" Checked="True" Expanded="True" Filename=".\taha_ai.g01.hdf">
-      <Layer Type="RASRiver" Checked="True" Expanded="True" />
+      <Layer Type="RASRiver" Checked="True" />
       <Layer Type="RASJunction" Checked="True" />
       <Layer Type="RASBankLines" Checked="True" />
       <Layer Type="FlowPaths" Checked="True" />
       <Layer Type="RiverStations" Checked="True" />
-      <Layer Type="RASXS" Checked="True" Expanded="True" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
+      <Layer Type="RASXS" Checked="True" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
       <Layer Type="RASEdgeLines" Checked="True" />
       <Layer Type="BlockedObstructionLayer" Checked="True" />
       <Layer Type="RASD2FlowArea">
@@ -145,6 +145,7 @@
         <ResampleMethod>near</ResampleMethod>
         <Surface On="True" />
       </Layer>
+      <Layer Type="RASErrors" Checked="True" />
     </Layer>
   </Geometries>
   <Plans Checked="True">
