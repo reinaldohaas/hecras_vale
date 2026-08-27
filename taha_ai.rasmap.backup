@@ -6,7 +6,7 @@
   </Features>
   <Geometries Checked="True" Expanded="True">
     <Layer Name="taha_ai - eixo do relevo Copernicus" Type="RASGeometry" Checked="True" Expanded="True" Filename=".\taha_ai.g01.hdf">
-      <Layer Type="RASRiver" Checked="True" />
+      <Layer Type="RASRiver" Checked="True" Expanded="True" />
       <Layer Type="RASJunction" Checked="True" />
       <Layer Type="RASBankLines" Checked="True" />
       <Layer Type="FlowPaths" Checked="True" />
@@ -323,10 +323,10 @@
     </Layer>
   </Terrains>
   <CurrentView>
-    <MaxX>657348.125750974</MaxX>
-    <MinX>649648.793088564</MinX>
-    <MaxY>7005962.46923076</MaxY>
-    <MinY>6999935.32402099</MinY>
+    <MaxX>672325.680844517</MaxX>
+    <MinX>654439.689801389</MinX>
+    <MaxY>7024225.36181311</MaxY>
+    <MinY>7010223.9580598</MinY>
   </CurrentView>
   <VelocitySettings>
     <Density>1.5</Density>
