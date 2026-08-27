@@ -1,7 +1,7 @@
 Plan Title=Rede_do_Relevo
 Program Version=7.01
 Short Identifier=TAJAI                                                           
-Simulation Date=01AUG2026,0000,08AUG2026,2300
+Simulation Date=01JUL1983,0000,31JUL1983,2300
 Geom File=g01
 Flow File=u01
 Subcritical Flow
@@ -30,7 +30,7 @@ Flow Ratio Min Ratio=0.5
 Flow Ratio Max Ratio=4
 Flow Ratio Max Iterations= 10 
 Flow Ratio Reference=
-Computation Interval=15SEC
+Computation Interval=1MIN
 Output Interval=1HOUR
 Instantaneous Interval=1HOUR
 Mapping Interval=1HOUR
@@ -138,7 +138,7 @@ Write IC File at Sim End=0
 Echo Input=False
 Echo Parameters=False
 Echo Output=False
-Write Detailed= 0 
+Write Detailed= 1 
 HDF Write Warmup=0
 HDF Write Time Slices=0
 HDF Flush=0
