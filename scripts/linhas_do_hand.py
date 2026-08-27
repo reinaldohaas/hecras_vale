@@ -94,7 +94,7 @@ def lado_e_km(ls, P):
     return np.array(lados), np.array(kms)
 
 
-def em_linhas(P, lados, kms, lado, simpl):
+def em_linhas(P, lados, kms, lado, simpl, cortar=True):
     """pontos de um lado -> polilinha ordenada pela km e simplificada."""
     from shapely.geometry import LineString
     m = lados == lado
@@ -102,16 +102,17 @@ def em_linhas(P, lados, kms, lado, simpl):
         return None
     o = np.argsort(-kms[m])
     pts = P[m][o]
-    # corta saltos > 3 km (bracos soltos do contorno)
-    partes, atual = [], [pts[0]]
-    for p in pts[1:]:
-        if np.hypot(p[0] - atual[-1][0], p[1] - atual[-1][1]) > 3000:
-            partes.append(atual)
-            atual = [p]
-        else:
-            atual.append(p)
-    partes.append(atual)
-    pts = max(partes, key=len)
+    if cortar:
+        # corta saltos > 3 km (bracos soltos do contorno)
+        partes, atual = [], [pts[0]]
+        for p in pts[1:]:
+            if np.hypot(p[0] - atual[-1][0], p[1] - atual[-1][1]) > 3000:
+                partes.append(atual)
+                atual = [p]
+            else:
+                atual.append(p)
+        partes.append(atual)
+        pts = max(partes, key=len)
     if len(pts) < 4:
         return None
     ls = LineString(pts).simplify(simpl)
@@ -120,6 +121,71 @@ def em_linhas(P, lados, kms, lado, simpl):
         simpl *= 1.6
         ls = ls.simplify(simpl)
     return [[round(x, 1), round(y, 1)] for x, y in ls.coords]
+
+
+def preencher_lacunas(ls, PB, lados, kms, mdt_src, passo=150.0):
+    """onde a FBDS nao tem margem num raio de 400 m de quilometragem,
+    mede a LAMINA no MDT 1 m (transecto + medir de largura_do_sigsc) e
+    acrescenta os dois pontos de borda d'agua."""
+    if mdt_src is None:
+        return PB, lados, kms
+    import largura_do_sigsc as L
+    T = mdt_src.transform
+    tem = {1: np.sort(kms[lados == 1]), -1: np.sort(kms[lados == -1])}
+
+    def coberto(lado, km):
+        v = tem[lado]
+        if len(v) == 0:
+            return False
+        i = np.searchsorted(v, km)
+        for j in (i - 1, i):
+            if 0 <= j < len(v) and abs(v[j] - km) < 400:
+                return True
+        return False
+
+    novos_p, novos_l, novos_k = [], [], []
+    n_novo = 0
+    for s in np.arange(200, ls.length - 200, passo):
+        km = ls.length - s
+        falta = [ld for ld in (1, -1) if not coberto(ld, km)]
+        if not falta:
+            continue
+        P0 = np.asarray(ls.interpolate(s).coords[0])
+        P1 = np.asarray(ls.interpolate(min(s + 30, ls.length)).coords[0])
+        t = P1 - P0
+        t = t / max(np.hypot(*t), 1e-9)
+        nvec = np.array([-t[1], t[0]])
+        z = L.transecto(mdt_src, T, P0, nvec)
+        m = L.medir(z)
+        if m is None or m == "solto":
+            continue
+        # bordas da lamina: reconstoi a faixa d'agua como em medir()
+        c = len(z) // 2
+        jan = z[c - 25:c + 26]
+        if np.all(np.isnan(jan)):
+            continue
+        esp = np.nanmin(jan)
+        i0 = c - 25 + int(np.nanargmin(jan))
+        agua = np.abs(z - esp) <= L.TOL_LAMINA
+        a = i0
+        while a > 0 and agua[a - 1]:
+            a -= 1
+        b = i0
+        while b < len(z) - 1 and agua[b + 1]:
+            b += 1
+        for off, lado in [(b - L.MEIA, 1), (a - L.MEIA, -1)]:
+            if lado in falta:
+                p = P0 + off * nvec
+                novos_p.append(p)
+                novos_l.append(lado)
+                novos_k.append(km)
+                n_novo += 1
+    if novos_p:
+        PB = np.vstack([PB, np.array(novos_p)])
+        lados = np.concatenate([lados, np.array(novos_l)])
+        kms = np.concatenate([kms, np.array(novos_k)])
+        print(f'      lacunas da FBDS: +{n_novo} pontos da lamina SIG-SC')
+    return PB, lados, kms
 
 
 def main(argv):
@@ -179,6 +245,12 @@ def main(argv):
             pass
     fbds = gpd.GeoDataFrame(pd.concat(partes, ignore_index=True),
                             crs=31982)
+    import largura_do_sigsc as L
+    try:
+        mdt_src = rasterio.open(L.MDT)
+    except Exception as e:
+        print(f'MDT do SIG-SC indisponivel ({e}) -- lacunas ficam abertas')
+        mdt_src = None
 
     linhas = []
     geo = {'type': 'FeatureCollection',
@@ -222,10 +294,16 @@ def main(argv):
                 if len(borda) > 10:
                     PB = np.array(borda)
                     lados, kms = lado_e_km(ls, PB)
+                    # LACUNAS da FBDS preenchidas pela LAMINA do MDT 1 m
+                    # (ordem do Reinaldo: "no FBDS e onde ele nao estiver
+                    # disponivel usar o SIG-SC")
+                    PB, lados, kms = preencher_lacunas(
+                        ls, PB, lados, kms, mdt_src)
                     for lado, tag in [(1, 'N'), (-1, 'S')]:
-                        lin = em_linhas(PB, lados, kms, lado, 25.0)
+                        lin = em_linhas(PB, lados, kms, lado, 25.0,
+                                        cortar=False)
                         if lin:
-                            nome = f'{ROTULOS.get(rio, rio)} — bank {tag} (rio SIG-SC)'
+                            nome = f'{ROTULOS.get(rio, rio)} — bank {tag} (FBDS+SIG-SC)'
                             linhas.append({'nome': nome,
                                            'cor': CORES.get(rio, '#333'),
                                            'grupo': ROTULOS.get(rio, rio),
