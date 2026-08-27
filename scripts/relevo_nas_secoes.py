@@ -39,6 +39,42 @@ from mdt_sigsc import MosaicoSigsc, tiles_do_dominio   # noqa: E402
 
 MAX_PONTOS = 450
 PASSO = 2.0
+LARGURAS = "doc/larguras_g95"   # lamina congelada (a mesma da campanha)
+LARG_MIN = 12.0
+BORDA = 20.0        # m de esponja em cada emenda SIG-SC <-> Copernicus:
+                    # sem ela cada vazio do SIG-SC (colarinho de folha)
+                    # vira DEGRAU vertical entre os dois datums
+COLAR = 0.20        # m: quase-zero onde o antigo diz terra alta = colarinho
+
+
+_larg_cache = {}
+
+
+def larg_lamina(rio, km):
+    """lamina mediana-movel (5 km) do CSV congelado; LARG_MIN sem dado."""
+    if rio not in _larg_cache:
+        import csv
+        arq = os.path.join(LARGURAS, f"{rio}.csv")
+        pares = []
+        if os.path.exists(arq):
+            for r in csv.reader(open(arq, encoding="utf-8"),
+                                delimiter=";"):
+                if r[0] == "dist_foz_km" or not r[1]:
+                    continue
+                pares.append((float(r[0]), float(r[1])))
+        pares.sort()
+        if len(pares) >= 3:
+            dd = np.array([p[0] for p in pares])
+            ww = np.array([p[1] for p in pares])
+            suave = np.array([np.median(ww[max(0, i - 5):i + 6])
+                              for i in range(len(ww))])
+            _larg_cache[rio] = (dd, suave)
+        else:
+            _larg_cache[rio] = None
+    m = _larg_cache[rio]
+    if m is None:
+        return LARG_MIN
+    return float(max(LARG_MIN, np.interp(km, m[0], m[1])))
 
 
 def ler_cutlines(g01):
@@ -129,26 +165,42 @@ def main(argv):
         est, cx, cy = amostrar_cutline(cut[i], float(sta0[-1] - sta0[0]))
         est = est + float(sta0[0])
         znovo = mdt.cota(cx, cy)
+        z_ant = np.interp(est, sta0, z0)
         vazio = ~np.isfinite(znovo)
+        # colarinho de folha: quase-zero onde o antigo diz terra alta
+        vazio |= (np.abs(np.nan_to_num(znovo)) < COLAR) & (z_ant > 2.0)
         if vazio.all():
             sem_dado += 1
             continue
-        # vazio herda o perfil antigo na mesma estacao
-        znovo[vazio] = np.interp(est[vazio], sta0, z0)
+        # vazio herda o perfil antigo (Copernicus) na mesma estacao...
+        znovo[vazio] = z_ant[vazio]
+        # ...e a EMENDA leva esponja de BORDA m: peso do SIG-SC cai
+        # linearmente a zero ao se aproximar de um trecho vazio
+        if vazio.any() and not vazio.all():
+            dist = np.full(len(est), np.inf)
+            iv = np.flatnonzero(vazio)
+            for k in np.flatnonzero(~vazio):
+                dist[k] = np.min(np.abs(est[k] - est[iv]))
+            w = np.clip(dist / BORDA, 0.0, 1.0)
+            znovo = w * znovo + (1.0 - w) * z_ant
         est, znovo = reduzir(est, znovo)
-        # reescavar o canal: dentro dos bancos originais, fundo nao sobe
+        # reescavar o canal: dentro dos bancos originais, fundo nao sobe.
+        # NAO e um espigao de 1 ponto (r00/r01: canal de ~10 m carregando
+        # o Acu inteiro, explosao no canion) -- cava-se um fundo PLANO ao
+        # talvegue antigo na LARGURA DA LAMINA medida do rio, centrado no
+        # ponto mais fundo do MDT, com paredes em rampa 1:2
         m = (est >= d["lb"] - 1e-6) & (est <= d["rb"] + 1e-6)
         tal0 = float(z0[(sta0 >= d["lb"]) & (sta0 <= d["rb"])].min()) \
             if ((sta0 >= d["lb"]) & (sta0 <= d["rb"])).any() \
             else float(z0.min())
         if m.any():
             i_min = np.flatnonzero(m)[int(np.argmin(znovo[m]))]
-            if znovo[i_min] > tal0:
-                znovo[i_min] = tal0
-                viz = (np.abs(est - est[i_min]) <= 10.0) & m
-                znovo[viz] = np.minimum(znovo[viz],
-                                        tal0 + np.abs(est[viz]
-                                                      - est[i_min]) * 0.5)
+            c = est[i_min]
+            W = larg_lamina(d["rio"], d["rs"] / 1000.0)
+            dcen = np.abs(est - c)
+            fundo = tal0 + np.maximum(0.0, (dcen - W / 2.0)) * 0.5
+            cava = m & (dcen <= W / 2.0 + 8.0)
+            znovo[cava] = np.minimum(znovo[cava], fundo[cava])
         est = np.round(est, 2)
         novos[i] = {"sta": est, "z": znovo,
                     "htab": float(znovo.min()) + 0.15,

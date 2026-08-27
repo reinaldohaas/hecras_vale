@@ -96,11 +96,14 @@ def promover(ext):
 def main(argv):
     ate = _arg(argv, "--ate", 99, int)
     quer_rodar = "--rodar" in argv
+    # --base troca a geometria crua de partida (ex.: taha_ai.r00, o
+    # relevo do MDT 1 m gerado por relevo_nas_secoes.py)
+    base_g = _arg(argv, "--base", "taha_ai.g01.antes_do_reparo_1983")
 
-    for arq in ("taha_ai.g01.antes_do_reparo_1983",
-                "taha_ai.u01.antes_do_observado"):
+    for arq in (base_g, "taha_ai.u01.antes_do_observado"):
         if not os.path.exists(os.path.join(RAIZ, arq)):
             raise SystemExit(f"falta o insumo {arq}")
+    print(f"base de geometria: {base_g}")
 
     # ------------------------------------------------------------- u01/p01
     shutil.copy2(os.path.join(RAIZ, "taha_ai.u01.antes_do_observado"),
@@ -112,8 +115,7 @@ def main(argv):
           "b. Initial RS= fantasma -> Initial Flow Loc=")
 
     # ------------------------------------------------------------- g01
-    shutil.copy2(os.path.join(RAIZ, "taha_ai.g01.antes_do_reparo_1983"),
-                 g("g01"))
+    shutil.copy2(os.path.join(RAIZ, base_g), g("g01"))
     passos = [
         (1, prog("rebaixar_foz.py", "taha_ai.g01", "--saida", "z01",
                  "--minimo", "0.1"), "z01",
