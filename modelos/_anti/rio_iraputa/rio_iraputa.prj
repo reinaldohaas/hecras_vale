@@ -1,0 +1,11 @@
+Proj Title=rio_iraputa
+Current Plan=p01
+Default Exp/Contr=0.3,0.1
+SI Units
+Geom File=g01
+Unsteady File=u01
+Plan File=p01
+Y Axis Title=Elevation
+X Axis Title(PR)=Distance
+X Axis Title(CS)=Station
+RASMap Filename=rio_iraputa.rasmap

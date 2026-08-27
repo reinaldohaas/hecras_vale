@@ -1,0 +1,37 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "nome": "Canal_Retificado_Baixo_Mirim",
+    "fonte": "tracado do relevo 1 m, 26/08/2026"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      723250,
+      7019350
+     ],
+     [
+      724800,
+      7020300
+     ],
+     [
+      726500,
+      7021400
+     ],
+     [
+      728200,
+      7022500
+     ],
+     [
+      730400,
+      7023700
+     ]
+    ]
+   }
+  }
+ ]
+}

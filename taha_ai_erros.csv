@@ -1,0 +1,122 @@
+nivel;camada;onde;mensagem
+Fatal;Rivers;Itajai_Acu - R2;Polyline has duplicate points - consider filtering.
+Fatal;Cross Sections;Rio_das_Pombas, R1 (75.00);XS intersects > 2 banklines
+Fatal;Cross Sections;Rio_das_Pombas, R1 (75.00);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Rio_dos_Cedros, R1 (75.00);XS intersects > 2 banklines
+Fatal;Cross Sections;Rio_dos_Cedros, R1 (75.00);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Itajai_Norte, R2 (75.00);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Norte, R2 (75.00);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Itajai_Oeste, R2 (36315.76);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Oeste, R2 (34315.76);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Oeste, R2 (33315.76);XS naming error - River Station out of order.
+Fatal;Cross Sections;Itajai_Oeste, R2 (32315.76);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Oeste, R2 (32315.76);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Itajai_Oeste, R2 (23602.79);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Oeste, R2 (23602.79);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Itajai_Oeste, R4 (75.00);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Oeste, R4 (75.00);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Itajai_Sul, R1 (33023.18);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Sul, R1 (75.00);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Sul, R1 (75.00);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Rio_Benedito, R1 (9489.09);XS intersects > 2 banklines
+Fatal;Cross Sections;Rio_Benedito, R1 (9489.09);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Rio_Benedito, R2 (133.67);XS intersects > 2 banklines
+Fatal;Cross Sections;Rio_Benedito, R2 (75.00);XS intersects > 2 banklines
+Fatal;Cross Sections;Rio_do_Testo, R1 (308.09);XS intersects > 2 banklines
+Fatal;Cross Sections;Rio_do_Testo, R1 (308.09);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Rio_do_Testo, R1 (75.00);XS intersects > 2 banklines
+Fatal;Cross Sections;Rio_do_Testo, R1 (75.00);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Itajai_Acu, R1 (140411.3);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Acu, R1 (140261.3);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Acu, R1 (140261.3);XS must intersect exactly one Reach.
+Fatal;Cross Sections;Itajai_Acu, R2 (89862.86);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Acu, R4 (8955.99);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Acu, R4 (7955.99);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Acu, R4 (6955.99);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Mirim, R1 (53382.53);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Mirim, R1 (747.20);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Mirim, R1 (75.00);XS intersects > 2 banklines
+Fatal;Cross Sections;Itajai_Mirim, R1 (75.00);XS must intersect exactly one Reach.
+Fatal;Edge Lines;4;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Fatal;Edge Lines;5;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Fatal;Edge Lines;12;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Warning;Edge line self intersections;2;This is a edge line self intersection point
+Fatal;Edge Lines;16;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Warning;Edge line self intersections;2;This is a edge line self intersection point
+Warning;Edge line self intersections;3;This is a edge line self intersection point
+Fatal;Edge Lines;17;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Warning;Edge line self intersections;2;This is a edge line self intersection point
+Warning;Edge line self intersections;3;This is a edge line self intersection point
+Warning;Edge line self intersections;4;This is a edge line self intersection point
+Warning;Edge line self intersections;5;This is a edge line self intersection point
+Warning;Edge line self intersections;6;This is a edge line self intersection point
+Warning;Edge line self intersections;7;This is a edge line self intersection point
+Warning;Edge line self intersections;8;This is a edge line self intersection point
+Warning;Edge line self intersections;9;This is a edge line self intersection point
+Warning;Edge line self intersections;10;This is a edge line self intersection point
+Warning;Edge line self intersections;11;This is a edge line self intersection point
+Warning;Edge line self intersections;12;This is a edge line self intersection point
+Warning;Edge line self intersections;13;This is a edge line self intersection point
+Warning;Edge line self intersections;14;This is a edge line self intersection point
+Warning;Edge line self intersections;15;This is a edge line self intersection point
+Warning;Edge line self intersections;16;This is a edge line self intersection point
+Warning;Edge line self intersections;17;This is a edge line self intersection point
+Warning;Edge line self intersections;18;This is a edge line self intersection point
+Warning;Edge line self intersections;19;This is a edge line self intersection point
+Warning;Edge line self intersections;20;This is a edge line self intersection point
+Warning;Edge line self intersections;21;This is a edge line self intersection point
+Warning;Edge line self intersections;22;This is a edge line self intersection point
+Warning;Edge line self intersections;23;This is a edge line self intersection point
+Fatal;Edge Lines;19;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Fatal;Edge Lines;30;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Warning;Edge line self intersections;2;This is a edge line self intersection point
+Fatal;Edge Lines;31;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Fatal;Edge Lines;32;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Warning;Edge line self intersections;2;This is a edge line self intersection point
+Warning;Edge line self intersections;3;This is a edge line self intersection point
+Warning;Edge line self intersections;4;This is a edge line self intersection point
+Fatal;Edge Lines;35;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Warning;Edge line self intersections;2;This is a edge line self intersection point
+Warning;Edge line self intersections;3;This is a edge line self intersection point
+Warning;Edge line self intersections;4;This is a edge line self intersection point
+Warning;Edge line self intersections;5;This is a edge line self intersection point
+Warning;Edge line self intersections;6;This is a edge line self intersection point
+Fatal;Edge Lines;36;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Warning;Edge line self intersections;2;This is a edge line self intersection point
+Warning;Edge line self intersections;3;This is a edge line self intersection point
+Warning;Edge line self intersections;4;This is a edge line self intersection point
+Warning;Edge line self intersections;5;This is a edge line self intersection point
+Warning;Edge line self intersections;6;This is a edge line self intersection point
+Fatal;Edge Lines;37;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Warning;Edge line self intersections;1;This is a edge line self intersection point
+Warning;Edge line self intersections;2;This is a edge line self intersection point
+Warning;Edge line self intersections;3;This is a edge line self intersection point
+Warning;Edge line self intersections;4;This is a edge line self intersection point
+Warning;Edge line self intersections;5;This is a edge line self intersection point
+Warning;Edge line self intersections;6;This is a edge line self intersection point
+Fatal;Edge Lines;38;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point
+Fatal;Edge Lines;39;Polyline has self intersections
+Warning;Edge line self intersections;0;This is a edge line self intersection point

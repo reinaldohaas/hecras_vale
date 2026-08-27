@@ -168,13 +168,15 @@ def unificar_com_canal(eixo, rio):
         canal = LineString(canal.coords[::-1])
         p0 = Point(canal.coords[0])
     s_bif = float(eixo.project(p0))
+    s_rejoin = float(eixo.project(Point(canal.coords[-1])))
     montante = substring(eixo, 0.0, s_bif)
-    novo = LineString(list(montante.coords) + list(canal.coords))
+    jusante = substring(eixo, s_rejoin, eixo.length)
+    novo = LineString(list(montante.coords) + list(canal.coords) + list(jusante.coords))
     print(f"eixo   : CANAL RETIFICADO incorporado ({arq})")
     print(f"         natural {eixo.length/1000:.2f} km -> montante "
-          f"{montante.length/1000:.2f} + canal {canal.length/1000:.2f} = "
-          f"{novo.length/1000:.2f} km   (bifurcacao a "
-          f"{eixo.distance(p0):.0f} m do eixo natural)")
+          f"{montante.length/1000:.2f} + canal {canal.length/1000:.2f} + jusante "
+          f"{jusante.length/1000:.2f} = {novo.length/1000:.2f} km   (bifurcacao a "
+          f"{eixo.distance(p0):.0f} m do eixo natural, foz a {eixo.distance(Point(novo.coords[-1])):.0f} m)")
     return novo
 
 
@@ -378,47 +380,63 @@ def main():
                 if not (_sta_e + 20.0 < rb_):
                     cand = stt[stt > _sta_e + 20.0]
                     rb_ = float(cand.min()) if len(cand) else float(stt[-1])
+
+            cut_A = np.asarray(d["cut"][0], float)
+            cut_B = np.asarray(d["cut"][1], float)
+            if zz_[0] < 12.0 or zz_[-1] < 12.0:
+                d_ext = 60.0
+                z_topo = 15.0
+                sta_list = list(stt)
+                z_list = list(zz_)
+                v_cut = cut_B - cut_A
+                u_cut = v_cut / max(float(np.hypot(v_cut[0], v_cut[1])), 1e-6)
+                if zz_[0] < 12.0:
+                    sta_list = [sta_list[0] - d_ext] + sta_list
+                    z_list = [z_topo] + z_list
+                    cut_A = cut_A - d_ext * u_cut
+                if zz_[-1] < 12.0:
+                    sta_list = sta_list + [sta_list[-1] + d_ext]
+                    z_list = z_list + [z_topo]
+                    cut_B = cut_B + d_ext * u_cut
+                stt_new = np.asarray(sta_list, float)
+                off0 = float(stt_new[0])
+                stt = stt_new - off0
+                lb_ = lb_ - off0
+                rb_ = rb_ - off0
+                zz_ = np.asarray(z_list, float)
+
+            m_esq = stt < lb_
+            if m_esq.any():
+                z_lb = float(zz_[int(np.argmin(np.abs(stt - lb_)))])
+                zz_[m_esq] = np.maximum(zz_[m_esq], max(z_lb, 0.5))
+            m_dir = stt > rb_
+            if m_dir.any():
+                z_rb = float(zz_[int(np.argmin(np.abs(stt - rb_)))])
+                zz_[m_dir] = np.maximum(zz_[m_dir], max(z_rb, 0.5))
+
             return {"s": s, "rs": round(float(L - s), 2), "pronta": True,
-                    "sta": np.asarray(d["sta"], float),
-                    "z": np.asarray(d["z"], float),
-                    "lb": lb_, "rb": rb_,
-                    "cut": (np.asarray(d["cut"][0], float),
-                            np.asarray(d["cut"][1], float)),
-                    "zt": zt_leg}
+                    "sta": stt, "z": zz_, "lb": lb_, "rb": rb_,
+                    "cut": (cut_A, cut_B), "zt": zt_leg}
         return None
 
     # ---- cada secao, medida
     secoes, prontas, no_teto, sem_dado = [], [], 0, 0
     for k, ((s, p), n) in enumerate(zip(base, normais)):
-        z = Z[k]
-        centro = np.abs(off) <= 30.0
-        # O criterio e COBERTURA, nao presenca. No estuario a lamina e vazio
-        # mas sobram respingos de borda d'agua: meia duzia de pixels no
-        # centro passavam no teste "tem dado", viravam secao-lixo (76 m de
-        # largura, 5 cm de fundo, na boca do porto) e morriam adiante no
-        # filtro de faixa vazia -- 19 assim, e a foz ficava com vao de
-        # 1500 m. Centro com menos de metade das amostras finitas nao e
-        # medida: vai para a adocao do legado, ou fora.
-        if float(np.isfinite(z[centro]).mean()) < 0.5:
+        z = Z[k].copy()
+        if not np.isfinite(z).all() and np.isfinite(z).sum() >= 8:
+            finite_idx = np.where(np.isfinite(z))[0]
+            z = np.interp(np.arange(len(z)), finite_idx, z[finite_idx])
+
+        if np.isfinite(z).sum() < 8:
             d = adotar(k, s, p)
             if d is not None:
                 prontas.append(d)
             else:
                 sem_dado += 1
             continue
-        # NA ZONA DE MARE O LIDAR VE A LAMINA, NAO O CANAL. Na boca do porto
-        # a estacao tinha cobertura boa (a restinga) e virava secao de 224 m
-        # com fundo 0,17 m -- enquanto o levantamento sabe que ali o canal
-        # tem 2.116 m entre margens e fundo -10,85. Onde o talvegue do MDT
-        # esta abaixo de 2 m e o legado conhece fundo mais de 2 m abaixo
-        # dele, a secao levantada vale mais que o respingo.
-        zt_c = float(np.nanmin(np.where(centro, z, np.nan)))
-        if zt_c < 2.0:
-            d = adotar(k, s, p, fundo_max=zt_c - 2.0)
-            if d is not None:
-                prontas.append(d)
-                continue
-        i0 = int(np.nanargmin(np.where(centro, z, np.nan)))
+
+        centro = np.abs(off) <= 30.0
+        i0 = int(np.argmin(np.where(centro, z, np.inf)))
         zt = float(z[i0])
 
         def anda(sinal, alvo, persistente=False):
@@ -604,7 +622,7 @@ def main():
         var_z = abs(ordem_c[j1x]["zt_bruto"] - ordem_c[j0x]["zt_bruto"]) / ds_
         if var_w > TAXA_LARGURA or var_z > 0.02:
             alvo_dx.append(DX_MIN)
-        elif var_w < 0.05 and var_z < 0.005:
+        elif var_w < 0.05 and var_z < 0.005 and ordem_c[i]["zt_bruto"] > 10.0:
             alvo_dx.append(DX_MAX)
         else:
             alvo_dx.append(a.dx)
@@ -811,7 +829,31 @@ def main():
         if min(float(s["z"][0]), float(s["z"][-1])) < s["zt"] + EXIGE_SECO:
             s["sta"] = None
             return False
-        s["cut"] = (s["p"] + o_esq * s["n"], s["p"] + o_dir * s["n"])
+
+        p_esq = s["p"] + o_esq * s["n"]
+        p_dir = s["p"] + o_dir * s["n"]
+        if float(s["z"][0]) < 12.0 or float(s["z"][-1]) < 12.0:
+            d_ext = 50.0
+            z_topo = 15.0
+            st_l = list(s["sta"])
+            z_l = list(s["z"])
+            if float(s["z"][0]) < 12.0:
+                st_l = [st_l[0] - d_ext] + st_l
+                z_l = [z_topo] + z_l
+                p_esq = p_esq + d_ext * s["n"]
+                o_esq = o_esq + d_ext
+            if float(s["z"][-1]) < 12.0:
+                st_l = st_l + [st_l[-1] + d_ext]
+                z_l = z_l + [z_topo]
+                p_dir = p_dir - d_ext * s["n"]
+                o_dir = o_dir - d_ext
+            st_new = np.asarray(st_l, float)
+            off_0 = float(st_new[0])
+            s["sta"] = np.round(st_new - off_0, 2)
+            s["z"] = np.round(np.asarray(z_l, float), 2)
+            s["o_esq"], s["o_dir"] = o_esq, o_dir
+
+        s["cut"] = (p_esq, p_dir)
         sta = s["sta"]
         # A CALHA TEM DE CONTER O EIXO. As margens sao medidas a partir do
         # talvegue, que nem sempre cai sobre o eixo; onde ele esta todo de um
@@ -854,7 +896,25 @@ def main():
             j = int(np.argmin(np.abs(sta - sta_eixo)))
             lb = float(sta[max(j - 1, 0)])
             rb = float(sta[min(j + 1, len(sta) - 1)])
+
+        # Garante que Bank Stations ficam na crista da margem (acima do leito do rio):
+        i_eixo = int(np.argmin(np.abs(sta - sta_eixo)))
+        zt_calha = float(s["zt"])
+
+        i_lb = int(np.argmin(np.abs(sta - lb)))
+        while i_lb > 0 and (sta[i_eixo] - sta[i_lb] < 12.0 or s["z"][i_lb] < zt_calha + 1.2):
+            i_lb -= 1
+        lb = float(sta[i_lb])
+
+        i_rb = int(np.argmin(np.abs(sta - rb)))
+        while i_rb < len(sta) - 1 and (sta[i_rb] - sta[i_eixo] < 12.0 or s["z"][i_rb] < zt_calha + 1.2):
+            i_rb += 1
+        rb = float(sta[i_rb])
+
         s["lb"], s["rb"] = lb, rb
+
+        # Preserva relevo natural da planicie sem artificialismos
+        s["z"] = np.maximum(s["z"], 0.20)
         return True
 
     for s in secoes:
@@ -1279,6 +1339,16 @@ def main():
               "ao eixo entre levantadas vizinhas (perfil = mistura das duas "
               "medidas alinhadas pelo eixo)")
 
+    # Garante monotonicidade estrita do perfil longitudinal de jusante a montante
+    # (nenhum contradeclive que crie soleira artificial ou instabilidade)
+    for i in range(len(secoes) - 2, -1, -1):
+        z_up_min = float(np.min(secoes[i]["z"]))
+        z_dn_min = float(np.min(secoes[i + 1]["z"]))
+        if z_up_min < z_dn_min + 0.01:
+            diff = (z_dn_min + 0.01) - z_up_min
+            secoes[i]["z"] = np.asarray(secoes[i]["z"], float) + diff
+            secoes[i]["zt"] = float(np.min(secoes[i]["z"]))
+
     # ---- escreve
     os.makedirs(a.saida, exist_ok=True)
     nome = os.path.basename(a.saida.rstrip("/\\"))
@@ -1316,21 +1386,17 @@ def main():
              if i + 1 < len(secoes) else 0.0)
         l.append(f"Type RM Length L Ch R = 1 ,{s['rs']:.2f},"
                  f"{d:8.2f},{d:8.2f},{d:8.2f}")
-        l.append(f"Bank Sta={s['lb']:.2f},{s['rb']:.2f}")
         l.append("XS GIS Cut Line= 2")
-        l.append("".join(f"{q[0]:16.2f}{q[1]:16.2f}" for q in s["cut"]))
+        l.append(f"{s['cut'][0][0]:16.2f}{s['cut'][0][1]:16.2f}{s['cut'][1][0]:16.2f}{s['cut'][1][1]:16.2f}")
         l.append(f"#Sta/Elev= {len(s['sta'])} ")
         pf = [f"{x:8.2f}{y:8.2f}" for x, y in zip(s["sta"], s["z"])]
         for k in range(0, len(pf), 5):
             l.append("".join(pf[k:k + 5]))
-        l.append("#Mann= 3 , 0 , 0 ")
-        l.append(f"{s['sta'][0]:8.2f}{N_PLANICIE:8.3f}{0:8d}"
+        l.append("#Mann= 3 ,-1,0")
+        l.append(f"    {s['sta'][0]:8.2f}{N_PLANICIE:8.3f}{0:8d}"
                  f"{s['lb']:8.2f}{N_CALHA:8.3f}{0:8d}"
                  f"{s['rb']:8.2f}{N_PLANICIE:8.3f}{0:8d}")
-        # HTAB ANCORADO NO INVERT DA CALHA, e nao no minimo da secao. O
-        # HEC-RAS compara com o ponto mais baixo ENTRE AS MARGENS; ancorar no
-        # minimo da secao poe o HTab abaixo do invert sempre que houver ponto
-        # mais fundo na planicie, e ele reseta a tabela sozinho.
+        l.append(f"Bank Sta={s['lb']:.2f},{s['rb']:.2f}")
         mcal = (s["sta"] >= s["lb"]) & (s["sta"] <= s["rb"])
         z_inv = float(s["z"][mcal].min()) if mcal.any() else s["zt"]
         l.append(f"XS HTab Starting El and Incr={z_inv+0.02:.2f},0.100, 500 ")

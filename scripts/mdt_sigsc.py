@@ -64,8 +64,8 @@ class MosaicoSigsc:
             if s.nodata is not None:
                 v[v == s.nodata] = np.nan
             if self.zero_e_vazio:
-                v[v == 0.0] = np.nan
-            v[v < -1000] = np.nan
+                v[v <= 0.0] = np.nan
+            v[v < -100] = np.nan
             z[m] = v
         return z
 

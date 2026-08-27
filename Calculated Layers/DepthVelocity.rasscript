@@ -1,0 +1,54 @@
+Imports System
+Imports System.Linq
+Imports System.Collections.Generic
+
+Namespace RasterCode
+  Public Class Processor
+    Public Shared Function ProcessTile(inputTiles As List(of Single())) As Single()
+      Const NoData As Single = -9999.0
+      Dim length As Integer = inputTiles.First().Length
+      For Each tile As Single() In inputTiles
+        If tile Is Nothing OrElse tile.Length <> length Then Throw New ArgumentException("Tile has invalid dimensions.")
+      Next
+
+      Dim returnArray(length - 1) as Single
+      For i as Integer = 0 to length - 1
+        Dim wse As Single = inputTiles(0)(i)
+        Dim v As Single = inputTiles(1)(i)
+        Dim Terreno As Single = inputTiles(2)(i)
+        Dim Output As Single = NoData
+
+' #BEGINSCRIPT:
+'  Depth * Velocity Example: computes depth times velocity for the specified profile
+'                  (Should not be used for Max D*V as the result will be MaxD*MaxV)
+'  Requirements: Water Surface Elevation, 'wse' and Velocity, 'v'
+'                Terrain, 'Terreno'
+' #VARIABLES:
+'  'wse' is the cell value from 'wse = TAJAI | elevation | -1 | Dynamic'
+'  'v' is the cell value from 'v = TAJAI | velocity | -1 | Dynamic'
+'  'Terreno' is the cell value from 'Terreno'
+'  'FACTOR' is a constant multiplier
+'-------------------------------------------------------
+  Const FACTOR As Single = 1.0
+  Dim d as Single
+  If wse = NoData OrElse v = NoData Then
+    Output = NoData
+  Else
+    d = wse - Terreno
+    Output = d * v * FACTOR
+  End If
+' #ENDSCRIPT:
+
+        returnArray(i) = Output
+      Next
+
+      return returnArray
+    End Function
+  End Class
+End Namespace
+
+' #VARIABLE: wse = TAJAI | elevation | -1 | Dynamic
+' #VARIABLE: v = TAJAI | velocity | -1 | Dynamic
+
+' #TERRAIN: Terreno = Terreno
+

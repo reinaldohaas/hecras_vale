@@ -129,7 +129,7 @@ def main():
     ap.add_argument("pedido")
     ap.add_argument("--rio", required=True)
     ap.add_argument("--legado", default=LEGADO)
-    ap.add_argument("--limite", type=float, default=300.0,
+    ap.add_argument("--limite", type=float, default=1500.0,
                     help="m; alem disso nao casa e deixa em branco")
     ap.add_argument("--saida", default=None)
     a = ap.parse_args()
@@ -192,13 +192,10 @@ def main():
         # legado e esquematico; no cinturao de meandros ele fica longe do
         # ponto do pedido e o limite de 300 m em XY deixava trechos REAIS
         # orfaos de ancora (Oeste: 27 em branco, e o aplicar mantinha o ruido
-        # do MDT ali). O RS casa ao longo do rio, imune ao pescoco de
-        # meandro; a folga e meio espacamento do legado (800 m) e a
-        # distancia 2D vira sanidade larga (1200 m).
         k = int(np.argmin(np.abs(L[:, 0] - rs_p)))
         d_rs = abs(float(L[k, 0]) - rs_p)
         d = float(np.hypot(L[k, 1] - x, L[k, 2] - y))
-        if d_rs > 800.0 or d > 1200.0:
+        if d_rs > 800.0 or d > a.limite:
             r["observacao"] = (f"sem secao levantada (RS mais proximo a "
                                f"{d_rs:.0f} m, centro a {d:.0f} m)")
             continue

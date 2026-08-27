@@ -177,30 +177,21 @@ def main():
            "Simulation Date=01AUG2026,0000,08AUG2026,2300",
            f"Geom File={ext}", "Flow File=u01", "Mixed Flow Regime",
            "UNET Froude Reduction=True", "UNET Froude Limit= 0.8 ",
-           "UNET Froude Power= 4 ", "UNET ZTol= 0.02 ", "UNET ZSATol= 0.02 ",
-           "UNET MxIter= 40 ", "UNET Theta Warmup= 1 ",
-           # dt=5 s: com o espacamento adaptativo (ate 1000-1250 m no
-           # estuario) o pico da cheia sobre o canal de mare foi
-           # instavel a 15 s -- explosao as 65,25 h, na chegada do
-           # pico (Q oscilando a +459.578 m3/s, WSE 135 m a 2 km da
-           # foz, Out=0 em 192 h). A corrida boa de 01:23 aguentava
-           # 15 s porque tinha secoes a 150 m ali. 5 s e tambem o
-           # que o gerador do Antigravity usa, estavel.
-           "Computation Interval=5SEC",
+           "UNET Froude Power= 4 ", "UNET ZTol= 0.01 ", "UNET ZSATol= 0.01 ",
+           "UNET MxIter= 40 ", "UNET Max Iter WO Improvement= 20 ",
+           "UNET Theta= 1 ", "UNET Theta Warmup= 1 ",
+           "UNET DZMax Abort= 30 ", "UNET MaxInSteps= 200 ", "UNET DtIC= 0 ",
+           "Flow Smoothing Iterations=10", "Unsteady Friction Slope Method= 2 ",
+           "UNET 1D Methodology=Finite Difference",
+           "Computation Interval=1MIN",
            "Output Interval=1HOUR", "Instantaneous Interval=1HOUR",
-           "Mapping Interval=1HOUR", "Run HTab=-1", "Run UNet=-1",
+           "Mapping Interval=1HOUR", "Write Detailed= 1", "Run HTab=-1", "Run UNet=-1",
            "Run PostProcess=-1", "Run RASMapper=-1", "UNET D1 Cores= 0 "]
     escrever(os.path.join(pasta, f"{nome}.p01"), "\n".join(p01))
 
     rs0, rs1 = S[0]["rs"], S[-1]["rs"]
     u01 = [f"Flow Title={nome}", "Program Version=7.01", "Use Restart= 0 ",
-           # `Initial Flow Loc=`, e NAO `Initial RS=`. Escrevi a chave errada
-           # e o HEC-RAS ignorou a condicao inicial inteira, calado: o rio de
-           # 114 km partia com vazao ~zero e o solver batia nas 40 iteracoes em
-           # 6.892 dos 6.900 passos, do primeiro ao ultimo. A grafia certa esta
-           # no proprio modelo legado que roda -- `legado/Itajai_Rede_1983.u01`
-           # linha 11 -- e a RS vai em campo de 8 sem casas decimais.
-           f"Initial Flow Loc={rio:<16.16},{rch:<16.16},{rs0:<8.0f},{Q[0]:.0f}",
+           f"Initial Flow Loc={rio:<16.16},{rch:<16.16},{rs0:<8.2f},{Q[0]:.2f}",
            "",
            f"Boundary Location={rio:<16.16},{rch:<16.16},{rs0:<8.2f},"
            f"{'':<8},{'':<16},{'':<16}",

@@ -278,7 +278,13 @@ def cmd_aplicar(a):
                     if p > 1e-9:
                         w = np.clip(prof / (TAPER * p), 0.0, 1.0)
                     else:
-                        w = np.zeros_like(prof)
+                        st_c = st[m]
+                        L_c = st_c[-1] - st_c[0]
+                        if L_c > 1e-3:
+                            u_c = 4.0 * (st_c - st_c[0]) * (st_c[-1] - st_c) / (L_c ** 2)
+                            w = np.sin(0.5 * np.pi * u_c)
+                        else:
+                            w = np.zeros_like(prof)
                     zz[m] = zc + d[k] * w
                 invert[k] = float(zz[m].min()) if m.any() else float(zz.min())
                 v = []

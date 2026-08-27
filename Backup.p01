@@ -1,7 +1,7 @@
 Plan Title=Rede_do_Relevo
 Program Version=7.01
 Short Identifier=TAJAI                                                           
-Simulation Date=01AUG2026,0000,05AUG2026,0000
+Simulation Date=01AUG2026,0000,08AUG2026,2300
 Geom File=g01
 Flow File=u01
 Subcritical Flow
@@ -30,7 +30,7 @@ Flow Ratio Min Ratio=0.5
 Flow Ratio Max Ratio=4
 Flow Ratio Max Iterations= 10 
 Flow Ratio Reference=
-Computation Interval=1MIN
+Computation Interval=15SEC
 Output Interval=1HOUR
 Instantaneous Interval=1HOUR
 Mapping Interval=1HOUR
@@ -69,7 +69,7 @@ UNET DSS MLevel= 4
 UNET Pardiso=0
 UNET DZMax Abort= 30 
 UNET Use Existing IB Tables=-1 
-UNET Froude Reduction=False
+UNET Froude Reduction=True
 UNET Froude Limit= 0.8 
 UNET Froude Power= 4 
 UNET D1 Cores= 0 
