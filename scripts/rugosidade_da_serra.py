@@ -51,6 +51,14 @@ def main(argv):
         raise SystemExit(__doc__)
     entrada = argv[0]
     ext = _arg(argv, "--saida", "h01")
+    # --forcar rio,reach,rs0,rs1,n : n minimo explicito numa janela
+    # (ex.: Salto dos Piloes, corredeira de matacoes, n 0,12)
+    forcados = []
+    for k, a in enumerate(argv):
+        if a == "--forcar":
+            rio_f, reach_f, r0, r1, nf = argv[k + 1].split(",")
+            forcados.append((rio_f.strip(), reach_f.strip(),
+                             float(r0), float(r1), float(nf)))
     raiz = os.path.dirname(entrada) or "."
     base = os.path.basename(entrada).split(".")[0]
     novo = os.path.join(raiz, f"{base}.{ext}")
@@ -79,8 +87,14 @@ def main(argv):
     por_rio = {}
     for i, d in enumerate(S):
         alvo = n_da_declividade(max(decl.get(i, 0.0), 0.0))
+        for rio_f, reach_f, r0, r1, nf in forcados:
+            if d["rio"] == rio_f and d["reach"] == reach_f \
+                    and r0 <= d["rs"] <= r1:
+                alvo = max(alvo or 0.0, nf)
         if alvo is not None:
-            novos[i] = alvo
+            # chave por (rio, reach, RS): indice de ler_secoes NAO segue
+            # o arquivo quando ha estrutura (barragem) no meio
+            novos[(d["rio"], d["reach"], round(d["rs"], 2))] = alvo
             e = por_rio.setdefault(d["rio"], [0, 0.0])
             e[0] += 1
             e[1] = max(e[1], alvo)
@@ -94,12 +108,22 @@ def main(argv):
 
     linhas = open(entrada, encoding="latin-1", errors="replace").read() \
         .replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    i_sec, saida, j, mudadas = -1, [], 0, 0
+    saida, j, mudadas = [], 0, 0
+    rio_c = reach_c = None
+    chave = None
     while j < len(linhas):
         l = linhas[j]
+        if l.startswith("River Reach="):
+            p = l.split("=", 1)[1].split(",")
+            rio_c = p[0].strip()
+            reach_c = p[1].strip() if len(p) > 1 else ""
         if l.startswith("Type RM Length L Ch R"):
-            i_sec += 1
-        alvo = novos.get(i_sec)
+            p = l.split("=", 1)[1].split(",")
+            try:
+                chave = (rio_c, reach_c, round(float(p[1]), 2))
+            except ValueError:
+                chave = None
+        alvo = novos.get(chave)
         if alvo is not None and l.startswith("#Mann="):
             partes = l.split("=")[1].split(",")
             cnt = int(partes[0])

@@ -48,6 +48,7 @@ def main(argv):
     topo = _arg(argv, "--topo", None, float)
     larg_v = _arg(argv, "--larg-vertedouro", 100.0, float)
     fenda = _arg(argv, "--fenda", 1.3, float)
+    rampa = _arg(argv, "--rampa", 0.0, float)
     coef = _arg(argv, "--coef", 1.7, float)
     nome = _arg(argv, "--nome", "Barragem")
     if None in (rio, reach, rs, crista, topo):
@@ -82,11 +83,21 @@ def main(argv):
     f0, f1 = ct - fenda / 2, ct + fenda / 2
     dist = (monte["rs"] - rs) * 0.9              # m ate a secao de montante
 
-    # degrau vertical = estacao repetida, como no BaldEagle.g01 oficial
-    perfil = [(s0, topo), (v0, topo), (v0, crista),
-              (f0, crista), (f0, leito), (f1, leito),
-              (f1, crista), (v1, crista), (v1, topo),
-              (s1, topo)]
+    # degrau vertical = estacao repetida, como no BaldEagle.g01 oficial.
+    # --rampa > 0: vertedouro em V raso (centro `rampa` m abaixo das
+    # pontas) para o vertimento ENGAJAR gradualmente -- crista plana de
+    # 100 m engajando de uma vez e um choque numerico no pe
+    if rampa > 0:
+        perfil = [(s0, topo), (v0, topo), (v0, crista),
+                  (ct - 10, crista - rampa), (f0, crista - rampa),
+                  (f0, leito), (f1, leito), (f1, crista - rampa),
+                  (ct + 10, crista - rampa), (v1, crista), (v1, topo),
+                  (s1, topo)]
+    else:
+        perfil = [(s0, topo), (v0, topo), (v0, crista),
+                  (f0, crista), (f0, leito), (f1, leito),
+                  (f1, crista), (v1, crista), (v1, topo),
+                  (s1, topo)]
     print(f"{nome}: {rio} {reach} RS {rs:.0f}")
     print(f"   entre RS {monte['rs']:.1f} e {jusante['rs']:.1f}")
     print(f"   leito {leito:.2f}  fenda {fenda:.2f} m  vertedouro "
