@@ -113,6 +113,10 @@ def main(argv):
         return
 
     # ------------------------------------------------------- reescreve
+    # chave por (rio, reach, RS): o indice de ler_secoes NAO acompanha o
+    # arquivo quando ha ESTRUTURA (barragem Type 5) no meio -- o gravador
+    # por indice escrevia o perfil rebaixado na secao ERRADA dali em
+    # diante (pego na foz do Luis Alves, 28/08)
     novos = {}
     for i, delta in rebaixo.items():
         d = S[i]
@@ -120,14 +124,25 @@ def main(argv):
         z = np.asarray(d["z"], float).copy()
         m = (st >= d["lb"] - 1e-6) & (st <= d["rb"] + 1e-6)
         z[m] = z[m] - delta
-        novos[i] = {"sta": st, "z": z, "htab": float(z.min()) + 0.15}
+        novos[(d["rio"], d["reach"], round(d["rs"], 2))] = \
+            {"sta": st, "z": z, "htab": float(z.min()) + 0.15}
 
-    i_sec, saida, j = -1, [], 0
+    saida, j = [], 0
+    rio_c = reach_c = None
+    chave = None
     while j < len(linhas):
         l = linhas[j]
+        if l.startswith("River Reach="):
+            p = l.split("=", 1)[1].split(",")
+            rio_c = p[0].strip()
+            reach_c = p[1].strip() if len(p) > 1 else ""
         if l.startswith("Type RM Length L Ch R"):
-            i_sec += 1
-        nv = novos.get(i_sec)
+            p = l.split("=", 1)[1].split(",")
+            try:
+                chave = (rio_c, reach_c, round(float(p[1]), 2))
+            except (ValueError, IndexError):
+                chave = None
+        nv = novos.get(chave)
         if nv is not None:
             if l.startswith("#Sta/Elev"):
                 v = []

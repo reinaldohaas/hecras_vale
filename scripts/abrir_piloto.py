@@ -37,6 +37,8 @@ def main(argv):
         raise SystemExit(__doc__)
     entrada = argv[0]
     ext = _arg(argv, "--saida", "g27")
+    so_rios = _arg(argv, "--rios", None)
+    so_rios = set(so_rios.split(",")) if so_rios else None
     relevo = _arg(argv, "--relevo", 0.5, float)
     largura = _arg(argv, "--largura", 25.0, float)
     prof = _arg(argv, "--prof", 1.5, float)
@@ -52,6 +54,8 @@ def main(argv):
 
     novos = {}
     for i, d in enumerate(S):
+        if so_rios and d["rio"] not in so_rios:
+            continue
         st = np.asarray(d["sta"], float)
         z = np.asarray(d["z"], float)
         m = (st >= d["lb"] - 1e-6) & (st <= d["rb"] + 1e-6)
@@ -66,7 +70,7 @@ def main(argv):
             # garante ao menos os pontos das bordas do entalhe
             dentro = m & (np.abs(st - centro) <= largura)
         z2[dentro] = fundo
-        novos[i] = {"sta": st, "z": z2, "htab": fundo + 0.15}
+        novos[(d["rio"], d["reach"], round(d["rs"], 2))] = {"sta": st, "z": z2, "htab": fundo + 0.15}
         print(f"   {d['rio']:13s} {d['reach']:3s} RS {d['rs']:9.1f}  "
               f"piloto {largura:.0f}x{prof:.1f} m aberto "
               f"(fundo {fundo:.2f})")
@@ -77,12 +81,22 @@ def main(argv):
 
     linhas = open(entrada, encoding="latin-1", errors="replace").read() \
         .replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    i_sec, saida, j = -1, [], 0
+    saida, j = [], 0
+    rio_c = reach_c = None
+    chave = None
     while j < len(linhas):
         l = linhas[j]
+        if l.startswith("River Reach="):
+            p = l.split("=", 1)[1].split(",")
+            rio_c = p[0].strip()
+            reach_c = p[1].strip() if len(p) > 1 else ""
         if l.startswith("Type RM Length L Ch R"):
-            i_sec += 1
-        nv = novos.get(i_sec)
+            p = l.split("=", 1)[1].split(",")
+            try:
+                chave = (rio_c, reach_c, round(float(p[1]), 2))
+            except (ValueError, IndexError):
+                chave = None
+        nv = novos.get(chave)
         if nv is not None:
             if l.startswith("#Sta/Elev"):
                 v = []

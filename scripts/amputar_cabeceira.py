@@ -95,7 +95,7 @@ def main(argv):
     escrever(novo, "\n".join(saida))
 
     # ------------------------------------------------------------- u01
-    u01 = os.path.join(raiz, base + ".u01")
+    u01 = _arg(argv, "--u01", os.path.join(raiz, base + ".u01"))
     shutil.copy2(u01, u01 + ".antes_da_amputacao")
     t = open(u01, encoding="latin-1", errors="replace").read()
     rs_txt = ("%.2f" % novo_topo).rstrip("0").rstrip(".")

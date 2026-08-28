@@ -62,7 +62,7 @@ def main(argv):
             continue
         z2 = z.copy()
         z2[m] = z2[m] - delta
-        novos[i] = {"sta": st, "z": z2, "htab": float(z2.min()) + 0.15}
+        novos[(d["rio"], d["reach"], round(d["rs"], 2))] = {"sta": st, "z": z2, "htab": float(z2.min()) + 0.15}
         print(f"   {d['rio']:13s} {d['reach']:3s} RS {d['rs']:9.1f}  "
               f"bancada {delta:5.1f} m nivelada ao talvegue "
               f"{z.min():7.2f}")
@@ -73,12 +73,24 @@ def main(argv):
 
     linhas = open(entrada, encoding="latin-1", errors="replace").read() \
         .replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    i_sec, saida, j = -1, [], 0
+    # chave por (rio, reach, RS): com ESTRUTURA (Type 5) no arquivo o
+    # indice de ler_secoes dessincroniza e o perfil ia para a secao errada
+    saida, j = [], 0
+    rio_c = reach_c = None
+    chave = None
     while j < len(linhas):
         l = linhas[j]
+        if l.startswith("River Reach="):
+            p = l.split("=", 1)[1].split(",")
+            rio_c = p[0].strip()
+            reach_c = p[1].strip() if len(p) > 1 else ""
         if l.startswith("Type RM Length L Ch R"):
-            i_sec += 1
-        nv = novos.get(i_sec)
+            p = l.split("=", 1)[1].split(",")
+            try:
+                chave = (rio_c, reach_c, round(float(p[1]), 2))
+            except (ValueError, IndexError):
+                chave = None
+        nv = novos.get(chave)
         if nv is not None:
             if l.startswith("#Sta/Elev"):
                 v = []

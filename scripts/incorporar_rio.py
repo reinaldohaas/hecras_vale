@@ -231,8 +231,30 @@ def main(argv):
     ls_n2 = bloco_novo.split('\n')
     saida_n = []
     i2 = 0
+    grade = np.array([0.0])
     while i2 < len(ls_n2):
         l2 = ls_n2[i2]
+        if l2.startswith('#Sta/Elev='):
+            # guarda a grade de estacoes da secao corrente, para ancorar
+            # Bank Sta e quebras de Manning (exigencia do RAS)
+            cnt3 = int(l2.split('=')[1])
+            vals3 = []
+            j3 = i2 + 1
+            while j3 < len(ls_n2) and len(vals3) < 2 * cnt3:
+                x3 = ls_n2[j3]
+                if not x3.strip() or x3.lstrip()[0].isalpha():
+                    break
+                vals3 += [float(x3[c:c + 8])
+                          for c in range(0, len(x3), 8)
+                          if x3[c:c + 8].strip()]
+                j3 += 1
+            grade = np.array(vals3[0::2]) if vals3 else grade
+
+        def ancora(v):
+            return float(grade[int(np.argmin(np.abs(grade - v)))])
+        if l2.startswith('Bank Sta='):
+            a3, b3 = (float(x) for x in l2.split('=')[1].split(','))
+            l2 = 'Bank Sta=%.2f,%.2f' % (ancora(a3), ancora(b3))
         saida_n.append(l2)
         if l2.startswith('#Mann='):
             cnt2 = int(l2.split('=')[1].split(',')[0])
@@ -244,6 +266,9 @@ def main(argv):
                     break
                 vals2 += [float(v) for v in x2.split()]
                 i2 += 1
+            # quebras do Manning ancoradas na grade (posicoes 0, 3, 6...)
+            for j2 in range(0, len(vals2), 3):
+                vals2[j2] = ancora(vals2[j2])
             lin2 = ''
             for j2, v2 in enumerate(vals2):
                 lin2 += '%8.3f' % v2

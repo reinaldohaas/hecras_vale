@@ -68,7 +68,7 @@ def main(argv):
                 z = np.asarray(d["z"], float).copy()
                 m = (st >= d["lb"] - 1e-6) & (st <= d["rb"] + 1e-6)
                 z[m] = z[m] - delta
-                novos[i] = {"sta": st, "z": z,
+                novos[(d["rio"], d["reach"], round(d["rs"], 2))] = {"sta": st, "z": z,
                             "htab": float(z.min()) + 0.15}
                 print(f"   {k[0]:13s} {k[1]:3s} RS {d['rs']:9.1f}  soleira "
                       f"{delta:+5.2f} m rebaixada (leito {zt:.2f} -> "
@@ -82,12 +82,24 @@ def main(argv):
 
     linhas = open(entrada, encoding="latin-1", errors="replace").read() \
         .replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    i_sec, saida, j = -1, [], 0
+    # chave por (rio, reach, RS): com ESTRUTURA (Type 5) no arquivo o
+    # indice de ler_secoes dessincroniza e o perfil ia para a secao errada
+    saida, j = [], 0
+    rio_c = reach_c = None
+    chave = None
     while j < len(linhas):
         l = linhas[j]
+        if l.startswith("River Reach="):
+            p = l.split("=", 1)[1].split(",")
+            rio_c = p[0].strip()
+            reach_c = p[1].strip() if len(p) > 1 else ""
         if l.startswith("Type RM Length L Ch R"):
-            i_sec += 1
-        nv = novos.get(i_sec)
+            p = l.split("=", 1)[1].split(",")
+            try:
+                chave = (rio_c, reach_c, round(float(p[1]), 2))
+            except (ValueError, IndexError):
+                chave = None
+        nv = novos.get(chave)
         if nv is not None:
             if l.startswith("#Sta/Elev"):
                 v = []

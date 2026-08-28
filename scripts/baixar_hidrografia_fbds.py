@@ -22,7 +22,7 @@ BASE = "https://geo.fbds.org.br/SC/{mun}/HIDROGRAFIA/"
 
 MUNICIPIOS = [
     # baixo vale / Acu
-    "ITAJAI", "NAVEGANTES", "ILHOTA", "GASPAR", "BLUMENAU", "INDAIAL",
+    "ITAJAI", "NAVEGANTES", "ILHOTA", "LUIS_ALVES", "GASPAR", "BLUMENAU", "INDAIAL",
     "ASCURRA", "APIUNA",
     # Benedito / Cedros / Testo
     "TIMBO", "POMERODE", "RIO_DOS_CEDROS", "BENEDITO_NOVO",
@@ -37,7 +37,7 @@ MUNICIPIOS = [
     # Mirim
     "VIDAL_RAMOS", "PRESIDENTE_NEREU", "BOTUVERA", "BRUSQUE", "GUABIRUBA",
 ]
-CAMADAS = ["RIOS_DUPLOS", "MASSAS_DAGUA"]
+CAMADAS = ["RIOS_DUPLOS", "MASSAS_DAGUA", "RIOS_SIMPLES"]
 PARTES = [".shp", ".shx", ".dbf", ".prj", ".cpg"]
 
 
