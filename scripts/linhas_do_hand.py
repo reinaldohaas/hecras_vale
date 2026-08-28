@@ -128,7 +128,8 @@ def em_partes(P, lados, kms, lado, simpl, salto=1500.0):
     return saida
 
 
-def preencher_lacunas(ls, PB, lados, kms, mdt_src, passo=150.0):
+def preencher_lacunas(ls, PB, lados, kms, mdt_src, passo=150.0,
+                      km_min=0.0, km_max=1e12):
     """onde a FBDS nao tem margem num raio de 400 m de quilometragem,
     mede a LAMINA no MDT 1 m (transecto + medir de largura_do_sigsc) e
     acrescenta os dois pontos de borda d'agua."""
@@ -152,6 +153,8 @@ def preencher_lacunas(ls, PB, lados, kms, mdt_src, passo=150.0):
     n_novo = 0
     for s in np.arange(200, ls.length - 200, passo):
         km = ls.length - s
+        if not (km_min <= km <= km_max):
+            continue
         falta = [ld for ld in (1, -1) if not coberto(ld, km)]
         if not falta:
             continue
@@ -212,6 +215,7 @@ def main(argv):
     from shapely.geometry import LineString
 
     rios = eixos_e_talvegues(g01)
+    S = ler_secoes(g01)
     todos_p, todos_c, todos_r = [], [], []
     for k, (rio, (ls, P, C)) in enumerate(sorted(rios.items())):
         todos_p.append(P)
@@ -262,13 +266,17 @@ def main(argv):
            'crs': {'type': 'name', 'properties': {'name': 'EPSG:31982'}},
            'features': []}
     for rio, (ls, P, C) in sorted(rios.items()):
-        # ---- EDGES pelo HAND, por TRANSECTO: em cada estacao do eixo,
-        # anda-se para fora ate o HAND passar do limite (primeira saida
-        # da planicie). Um ponto por lado por estacao = linha limpa.
-        # (contorno da mancha e DENDRITICO: ordenar seus pontos pela
-        # quilometragem costurava bracos diferentes -- a teia da captura
-        # de tela do Reinaldo)
+        # ---- EDGES pelo HAND, por TRANSECTO sobre a mancha LIMPA por
+        # MORFOLOGIA (ideia do Reinaldo: reconhecimento de imagem):
+        # ABERTURA poda os dedos dendriticos dos vales laterais (mais
+        # estreitos que ~500 m) e FECHAMENTO tapa buracos -- e o
+        # contorno vira uma curva de verdade, nao uma teia
+        from scipy import ndimage
         mancha = (hand <= hand_edge) & perto & (dono == rio)
+        el = ndimage.generate_binary_structure(2, 1)
+        mancha = ndimage.binary_closing(mancha, el, iterations=3)
+        mancha = ndimage.binary_opening(mancha, el, iterations=6)
+        mancha = ndimage.binary_closing(mancha, el, iterations=3)
 
         def hand_ok(x, y):
             j = int(round((x - BB[0]) / (BB[2] - BB[0]) * (NX - 1)))
@@ -277,25 +285,36 @@ def main(argv):
                 return bool(mancha[i, j])
             return False
 
+        # so a QUILOMETRAGEM COM SECOES no modelo: alem da amputacao
+        # (Mirim > km 40 etc.) o eixo continua mas nao ha modelo -- era
+        # de la que vinham os rabiscos rio acima
+        rss_rio = [d['rs'] for d in S
+                   if d['rio'] == rio and d['tipo'] == '1']
+        s_ini = max(100.0, ls.length - max(rss_rio))
+        s_fim = min(ls.length - 100.0, ls.length - min(rss_rio))
         for lado, tag in [(1, 'N'), (-1, 'S')]:
-            pontos_e = []
-            for s in np.arange(100, ls.length - 100, 250.0):
+            estacoes, afastas = [], []
+            for s in np.arange(s_ini, s_fim, 250.0):
                 P0 = np.asarray(ls.interpolate(s).coords[0])
                 P1 = np.asarray(ls.interpolate(min(s + 30,
                                                    ls.length)).coords[0])
                 t = P1 - P0
                 t = t / max(np.hypot(*t), 1e-9)
                 nv = np.array([-t[1], t[0]]) * lado
-                borda = None
                 d = RES
                 while d <= 12000:
                     p = P0 + d * nv
                     if not hand_ok(p[0], p[1]):
-                        borda = P0 + (d - RES) * nv
                         break
                     d += RES
-                if borda is not None and d > 2 * RES:
-                    pontos_e.append(borda)
+                estacoes.append((P0, nv))
+                afastas.append(d - RES if d > 2 * RES else np.nan)
+            afastas = np.array(afastas, float)
+            # mediana movel (5 estacoes) tira o zigue-zague dos buracos
+            lisas = np.array([np.nanmedian(afastas[max(0, i - 2):i + 3])
+                              for i in range(len(afastas))])
+            pontos_e = [P0 + a * nv for (P0, nv), a in
+                        zip(estacoes, lisas) if np.isfinite(a)]
             if len(pontos_e) < 4:
                 continue
             PE = np.array(pontos_e)
@@ -334,7 +353,12 @@ def main(argv):
                     # (ordem do Reinaldo: "no FBDS e onde ele nao estiver
                     # disponivel usar o SIG-SC")
                     PB, lados, kms = preencher_lacunas(
-                        ls, PB, lados, kms, mdt_src)
+                        ls, PB, lados, kms, mdt_src,
+                        km_min=min(rss_rio), km_max=max(rss_rio))
+                    # bank fora da quilometragem do modelo tambem sai
+                    m_ok = (kms >= min(rss_rio) - 400) \
+                        & (kms <= max(rss_rio) + 400)
+                    PB, lados, kms = PB[m_ok], lados[m_ok], kms[m_ok]
                     for lado, tag in [(1, 'N'), (-1, 'S')]:
                         pedacos = em_partes(PB, lados, kms, lado, 25.0,
                                             salto=800.0)
