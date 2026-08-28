@@ -96,9 +96,22 @@ def promover(ext):
 def main(argv):
     ate = _arg(argv, "--ate", 99, int)
     quer_rodar = "--rodar" in argv
+    # --sem-amputar: mantem os rios INTEIROS (no relevo SIG-SC a serra e
+    # real; a amputacao era remedio para a serra sintetica)
+    sem_amputar = "--sem-amputar" in argv
+    # --slot N: grava a variante como gNN/uNN/pNN registrados no .prj,
+    # SEM tocar g01/u01/p01 ([[nunca-sobrescrever-o-projeto]])
+    slot = _arg(argv, "--slot", 0, int)
     # --base troca a geometria crua de partida (ex.: taha_ai.r00, o
     # relevo do MDT 1 m gerado por relevo_nas_secoes.py)
     base_g = _arg(argv, "--base", "taha_ai.g01.antes_do_reparo_1983")
+    guardados = {}
+    if slot:
+        for ext in ("g01", "u01", "p01"):
+            arq = g(ext)
+            if os.path.exists(arq):
+                guardados[ext] = arq + ".antes_do_slot"
+                shutil.copy2(arq, guardados[ext])
 
     for arq in (base_g, "taha_ai.u01.antes_do_observado"):
         if not os.path.exists(os.path.join(RAIZ, arq)):
@@ -145,7 +158,9 @@ def main(argv):
         rodar(cmd, resumo)
         promover(ext)
 
-    if ate >= 6:
+    if ate >= 6 and sem_amputar:
+        print("\n=== 6. amputacoes PULADAS (--sem-amputar: rios inteiros)")
+    if ate >= 6 and not sem_amputar:
         for reach, corte in [("Itajai_Mirim,R1", "40000"),
                              ("Rio_Benedito,R1", "23000"),
                              ("Rio_dos_Cedros,R1", "12000")]:
@@ -199,12 +214,51 @@ def main(argv):
             print(f"    AVISO p01: esperava '{chave}{valor}'")
     open(p01, "w", encoding="latin-1", newline="\r\n").write(t)
     print("\nd. p01 conferido (CRLF garantido)")
-    print("\nCONSTRUIDO. g01/u01/p01 prontos para o plano 01.")
+
+    plano = "01"
+    if slot:
+        # empacota a variante em gNN/uNN/pNN e RESTAURA g01/u01/p01
+        gs, us, ps = f"g{slot:02d}", f"u{slot:02d}", f"p{slot:02d}"
+        plano = f"{slot:02d}"
+        shutil.copy2(g("g01"), g(gs))
+        shutil.copy2(g("u01"), g(us))
+        tg = open(g(gs), encoding="latin-1").read().replace("\r\n", "\n")
+        tg = tg.replace("Geom Title=taha_ai - eixo do relevo Copernicus",
+                        f"Geom Title=taha_ai - variante slot {slot}", 1)
+        open(g(gs), "w", encoding="latin-1", newline="\r\n").write(tg)
+        import re as _re
+        tp = open(g("p01"), encoding="latin-1").read().replace("\r\n",
+                                                               "\n")
+        tp = tp.replace("Geom File=g01", f"Geom File={gs}", 1)
+        tp = tp.replace("Flow File=u01", f"Flow File={us}", 1)
+        tp = _re.sub(r"Plan Title=.*",
+                     f"Plan Title=1983 variante slot {slot}", tp, count=1)
+        tp = _re.sub(r"Short Identifier=.*",
+                     f"Short Identifier=1983_slot{slot}", tp, count=1)
+        open(g(ps), "w", encoding="latin-1", newline="\r\n").write(tp)
+        for ext, backup in guardados.items():
+            shutil.copy2(backup, g(ext))
+        tj = open(g("prj"), encoding="latin-1").read().replace("\r\n",
+                                                               "\n")
+        if f"Geom File={gs}" not in tj:
+            tj = tj.replace("Geom File=g01",
+                            f"Geom File=g01\nGeom File={gs}", 1)
+        if f"Plan File={ps}" not in tj:
+            tj = tj.replace("Plan File=p01",
+                            f"Plan File=p01\nPlan File={ps}", 1)
+        open(g("prj"), "w", encoding="latin-1", newline="\r\n").write(tj)
+        print(f"\nCONSTRUIDO no slot: {gs}/{us}/{ps} registrados; "
+              f"g01/u01/p01 restaurados intactos.")
+    else:
+        print("\nCONSTRUIDO. g01/u01/p01 prontos para o plano 01.")
 
     if not quer_rodar:
         print("(use --rodar para computar e conferir as reguas)")
         return
-    for lixo in ("taha_ai.g01.hdf", "taha_ai.p01.data_errors.txt"):
+    lixos = ["taha_ai.p01.data_errors.txt",
+             f"taha_ai.p{plano}.data_errors.txt",
+             f"taha_ai.g{slot:02d}.hdf" if slot else "taha_ai.g01.hdf"]
+    for lixo in lixos:
         if os.path.exists(os.path.join(RAIZ, lixo)):
             os.remove(os.path.join(RAIZ, lixo))
     sys.path.insert(0, RAIZ)
@@ -212,10 +266,11 @@ def main(argv):
     from vale.terreno import HECRAS_DIR
     p = init_ras_project(os.path.join(RAIZ, "taha_ai.prj"),
                          os.path.join(HECRAS_DIR, "Ras.exe"))
-    print("\ncomputando (31 dias, ~30-40 min)...")
-    RasCmdr.compute_plan("01", ras_object=p, force_rerun=True)
+    print(f"\ncomputando o plano {plano} (31 dias, ~30-40 min)...")
+    RasCmdr.compute_plan(plano, ras_object=p, force_rerun=True)
     import h5py
-    with h5py.File(os.path.join(RAIZ, "taha_ai.p01.hdf"), "r") as f:
+    with h5py.File(os.path.join(RAIZ, f"taha_ai.p{plano}.hdf"),
+                   "r") as f:
         txt = bytes(f["Results/Summary/Compute Messages (text)"][()]) \
             .decode("utf-8", "replace")
     ok = "Finished Unsteady Flow Simulation" in txt
@@ -223,7 +278,7 @@ def main(argv):
     print("\nACEITE:")
     print(f"   terminou o mes: {ok}   (tem de ser True)")
     print(f"   {vol[-1].strip() if vol else 'sem linha de volume'}")
-    rodar(prog("comparar_com_observado.py", "taha_ai.p01.hdf"),
+    rodar(prog("comparar_com_observado.py", f"taha_ai.p{plano}.hdf"),
           "reguas simulado x observado")
 
 
