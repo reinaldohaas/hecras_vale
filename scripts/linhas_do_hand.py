@@ -262,28 +262,57 @@ def main(argv):
            'crs': {'type': 'name', 'properties': {'name': 'EPSG:31982'}},
            'features': []}
     for rio, (ls, P, C) in sorted(rios.items()):
-        # ---- EDGES pelo HAND (contorno via matplotlib, sem skimage)
+        # ---- EDGES pelo HAND, por TRANSECTO: em cada estacao do eixo,
+        # anda-se para fora ate o HAND passar do limite (primeira saida
+        # da planicie). Um ponto por lado por estacao = linha limpa.
+        # (contorno da mancha e DENDRITICO: ordenar seus pontos pela
+        # quilometragem costurava bracos diferentes -- a teia da captura
+        # de tela do Reinaldo)
         mancha = (hand <= hand_edge) & perto & (dono == rio)
-        figc, axc = plt.subplots()
-        cs = axc.contour(gx, gy, mancha.astype(float), levels=[0.5])
-        segs = [s for s in cs.allsegs[0] if len(s) > 3]
-        plt.close(figc)
-        if segs:
-            PC = np.vstack(segs)          # TODOS os fragmentos da mancha
-            lados, kms = lado_e_km(ls, PC)
-            for lado, tag in [(1, 'N'), (-1, 'S')]:
-                pedacos = em_partes(PC, lados, kms, lado, 80.0)
-                for k, lin in enumerate(pedacos):
-                    suf = f' {k+1}/{len(pedacos)}' if len(pedacos) > 1 else ''
-                    nome = (f'{ROTULOS.get(rio, rio)} — edge {tag}{suf} '
-                            f'(HAND {hand_edge:.0f} m)')
-                    linhas.append({'nome': nome, 'cor': CORES.get(rio, '#333'),
-                                   'grupo': ROTULOS.get(rio, rio),
-                                   'pontos': lin})
-                    geo['features'].append({'type': 'Feature',
-                                            'properties': {'nome': nome},
-                                            'geometry': {'type': 'LineString',
-                                                         'coordinates': lin}})
+
+        def hand_ok(x, y):
+            j = int(round((x - BB[0]) / (BB[2] - BB[0]) * (NX - 1)))
+            i = int(round((BB[3] - y) / (BB[3] - BB[1]) * (NY - 1)))
+            if 0 <= i < NY and 0 <= j < NX:
+                return bool(mancha[i, j])
+            return False
+
+        for lado, tag in [(1, 'N'), (-1, 'S')]:
+            pontos_e = []
+            for s in np.arange(100, ls.length - 100, 250.0):
+                P0 = np.asarray(ls.interpolate(s).coords[0])
+                P1 = np.asarray(ls.interpolate(min(s + 30,
+                                                   ls.length)).coords[0])
+                t = P1 - P0
+                t = t / max(np.hypot(*t), 1e-9)
+                nv = np.array([-t[1], t[0]]) * lado
+                borda = None
+                d = RES
+                while d <= 12000:
+                    p = P0 + d * nv
+                    if not hand_ok(p[0], p[1]):
+                        borda = P0 + (d - RES) * nv
+                        break
+                    d += RES
+                if borda is not None and d > 2 * RES:
+                    pontos_e.append(borda)
+            if len(pontos_e) < 4:
+                continue
+            PE = np.array(pontos_e)
+            pedacos = em_partes(PE, np.full(len(PE), lado),
+                                np.arange(len(PE), 0, -1.0) * 250, lado,
+                                80.0)
+            for k, lin in enumerate(pedacos):
+                suf = f' {k+1}/{len(pedacos)}' if len(pedacos) > 1 else ''
+                nome = (f'{ROTULOS.get(rio, rio)} — edge {tag}{suf} '
+                        f'(HAND {hand_edge:.0f} m)')
+                linhas.append({'nome': nome, 'cor': CORES.get(rio, '#333'),
+                               'grupo': ROTULOS.get(rio, rio),
+                               'pontos': lin})
+                geo['features'].append({'type': 'Feature',
+                                        'properties': {'nome': nome},
+                                        'geometry': {'type': 'LineString',
+                                                     'coordinates': lin}})
         # ---- BANKS pelo rio desenhado
         try:
             faixa = ls.buffer(600)
