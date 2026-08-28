@@ -85,7 +85,8 @@ function desenha(){
     const pl = document.createElementNS(NS, 'polyline');
     pl.setAttribute('points', L.pontos.map(p=>`${sx(p[0])},${sy(p[1])}`).join(' '));
     pl.setAttribute('fill','none'); pl.setAttribute('stroke', L.cor);
-    pl.setAttribute('stroke-width', (sel===li?1.8:1)*lw);
+    pl.setAttribute('stroke-width', (sel===li?1.8:1)*lw*(L.fina?0.55:1));
+    if(L.fina) pl.setAttribute('opacity', .75);
     pl.setAttribute('stroke-dasharray', (L.banco || L.nome.startsWith('Divisor'))?'none':`${6*pxUnid()} ${4*pxUnid()}`);
     pl.style.cursor = 'copy';
     pl.addEventListener('pointerdown', ev => { ev.stopPropagation();

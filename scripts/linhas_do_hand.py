@@ -380,6 +380,50 @@ def main(argv):
             print(f'   {rio}: banks falharam ({e})')
         print(f'   {rio}: ok')
 
+    # ---- linhas DO MODELO que esta funcionando (referencia editavel):
+    # banks = Bank Sta reais, edges = pontas das secoes, por rio
+    from relevo_nas_secoes import ler_cutlines, amostrar_cutline
+    cut = ler_cutlines(g01)
+    por_rio_mod = {}
+    for i, d in enumerate(S):
+        if d['tipo'] != '1' or i not in cut:
+            continue
+        sta = np.asarray(d['sta'], float)
+        est, cx, cy = amostrar_cutline(cut[i], float(sta[-1] - sta[0]))
+        est = est + float(sta[0])
+
+        def xy(e):
+            return (float(np.interp(e, est, cx)),
+                    float(np.interp(e, est, cy)))
+        r = por_rio_mod.setdefault(d['rio'],
+                                   {'bN': [], 'bS': [], 'eN': [],
+                                    'eS': [], 'rs': []})
+        r['bS'].append(xy(d['lb']))
+        r['bN'].append(xy(d['rb']))
+        r['eS'].append((cx[0], cy[0]))
+        r['eN'].append((cx[-1], cy[-1]))
+        r['rs'].append(d['rs'])
+    for rio, r in sorted(por_rio_mod.items()):
+        o = np.argsort(-np.array(r['rs']))
+        kms = np.array(r['rs'])[o]
+        for chave, tag, tipo in [('bN', 'N', 'bank'), ('bS', 'S', 'bank'),
+                                 ('eN', 'N', 'edge'), ('eS', 'S', 'edge')]:
+            P = np.array(r[chave])[o]
+            pedacos = em_partes(P, np.ones(len(P)), kms, 1,
+                                40.0, salto=2500.0)
+            for k, lin in enumerate(pedacos):
+                suf = f' {k+1}/{len(pedacos)}' if len(pedacos) > 1 else ''
+                nome = (f'{ROTULOS.get(rio, rio)} — {tipo} {tag}{suf} '
+                        f'(modelo)')
+                linhas.append({'nome': nome, 'cor': CORES.get(rio, '#333'),
+                               'grupo': f'{ROTULOS.get(rio, rio)} (modelo)',
+                               'banco': tipo == 'bank', 'fina': True,
+                               'pontos': lin})
+                geo['features'].append({'type': 'Feature',
+                                        'properties': {'nome': nome},
+                                        'geometry': {'type': 'LineString',
+                                                     'coordinates': lin}})
+
     # divisor Acu-Mirim: linha media entre os dois eixos
     if 'Itajai_Acu' in rios and 'Itajai_Mirim' in rios:
         acu_ls = rios['Itajai_Acu'][0]
