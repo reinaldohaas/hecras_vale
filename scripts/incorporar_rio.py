@@ -221,6 +221,40 @@ def main(argv):
     bloco_novo = re.sub(r'^River Reach=[^,]+,',
                         f'River Reach={nome_rio:<16s},', bloco_novo,
                         count=1, flags=re.M)
+    # '#Mann= N ,-1,0' liga o modo "n horizontal variado" e o RAS exige
+    # outra estrutura ("needs n on first station"); as irmas usam 0
+    bloco_novo = re.sub(r'^#Mann= *(\d+) *, *-1 *, *0',
+                        r'#Mann= \1 , 0 , 0 ', bloco_novo, flags=re.M)
+    # e o gerador grava os valores em campos de 12 colunas -- o RAS le
+    # em 8 e acha a tabela desalinhada ("n value not set"): reescreve
+    # cada bloco de valores no formato canonico de 8 colunas
+    ls_n2 = bloco_novo.split('\n')
+    saida_n = []
+    i2 = 0
+    while i2 < len(ls_n2):
+        l2 = ls_n2[i2]
+        saida_n.append(l2)
+        if l2.startswith('#Mann='):
+            cnt2 = int(l2.split('=')[1].split(',')[0])
+            vals2 = []
+            i2 += 1
+            while i2 < len(ls_n2) and len(vals2) < 3 * cnt2:
+                x2 = ls_n2[i2]
+                if not x2.strip() or x2.lstrip()[0].isalpha():
+                    break
+                vals2 += [float(v) for v in x2.split()]
+                i2 += 1
+            lin2 = ''
+            for j2, v2 in enumerate(vals2):
+                lin2 += '%8.3f' % v2
+                if (j2 + 1) % 10 == 0:
+                    saida_n.append(lin2)
+                    lin2 = ''
+            if lin2:
+                saida_n.append(lin2)
+            continue
+        i2 += 1
+    bloco_novo = '\n'.join(saida_n)
     # anexa ao fim
     t2 = t2.rstrip('\n') + '\n\n' + bloco_novo + '\n'
 
@@ -272,6 +306,11 @@ def main(argv):
                          if l[c:c + 8].strip()]
             resto = '\n'.join(ls_b[corte_i:]) if corte_i else ''
             fr_up = (r_ini - rs_corte_up) / max(r_ini - r_fim2, 1e-9)
+            # o RAS proibe lateral terminando na ULTIMA secao do reach
+            # ou comecando na PRIMEIRA: encosta uma secao para dentro
+            fim_up = sorted(acima)[1] if len(acima) > 1 else rs_corte_up
+            ini_dn = sorted(abaixo, reverse=True)[1] \
+                if len(abaixo) > 1 else rs_corte_dn
             cab = b.split('\n')[0]
             meio = b[len(cab) + 1:h.start()]
 
@@ -285,8 +324,8 @@ def main(argv):
                                     f'{len(sN)} '] + fmt8(sN)
                                  + [resto.rstrip('\n')]) + '\n\n'
             ra_up = ('%.2f' % r_ini).rstrip('0').rstrip('.')
-            rb_up = ('%.2f' % rs_corte_up).rstrip('0').rstrip('.')
-            ra_dn = ('%.2f' % rs_corte_dn).rstrip('0').rstrip('.')
+            rb_up = ('%.2f' % fim_up).rstrip('0').rstrip('.')
+            ra_dn = ('%.2f' % ini_dn).rstrip('0').rstrip('.')
             rb_dn = ('%.2f' % r_fim2).rstrip('0').rstrip('.')
             blocos[k] = (novo_bloco(alvo_rio, alvo_reach, ra_up, rb_up,
                                     fr_up)

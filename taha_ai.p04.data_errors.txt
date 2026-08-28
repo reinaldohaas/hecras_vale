@@ -1,4 +1,0 @@
-Boundary at River: Itajai_Norte  Reach: R2  RS: 116746.1 to 19980.02
-      Downstream RS is at the bottom of a reach.  Uniform lateral inflows cannot end on the downstream cross section of a reach
-Boundary at River: Itajai_Norte  Reach: R3  RS: 19695.7 to 410.44
-      Upstream RS is at the top of a reach.  Uniform lateral inflows cannot start on the upstream cross section of a reach

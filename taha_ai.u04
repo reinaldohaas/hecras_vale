@@ -228,7 +228,7 @@ Use DSS=False
 Use Fixed Start Time=False
 Fixed Start Date/Time=,
 
-Boundary Location=Itajai_Norte    ,R2              ,116746.1,19980.02,                ,                
+Boundary Location=Itajai_Norte    ,R2              ,116746.1,20980.02,                ,                
 Interval=1DAY
 Uniform Lateral Inflow Hydrograph= 36 
    88.95   78.57   73.62   61.96   58.66  269.25  990.50 1452.92 1167.50  857.52
@@ -240,7 +240,7 @@ Use DSS=False
 Use Fixed Start Time=False
 Fixed Start Date/Time=,
 
-Boundary Location=Itajai_Norte    ,R3              ,19695.7 ,410.44  ,                ,                
+Boundary Location=Itajai_Norte    ,R3              ,19411.37,410.44  ,                ,                
 Interval=1DAY
 Uniform Lateral Inflow Hydrograph= 36 
    17.99   15.89   14.89   12.53   11.86   54.45  200.32  293.83  236.11  173.42
