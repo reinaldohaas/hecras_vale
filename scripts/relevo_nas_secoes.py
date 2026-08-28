@@ -136,6 +136,13 @@ def main(argv):
     entrada = argv[0]
     ext = _arg(argv, "--saida", "r00")
     fig_arq = _arg(argv, "--figura", "doc/figuras/relevo_trocado.png")
+    # --fundo talvegue: cava ao talvegue ANTIGO (sintetico calibrado).
+    # --fundo lamina: cava a `--profundidade` m abaixo do ESPELHO do
+    #   MDT -- o espelho e agua real e desce monotonico; e o unico fundo
+    #   sao sem batimetria nos trechos onde o sintetico e escadaria
+    #   (Cedros restaurado explodia com 20 m de erro pelo leito antigo)
+    fundo = _arg(argv, "--fundo", "talvegue")
+    prof = _arg(argv, "--profundidade", 2.0, float)
     raiz = os.path.dirname(entrada) or "."
     base = os.path.basename(entrada).split(".")[0]
     novo = os.path.join(raiz, f"{base}.{ext}")
@@ -197,10 +204,14 @@ def main(argv):
             i_min = np.flatnonzero(m)[int(np.argmin(znovo[m]))]
             c = est[i_min]
             W = larg_lamina(d["rio"], d["rs"] / 1000.0)
+            if fundo == "lamina":
+                alvo_f = float(znovo[i_min]) - prof
+            else:
+                alvo_f = tal0
             dcen = np.abs(est - c)
-            fundo = tal0 + np.maximum(0.0, (dcen - W / 2.0)) * 0.5
+            piso = alvo_f + np.maximum(0.0, (dcen - W / 2.0)) * 0.5
             cava = m & (dcen <= W / 2.0 + 8.0)
-            znovo[cava] = np.minimum(znovo[cava], fundo[cava])
+            znovo[cava] = np.minimum(znovo[cava], piso[cava])
         est = np.round(est, 2)
         novos[i] = {"sta": est, "z": znovo,
                     "htab": float(znovo.min()) + 0.15,
@@ -287,7 +298,11 @@ def main(argv):
             sobe += 1
         if (np.abs(zb) < 1e-6).any():
             zerado += 1
-    print(f"   talvegue subiu: {sobe}   (tem de ser 0)")
+    if fundo == "lamina":
+        print(f"   talvegue subiu vs sintetico: {sobe}   (esperado em "
+              f"--fundo lamina: o leito novo e espelho-{prof:.1f} m)")
+    else:
+        print(f"   talvegue subiu: {sobe}   (tem de ser 0)")
     print(f"   pontos em zero absoluto: {zerado}   (tem de ser 0)")
 
     if exemplos:
