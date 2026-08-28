@@ -327,6 +327,22 @@ def main(argv):
             print(f'   {rio}: banks falharam ({e})')
         print(f'   {rio}: ok')
 
+    # divisor Acu-Mirim: linha media entre os dois eixos
+    if 'Itajai_Acu' in rios and 'Itajai_Mirim' in rios:
+        acu_ls = rios['Itajai_Acu'][0]
+        mir_ls = rios['Itajai_Mirim'][0]
+        div = []
+        for s in np.linspace(0, mir_ls.length, 500):
+            pm = mir_ls.interpolate(mir_ls.length - s)
+            pa = acu_ls.interpolate(acu_ls.project(pm))
+            if np.hypot(pm.x - pa.x, pm.y - pa.y) > 45000:
+                break
+            div.append(((pm.x + pa.x) / 2, (pm.y + pa.y) / 2))
+        div = [[round(x, 1), round(y, 1)] for x, y in
+               LineString(div).simplify(60).coords]
+        linhas.append({'nome': 'Divisor Açu–Mirim', 'cor': '#111111',
+                       'grupo': 'Divisor', 'banco': True, 'pontos': div})
+
     dados = {'bbox': list(BB), 'linhas': linhas}
     json.dump(dados, open(os.path.join(pasta, 'linhas_editor.json'), 'w'))
     json.dump(geo, open(os.path.join(pasta, 'linhas_hand.geojson'), 'w'))
