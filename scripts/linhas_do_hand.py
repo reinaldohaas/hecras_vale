@@ -94,33 +94,38 @@ def lado_e_km(ls, P):
     return np.array(lados), np.array(kms)
 
 
-def em_linhas(P, lados, kms, lado, simpl, cortar=True):
-    """pontos de um lado -> polilinha ordenada pela km e simplificada."""
+def em_partes(P, lados, kms, lado, simpl, salto=1500.0):
+    """pontos de um lado -> TODAS as polilinhas continuas (ordenadas pela
+    km, quebradas onde ha salto). Antes so o maior fragmento sobrevivia e
+    os rios ficavam pelados; costurar fragmentos gerava cordas retas."""
     from shapely.geometry import LineString
     m = lados == lado
     if m.sum() < 4:
-        return None
+        return []
     o = np.argsort(-kms[m])
     pts = P[m][o]
-    if cortar:
-        # corta saltos > 3 km (bracos soltos do contorno)
-        partes, atual = [], [pts[0]]
-        for p in pts[1:]:
-            if np.hypot(p[0] - atual[-1][0], p[1] - atual[-1][1]) > 3000:
-                partes.append(atual)
-                atual = [p]
-            else:
-                atual.append(p)
-        partes.append(atual)
-        pts = max(partes, key=len)
-    if len(pts) < 4:
-        return None
-    ls = LineString(pts).simplify(simpl)
-    # teto de vertices por linha: editor a mouse nao quer milhares
-    while len(ls.coords) > 700:
-        simpl *= 1.6
-        ls = ls.simplify(simpl)
-    return [[round(x, 1), round(y, 1)] for x, y in ls.coords]
+    partes, atual = [], [pts[0]]
+    for p in pts[1:]:
+        if np.hypot(p[0] - atual[-1][0], p[1] - atual[-1][1]) > salto:
+            partes.append(atual)
+            atual = [p]
+        else:
+            atual.append(p)
+    partes.append(atual)
+    saida = []
+    for pts in partes:
+        if len(pts) < 4:
+            continue
+        ls = LineString(pts)
+        if ls.length < 1500:      # fiapos nao valem edicao
+            continue
+        s = simpl
+        ls = ls.simplify(s)
+        while len(ls.coords) > 700:
+            s *= 1.6
+            ls = ls.simplify(s)
+        saida.append([[round(x, 1), round(y, 1)] for x, y in ls.coords])
+    return saida
 
 
 def preencher_lacunas(ls, PB, lados, kms, mdt_src, passo=150.0):
@@ -264,12 +269,14 @@ def main(argv):
         segs = [s for s in cs.allsegs[0] if len(s) > 3]
         plt.close(figc)
         if segs:
-            PC = max(segs, key=len)
+            PC = np.vstack(segs)          # TODOS os fragmentos da mancha
             lados, kms = lado_e_km(ls, PC)
             for lado, tag in [(1, 'N'), (-1, 'S')]:
-                lin = em_linhas(PC, lados, kms, lado, 80.0)
-                if lin:
-                    nome = f'{ROTULOS.get(rio, rio)} — edge {tag} (HAND {hand_edge:.0f} m)'
+                pedacos = em_partes(PC, lados, kms, lado, 80.0)
+                for k, lin in enumerate(pedacos):
+                    suf = f' {k+1}/{len(pedacos)}' if len(pedacos) > 1 else ''
+                    nome = (f'{ROTULOS.get(rio, rio)} — edge {tag}{suf} '
+                            f'(HAND {hand_edge:.0f} m)')
                     linhas.append({'nome': nome, 'cor': CORES.get(rio, '#333'),
                                    'grupo': ROTULOS.get(rio, rio),
                                    'pontos': lin})
@@ -300,10 +307,13 @@ def main(argv):
                     PB, lados, kms = preencher_lacunas(
                         ls, PB, lados, kms, mdt_src)
                     for lado, tag in [(1, 'N'), (-1, 'S')]:
-                        lin = em_linhas(PB, lados, kms, lado, 25.0,
-                                        cortar=False)
-                        if lin:
-                            nome = f'{ROTULOS.get(rio, rio)} — bank {tag} (FBDS+SIG-SC)'
+                        pedacos = em_partes(PB, lados, kms, lado, 25.0,
+                                            salto=800.0)
+                        for k, lin in enumerate(pedacos):
+                            suf = (f' {k+1}/{len(pedacos)}'
+                                   if len(pedacos) > 1 else '')
+                            nome = (f'{ROTULOS.get(rio, rio)} — bank '
+                                    f'{tag}{suf} (FBDS+SIG-SC)')
                             linhas.append({'nome': nome,
                                            'cor': CORES.get(rio, '#333'),
                                            'grupo': ROTULOS.get(rio, rio),

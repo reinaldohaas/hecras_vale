@@ -1,0 +1,204 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Editor de Edges do Vale</title>
+<style>
+:root{--fundo:#F4F6F8;--painel:#FFFFFF;--tinta:#1C2B3A;--tinta2:#51677A;--fio:#D5DEE6;--ok:#0E8A78;--acao:#1C5DB0}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--fundo:#11181F;--painel:#1A232D;--tinta:#E7EDF2;--tinta2:#A9BAC9;--fio:#2C3945;--ok:#2FB89F;--acao:#5E97E8}}
+:root[data-theme="dark"]{--fundo:#11181F;--painel:#1A232D;--tinta:#E7EDF2;--tinta2:#A9BAC9;--fio:#2C3945;--ok:#2FB89F;--acao:#5E97E8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fundo);color:var(--tinta);font-family:system-ui,sans-serif;
+  display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--painel);
+  border-bottom:1px solid var(--fio);flex-wrap:wrap}
+header h1{font-size:16px;margin:0 14px 0 0}
+button{font:inherit;font-size:13.5px;padding:7px 14px;border:1px solid var(--fio);
+  border-radius:5px;background:var(--painel);color:var(--tinta);cursor:pointer}
+button.primario{background:var(--acao);border-color:var(--acao);color:#fff;font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+#aviso{font-size:13px;color:var(--tinta2)}
+#aviso.bom{color:var(--ok);font-weight:600}
+main{flex:1;position:relative;overflow:hidden}
+svg{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+svg.arrastando{cursor:grabbing}
+aside{position:absolute;top:12px;left:12px;max-height:calc(100% - 24px);overflow-y:auto;background:var(--painel);border:1px solid var(--fio);
+  border-radius:6px;padding:10px 12px;font-size:13px;max-width:250px;box-shadow:0 3px 14px #0002}
+aside label{display:flex;align-items:center;gap:7px;padding:3px 0;cursor:pointer}
+aside .cor{width:14px;height:3px;border-radius:2px;display:inline-block}
+aside .dica{color:var(--tinta2);font-size:12px;margin-top:8px;border-top:1px solid var(--fio);padding-top:7px;line-height:1.5}
+.vert{cursor:move}
+</style>
+</head>
+<body>
+<header>
+  <h1>Editor de Edges — Vale do Itajaí (todos os rios)</h1>
+  <button class="primario" id="salvar">Salvar no artifact</button>
+  <button id="baixar">Baixar GeoJSON</button>
+  <button id="desfazer">Desfazer (Ctrl+Z)</button>
+  <span id="aviso">carregando…</span>
+</header>
+<main>
+  <svg id="mapa" preserveAspectRatio="xMidYMid meet">
+    <image id="fundo" href="@@IMG@@"/>
+    <g id="linhas"></g>
+  </svg>
+  <aside>
+    <div id="legenda"></div>
+    <div class="dica"><b>Arraste o fundo</b> para mover, <b>roda</b> para zoom.<br>
+    <b>Arraste um vértice</b> para editar; <b>clique na linha</b> insere vértice;
+    <b>clique numa linha</b> a seleciona (mostra os vértices); segundo clique insere vértice; <b>clique direito</b> num vértice apaga.<br>Coordenadas UTM 22S (SIRGAS2000).
+    Fundo: altura acima do rio mais próximo (azul <2 m, verde <10, amarelo <25, cinza = encosta). <b>Salvar</b> grava para o Claude ler; um rascunho local também fica no navegador.</div>
+  </aside>
+</main>
+<script id="dados" type="application/json">@@DADOS@@</script>
+<script>
+const TPL_B64 = "@@TPL@@";
+const dados = JSON.parse(document.getElementById('dados').textContent);
+const BB = dados.bbox;                       // [x0, y0, x1, y1] UTM
+const W = BB[2]-BB[0], H = BB[3]-BB[1];
+const svg = document.getElementById('mapa');
+const gL = document.getElementById('linhas');
+const aviso = document.getElementById('aviso');
+const NS = 'http://www.w3.org/2000/svg';
+// UTM -> svg: x' = x - x0 ; y' = y1 - y   (y desce)
+const sx = x => x - BB[0], sy = y => BB[3] - y;
+const ux = x => x + BB[0], uy = y => BB[3] - y;
+let vista = {x:0, y:0, w:W, h:H};
+let visivel = dados.linhas.map(()=>true);
+let sel = null, sujo = false;
+const hist = [];
+
+document.getElementById('fundo').setAttribute('x',0);
+document.getElementById('fundo').setAttribute('y',0);
+document.getElementById('fundo').setAttribute('width',W);
+document.getElementById('fundo').setAttribute('height',H);
+
+function aplicaVista(){ svg.setAttribute('viewBox', `${vista.x} ${vista.y} ${vista.w} ${vista.h}`); desenha(); }
+function pxUnid(){ return vista.w / svg.clientWidth; }
+
+function desenha(){
+  gL.innerHTML = '';
+  const r = 5*pxUnid(), lw = 2*pxUnid();
+  dados.linhas.forEach((L, li) => {
+    if(!visivel[li]) return;
+    const pl = document.createElementNS(NS, 'polyline');
+    pl.setAttribute('points', L.pontos.map(p=>`${sx(p[0])},${sy(p[1])}`).join(' '));
+    pl.setAttribute('fill','none'); pl.setAttribute('stroke', L.cor);
+    pl.setAttribute('stroke-width', (sel===li?1.8:1)*lw);
+    pl.setAttribute('stroke-dasharray', (L.banco || L.nome.startsWith('Divisor'))?'none':`${6*pxUnid()} ${4*pxUnid()}`);
+    pl.style.cursor = 'copy';
+    pl.addEventListener('pointerdown', ev => { ev.stopPropagation();
+      if(sel !== li){ sel = li; aviso.textContent = 'selecionada: ' + L.nome; desenha(); return; }
+      insere(li, ev); });
+    gL.appendChild(pl);
+    if(li !== sel) return;   // vertices so na linha selecionada
+    L.pontos.forEach((p, pi) => {
+      const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', sx(p[0])); c.setAttribute('cy', sy(p[1]));
+      c.setAttribute('r', r); c.setAttribute('fill', L.cor);
+      c.setAttribute('stroke', '#fff'); c.setAttribute('stroke-width', .35*r);
+      c.classList.add('vert');
+      c.addEventListener('pointerdown', ev => { ev.stopPropagation(); sel=li; arrasta(li, pi, ev); });
+      c.addEventListener('contextmenu', ev => { ev.preventDefault(); ev.stopPropagation();
+        if(dados.linhas[li].pontos.length > 3){ marca(); dados.linhas[li].pontos.splice(pi,1); mudou(); } });
+      gL.appendChild(c);
+    });
+  });
+}
+function coordEv(ev){
+  const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  const m = svg.getScreenCTM().inverse(); const q = pt.matrixTransform(m);
+  return [q.x, q.y];
+}
+function marca(){ hist.push(JSON.stringify(dados.linhas)); if(hist.length>60) hist.shift(); }
+function mudou(){ sujo = true; aviso.textContent = 'edicoes nao salvas'; aviso.className='';
+  try{ localStorage.setItem('edges_rascunho', JSON.stringify(dados.linhas)); }catch(e){}
+  desenha(); }
+function arrasta(li, pi, ev){
+  marca();
+  const move = e => { const [x,y] = coordEv(e);
+    dados.linhas[li].pontos[pi] = [Math.round(ux(x)*10)/10, Math.round(uy(y)*10)/10]; mudou(); };
+  const solta = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', solta); };
+  window.addEventListener('pointermove', move); window.addEventListener('pointerup', solta);
+}
+function insere(li, ev){
+  const [x, y] = coordEv(ev); const P = [Math.round(ux(x)*10)/10, Math.round(uy(y)*10)/10];
+  const pts = dados.linhas[li].pontos;
+  let melhor = 0, dm = 1e18;
+  for(let k=0; k<pts.length-1; k++){
+    const ax=pts[k][0], ay=pts[k][1], bx=pts[k+1][0], by=pts[k+1][1];
+    const t = Math.max(0, Math.min(1, ((P[0]-ax)*(bx-ax)+(P[1]-ay)*(by-ay))/((bx-ax)**2+(by-ay)**2 || 1)));
+    const d = (P[0]-(ax+t*(bx-ax)))**2 + (P[1]-(ay+t*(by-ay)))**2;
+    if(d<dm){ dm=d; melhor=k; }
+  }
+  marca(); pts.splice(melhor+1, 0, P); mudou();
+  // ja engata o arrasto do novo vertice
+  arrasta(li, melhor+1, ev);
+}
+// pan e zoom
+let pan = null;
+svg.addEventListener('pointerdown', ev => { pan = {x:ev.clientX, y:ev.clientY, v:{...vista}}; svg.classList.add('arrastando'); });
+window.addEventListener('pointermove', ev => { if(!pan) return;
+  const k = vista.w / svg.clientWidth;
+  vista.x = pan.v.x - (ev.clientX-pan.x)*k; vista.y = pan.v.y - (ev.clientY-pan.y)*k; aplicaVista(); });
+window.addEventListener('pointerup', () => { pan = null; svg.classList.remove('arrastando'); });
+svg.addEventListener('wheel', ev => { ev.preventDefault();
+  const [mx, my] = coordEv(ev); const f = ev.deltaY > 0 ? 1.18 : 1/1.18;
+  vista = {x: mx-(mx-vista.x)*f, y: my-(my-vista.y)*f, w: vista.w*f, h: vista.h*f}; aplicaVista(); }, {passive:false});
+window.addEventListener('keydown', ev => { if((ev.ctrlKey||ev.metaKey) && ev.key==='z'){ ev.preventDefault();
+  const h = hist.pop(); if(h){ dados.linhas = JSON.parse(h); mudou(); } }});
+// legenda
+const leg = document.getElementById('legenda');
+const grupos = [...new Set(dados.linhas.map(L => L.grupo || L.nome))];
+grupos.forEach(gr => {
+  const lab = document.createElement('label');
+  const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = true;
+  cb.addEventListener('change', ()=>{
+    dados.linhas.forEach((L, li) => { if((L.grupo || L.nome) === gr) visivel[li] = cb.checked; });
+    desenha(); });
+  const L0 = dados.linhas.find(L => (L.grupo || L.nome) === gr);
+  const sw = document.createElement('span'); sw.className='cor'; sw.style.background = L0.cor;
+  const n = dados.linhas.filter(L => (L.grupo || L.nome) === gr).length;
+  lab.appendChild(cb); lab.appendChild(sw);
+  lab.appendChild(document.createTextNode(`${gr} (${n})`));
+  leg.appendChild(lab);
+});
+// rascunho local
+try{
+  const r = localStorage.getItem('edges_rascunho');
+  if(r){ dados.linhas = JSON.parse(r); aviso.textContent = 'rascunho local restaurado (nao salvo)'; }
+}catch(e){}
+// salvar / baixar
+function paginaNova(){
+  const tpl = decodeURIComponent(escape(atob(TPL_B64)));
+  return tpl.replace('@@'+'DADOS'+'@@', JSON.stringify(dados))
+            .replace('@@'+'TPL'+'@@', TPL_B64);
+}
+document.getElementById('salvar').addEventListener('click', async () => {
+  aviso.textContent = 'salvando…'; aviso.className='';
+  const art = await claude.use('artifact');
+  if(!art){ aviso.textContent = 'salvar indisponivel nesta visualizacao'; return; }
+  try{
+    await art.publish(paginaNova());
+    sujo = false; aviso.textContent = 'salvo — o Claude ja consegue ler'; aviso.className='bom';
+    try{ localStorage.removeItem('edges_rascunho'); }catch(e){}
+  }catch(e){
+    aviso.textContent = (e && e.code==='conflict') ? 'outra versao foi salva antes — recarregando' : 'falhou: '+(e && e.message || e);
+  }
+});
+document.getElementById('baixar').addEventListener('click', async () => {
+  const gj = {type:'FeatureCollection', crs:{type:'name',properties:{name:'EPSG:31982'}},
+    features: dados.linhas.map(L => ({type:'Feature', properties:{nome:L.nome},
+      geometry:{type:'LineString', coordinates:L.pontos}}))};
+  const dl = await claude.use('downloads');
+  if(!dl){ aviso.textContent = 'download indisponivel aqui'; return; }
+  try{ await dl.save({filename:'edges_editadas.geojson', data: JSON.stringify(gj, null, 1)});
+    aviso.textContent = 'GeoJSON oferecido ao navegador'; }catch(e){ aviso.textContent = 'download recusado'; }
+});
+aviso.textContent = 'pronto — edite e salve';
+aplicaVista();
+window.addEventListener('resize', aplicaVista);
+</script>
+</body>
+</html>
