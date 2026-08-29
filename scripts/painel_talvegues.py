@@ -202,6 +202,7 @@ const DUPLOS = @@DUPLOS@@;
 const LAMINA = @@LAMINA@@;
 const BARRAGENS = @@BARRAGENS@@;
 const ARQUIVADOS = @@ARQUIVADOS@@;
+const ANARIOS = @@ANARIOS@@;
 
 const mapa = L.map('mapa');
 const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -257,6 +258,12 @@ const camBarragens = L.geoJSON(BARRAGENS, {
       (p.USO_PRINCIPAL||'?')+'<br>material: '+(p.TIPO_MATERIAL||'?'));
   }});
 camBarragens.addTo(mapa);
+const camAna = L.geoJSON(ANARIOS, {
+  style: f => ({color:'#e8590c',
+    weight: (f.properties.nome||'').indexOf('[')===0 ? 1.5 : 3,
+    opacity:0.85}),
+  onEachFeature: (f, l) => l.bindTooltip(f.properties.nome,
+                                         {sticky:true})});
 const camArquivados = L.layerGroup();
 for (const nome in ARQUIVADOS) {
   const l = L.polyline(ARQUIVADOS[nome], {color:'#868e96', weight:3,
@@ -272,7 +279,8 @@ L.control.layers(
    "Massas d'água (FBDS)":camMassas,
    'Rios duplos (FBDS)':camDuplos,
    'Barragens (SNISB)':camBarragens,
-   'Rios arquivados (fora do modelo)':camArquivados},
+   'Rios arquivados (fora do modelo)':camArquivados,
+   'Cursos d'água ANA (código Otto)':camAna},
   {collapsed:false}).addTo(mapa);
 
 const todos = Object.values(RIOS).flat();
@@ -358,6 +366,11 @@ def main():
     print(f'centerlines: {sum(len(v) for v in eixos.values())} reaches')
     arquivados = eixos_arquivados()
     print(f'arquivados: {list(arquivados.keys())}')
+    ana_arq = os.path.join('doc', 'painel', 'ana_rios.geojson')
+    anarios = {'type': 'FeatureCollection', 'features': []}
+    if os.path.exists(ana_arq):
+        anarios = json.load(open(ana_arq))
+        print(f'cursos ANA: {len(anarios["features"])} tracos')
     print('recortando FBDS...')
     massas = fbds_geojson('MASSAS_DAGUA')
     duplos = fbds_geojson('RIOS_DUPLOS')
@@ -393,6 +406,8 @@ def main():
                 barragens, separators=(',', ':')))
             .replace('@@ARQUIVADOS@@', json.dumps(
                 arquivados, separators=(',', ':')))
+            .replace('@@ANARIOS@@', json.dumps(
+                anarios, separators=(',', ':')))
             .replace('@@MASSAS@@', json.dumps(massas,
                                               separators=(',', ':')))
             .replace('@@DUPLOS@@', json.dumps(duplos,
