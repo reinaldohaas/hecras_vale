@@ -1,0 +1,22 @@
+Plan Title=rede plena SIG-SC (lab)
+Program Version=7.01
+Short Identifier=lab_rede_plena
+Geom File=g01
+Flow File=u01
+Simulation Date=01JUL1983,0000,31JUL1983,2300
+UNET ZTol= 0.02 
+UNET ZSATol= 0.02 
+UNET MxIter= 40 
+Mixed Flow Regime
+UNET Froude Reduction=True
+UNET Froude Limit= 0.8 
+UNET Froude Power= 4 
+Computation Interval=1MIN
+Output Interval=1HOUR
+Instantaneous Interval=1HOUR
+Mapping Interval=1HOUR
+Write Detailed= 1
+Run HTab=-1
+Run UNet=-1
+Run PostProcess=-1
+Run RASMapper=-1

@@ -48,6 +48,7 @@ def ler(projeto):
                 rs = None
         elif l.startswith("#Sta/Elev="):
             n = int(l.split("=")[1])
+            cab = i                     # linha do cabecalho, para achar Bank Sta
             v = []
             i += 1
             while i < len(txt) and len(v) < 2 * n:
@@ -55,8 +56,12 @@ def ler(projeto):
                 v += [float(s[c:c + 8]) for c in range(0, len(s.rstrip()), 8)
                       if s[c:c + 8].strip()]
                 i += 1
+            # Bank Sta pode vir ANTES ou DEPOIS do #Sta/Elev: a formatacao
+            # propria punha depois, e o build_cross_section do ras-commander
+            # poe antes. Procurar so depois devolvia None em TODAS as secoes, e
+            # qualquer metrica que use margem sai silenciosamente vazia.
             lb = rb = None
-            for k in range(i, min(i + 6, len(txt))):
+            for k in list(range(i, min(i + 6, len(txt)))) +                      list(range(max(0, cab - 8), cab)):
                 if txt[k].startswith("Bank Sta="):
                     lb, rb = [float(x) for x in txt[k].split("=")[1].split(",")]
                     break

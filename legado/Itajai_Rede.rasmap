@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RASMapper>
   <Version>2.00</Version>
-  <RASProjectionFilename Filename=".\Itajai_Rede.projection" />
+  <RASProjectionFilename Filename=".\SIRGAS2000_UTM22S.prj" />
   <Geometries Checked="True" Expanded="True" />
   <Results Checked="True" Expanded="True">
     <Layer Name="REDE" Type="RASResults" Checked="True" Expanded="True" Filename=".\Itajai_Rede.p01.hdf">

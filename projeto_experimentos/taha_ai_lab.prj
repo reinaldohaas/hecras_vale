@@ -1,0 +1,19 @@
+Proj Title=taha_ai_lab
+Current Plan=p01
+Default Exp/Contr=0.3,0.1
+SI Units
+Geom File=g01
+Unsteady File=u01
+Plan File=p01
+Geom File=g02
+Unsteady File=u02
+Plan File=p02
+Geom File=g03
+Unsteady File=u03
+Plan File=p03
+Y Axis Title=Elevation
+X Axis Title(PF)=Main Channel Distance
+X Axis Title(XS)=Station
+BEGIN DESCRIPTION:
+experimentos: rede plena, Krauel, Luis Alves
+END DESCRIPTION:

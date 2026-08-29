@@ -1,0 +1,16 @@
+name: hecras-qc
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - gdal
+  - rasterio
+  - geopandas
+  - shapely
+  - pyproj
+  - numpy
+  - scipy
+  - matplotlib
+  - pyside6
+  - pandas
+  - pip

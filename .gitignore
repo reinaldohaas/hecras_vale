@@ -1,15 +1,19 @@
+.venv/
+# --- saida do pacote vale/ (tudo regeneravel por rodar_vale.bat) ---
+# estado.pkl tem 43 MB e o .g01 12 MB; ambos saem de um "rodar_vale.bat 4-10".
+# As figuras de erro tambem: o passo 8 e o 9 as regeram a cada rodada.
+modelo/
+Terrain/
 
-# --- binarios pesados: nunca versionar ---
-# Um 'git add -A' varreu estes e o push foi rejeitado pelo GitHub (limite de
-# 100 MB por arquivo). Todos sao REGENERAVEIS: os DEM baixam do Copernicus /
-# SIG-SC, e os resultados saem de rodar_modelo.py.
+# --- lixo de execucao ---
+__pycache__/
+*.pyc
+*.npz
+*.dem
 *.tif
-*.tiff
 *.hdf
-*.dss
+*.aux.xml
 *.O0[0-9]
-*.r0[0-9]
-*.x0[0-9]
 *.b0[0-9]
 *.bco0[0-9]
 *.ic.o0[0-9]
@@ -20,3 +24,13 @@ eixos_do_relevo.geojson
 # projeto gerado (regeneravel por construir.py)
 Tajai.*
 !Tajai.prj
+
+# --- rasters grandes de origem (o GitHub recusa acima de 100 MB) ---
+# dem_itajai.tif tem 147 MB e dem_bacia_itajai.tif tem 129 MB. Estavam
+# rastreados e faziam o pre-receive do GitHub recusar a branch inteira.
+# Foram tirados do historico dos commits nao publicados e continuam no disco.
+dem_itajai.tif
+dem_itajai.tif.aux.xml
+dem_bacia_itajai.tif
+doc/ana_credenciais.txt
+*.ovr

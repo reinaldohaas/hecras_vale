@@ -1,0 +1,36 @@
+<RASMapper>
+  <Version>2.0.0</Version>
+  <RASProjectionFilename Filename=".\SIRGAS2000_UTM22S.prj" />
+  <Geometries Checked="True" Expanded="True">
+    <Layer Name="Rio_das_Pombas - Validado" Type="RASGeometry" Checked="True" Expanded="True" Filename=".\rio_das_pombas.g01.hdf">
+      <Layer Type="RASRiver" Checked="True" />
+      <Layer Type="RASXS" Checked="True" Expanded="True" UnitsRiverStation="Meters" RiverStationDecimalPlaces="0" />
+      <Layer Type="RASEdgeLines" Checked="True" />
+      <Layer Type="RASXSInterpolationSurface" Checked="True" />
+    </Layer>
+  </Geometries>
+  <Plans Checked="True">
+    <Layer Name="Plano_rio_das_pombas" Type="RASPlan" Checked="True" Filename=".\rio_das_pombas.p01" GeometryHDF=".\rio_das_pombas.g01.hdf" />
+  </Plans>
+  <Results Checked="True" Expanded="True">
+    <Layer Name="p01" Type="RASResults" Checked="True" Expanded="True" Filename=".\rio_das_pombas.p01.hdf">
+      <Layer Name="WSE" Type="RASResultsMap" Checked="True">
+        <MapParameters MapType="elevation" ProfileIndex="2147483647" ProfileName="Max" />
+      </Layer>
+      <Layer Name="Velocity" Type="RASResultsMap" Checked="True">
+        <MapParameters MapType="velocity" ProfileIndex="2147483647" ProfileName="Max" />
+      </Layer>
+      <Layer Name="Depth" Type="RASResultsMap" Checked="True">
+        <MapParameters MapType="depth" ProfileIndex="2147483647" ProfileName="Max" />
+      </Layer>
+    </Layer>
+  </Results>
+  <Terrains Checked="True" Expanded="True">
+    <Layer Name="Terrain" Type="TerrainLayer" Checked="True" Filename=".\Terrain\Terrain.hdf">
+      <ResampleMethod>near</ResampleMethod>
+      <Surface On="True" />
+    </Layer>
+  </Terrains>
+  <Units>SI Units</Units>
+  <RenderMode>slopingPretty</RenderMode>
+</RASMapper>

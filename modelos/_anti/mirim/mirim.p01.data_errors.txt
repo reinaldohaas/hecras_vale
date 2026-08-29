@@ -1,0 +1,478 @@
+River: "Itajai_Mirim"   Reach: "R1"   RS:114503.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:114253.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:114003.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:113753.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:113503.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:113253.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:112253.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:111253.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:111003.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:110503.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:109753.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:108753.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:108503.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:107753.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:106003.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:105753.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:105253.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:104253.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:103753.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:102503.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:102003.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:101503.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:101003.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:100003.3                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:99253.33                  
+     - No Manning's n data or friction heights k set.
+River: "Itajai_Mirim"   Reach: "R1"   RS:98503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:98003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:96753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:96003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:94503.33                  
+     - No Manning's n data or friction heights k set.
+River: "Itajai_Mirim"   Reach: "R1"   RS:93753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:93253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:92753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:92253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:91753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:91003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:90253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:90003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:89503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:89003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:88253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:87503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:86753.33                  
+     - No Manning's n data or friction heights k set.
+River: "Itajai_Mirim"   Reach: "R1"   RS:86003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:85253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:84503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:84003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:83503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:82253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:81253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:80753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:80253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:79253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:79003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:78503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:78253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:77503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:76753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:76003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:75003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:74753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:73503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:73003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:72003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:70753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:70253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:69503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:68753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:67753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:67503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:67253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:66753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:66003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:65753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:65253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:65003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:63753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:63003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:62503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:62003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:60753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:60253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:59753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:59503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:58503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:57503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:56753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:56503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:56253.33                  
+     - No Manning's n data or friction heights k set.
+River: "Itajai_Mirim"   Reach: "R1"   RS:55753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:54503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:53503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:53253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:52753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:51753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:51503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:51003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:50003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:49003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:48753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:48003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:47253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:47003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:46253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:45753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:45003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:44503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:44253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:42753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:42253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:41753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:40753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:39753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:38503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:38003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:37503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:37253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:36753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:36503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:35753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:35503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:35253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:35003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:34503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:34003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:33753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:33503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:33253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:33003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:32753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:32503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:32253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:32003.33                  
+     - No Manning's n data or friction heights k set.
+River: "Itajai_Mirim"   Reach: "R1"   RS:31753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:31503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:31253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:31003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:30753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:30503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:30253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:30003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:29503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:29253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:29003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:28753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:28003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:27753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:27503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:27253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:27003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:26753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:26503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:26253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:25753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:25503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:25003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:24753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:24503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:24253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:24003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:23253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:23003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:22753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:22503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:22253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:22003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:21753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:21253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:21003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:20753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:20503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:20253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:20003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:19753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:19503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:19253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:19003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:18503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:18253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:18003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:17753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:17253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:17003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:16753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:16503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:16253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:16003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:15753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:15503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:15253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:15003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:14753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:14503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:14253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:14003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:13753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:13503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:13003.33                  
+     - No Manning's n data or friction heights k set.
+River: "Itajai_Mirim"   Reach: "R1"   RS:12753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:12503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:12253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:12003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:11753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:11503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:11253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:11003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:10753.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:10503.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:10253.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:10003.33                  
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:9753.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:9503.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:9003.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:8753.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:8503.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:8003.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:7753.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:7503.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:7253.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:7003.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:6753.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:6503.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:6253.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:6003.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:5753.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:5503.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:5253.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:5003.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:4753.33                   
+     - No Manning's n data or friction heights k set.
+River: "Itajai_Mirim"   Reach: "R1"   RS:4503.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:4003.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:3753.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:3253.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:3003.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:2753.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:2253.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:1253.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:1003.33                   
+     - A horizontal Manning's n value needs to be specified on first station.
+River: "Itajai_Mirim"   Reach: "R1"   RS:503.33                    
+     - A horizontal Manning's n value needs to be specified on first station.

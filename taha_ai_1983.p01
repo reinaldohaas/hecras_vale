@@ -1,0 +1,17 @@
+Plan Title=Rede_do_Relevo
+Program Version=7.01
+Short Identifier=TAJAI
+Geom File=g01
+Flow File=u01
+Simulation Date=01AUG2026,0000,08AUG2026,2300
+UNET ZTol= 0.02 
+UNET ZSATol= 0.02 
+UNET MxIter= 40 
+Computation Interval=1MIN
+Output Interval=1HOUR
+Instantaneous Interval=1HOUR
+Mapping Interval=1HOUR
+Run HTab=-1
+Run UNet=-1
+Run PostProcess=-1
+Run RASMapper=-1

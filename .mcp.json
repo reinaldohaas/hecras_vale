@@ -1,0 +1,12 @@
+﻿{
+  "mcpServers": {
+    "hecras": {
+      "command": "C:/Users/haas/github/hecras_vale/.venv/Scripts/ras-commander-mcp.exe",
+      "args": [],
+      "env": {
+        "HECRAS_VERSION": "7.0.1",
+        "HECRAS_PATH": "C:/Program Files (x86)/HEC/HEC-RAS/7.0.1"
+      }
+    }
+  }
+}

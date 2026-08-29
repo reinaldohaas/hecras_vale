@@ -49,6 +49,22 @@ CANAL_KH, CANAL_EH = 0.277, 0.35     # profundidade = KH * A^EH
 CANAL_KW, CANAL_EW = 5.0, 0.40       # largura     = KW * A^EW
 ALTURA_MARGEM = 3.0                  # folga acima do topo da calha
 
+# --- pilot channel (o mesmo recurso do HEC-RAS: Geometric Data > Pilot
+#     Channels, com largura, n e inverts interpolados). Um entalhe estreito e
+#     raso no talvegue.
+#     Por que e necessario aqui: com CALHA_SINTETICA desligada o fundo da secao
+#     e CHATO, com ~100 m de largura na cota do talvegue do DEM. Em lamina
+#     baixa -- que e o aquecimento, exatamente onde o modelo falha, entre
+#     00:07 e 00:25 de simulacao -- a area molhada e o raio hidraulico ficam
+#     mal definidos: alguns centimetros de agua espalhados por 100 m. A
+#     conducao calculada sobre isso oscila, e o solver nao converge.
+#     O entalhe da um caminho de escoamento continuo e bem condicionado desde
+#     a primeira iteracao, sem alterar a capacidade de cheia (25 m x 1,5 m sao
+#     37 m2 num rio que conduz milhares de m3/s).
+PILOT_ATIVO = True
+PILOT_LARGURA = 25.0                 # m
+PILOT_PROF = 1.5                     # m abaixo do fundo imposto
+
 
 def largura_secao(area_km2):
     """Meia-largura da secao, conforme o porte do rio.
@@ -137,6 +153,8 @@ def margens(sta, z, i0, prof_canal):
 
 
 FOLGA_CURVA = 0.70       # fracao do raio de curvatura ate onde a secao pode ir
+RAZAO_LADOS = 2.5        # largura maxima de um lado em relacao ao outro
+MINIMO_LADO = 120.0      # m, meia-largura minima de cada lado
 
 
 def direcao(linha, s):
@@ -205,8 +223,17 @@ def limites_por_curvatura(linha, estacas, meia_largura):
         k = np.ones(3) / 3.0
         return np.convolve(np.pad(m, 1, mode="edge"), k, "valid")
 
-    minimo = 120.0
-    return (np.maximum(alisar(esq), minimo), np.maximum(alisar(dir_), minimo))
+    minimo = MINIMO_LADO
+    e = np.maximum(alisar(esq), minimo)
+    d = np.maximum(alisar(dir_), minimo)
+    # Centrar a calha no corte. O limite de curvatura apara SO o lado concavo,
+    # entao numa curva fechada a secao sai com 90 m de um lado e 700 do outro:
+    # a calha encostada na borda, sem planicie de um lado (foi o Bank Sta
+    # 2,58/92,99 num corte de 800 m no Mirim). Estreitar o lado LARGO nunca
+    # cria cruzamento -- cruzamento vem de largura a mais --, entao limitar a
+    # razao entre os lados centra a calha sem afrouxar o criterio de curvatura.
+    e, d = np.minimum(e, d * RAZAO_LADOS), np.minimum(d, e * RAZAO_LADOS)
+    return np.maximum(e, minimo), np.maximum(d, minimo)
 
 
 def cortar(linha, s, amostrador, meia_largura, area_km2, hw_esq=None,
@@ -284,6 +311,26 @@ def escavar(d):
     z_canal = alvo + subida * np.maximum(z - alvo, 0.0)
     z = np.minimum(z, z_canal)
 
+    # PILOT CHANNEL. O invert acompanha z_alvo, que ja vem do perfil alisado,
+    # entao o entalhe e continuo rio abaixo por construcao -- que e o que o
+    # HEC-RAS obtem interpolando os inverts de montante e jusante na ferramenta
+    # dele.
+    if PILOT_ATIVO and PILOT_PROF > 0:
+        meia_p = PILOT_LARGURA / 2.0
+        talude_p = max(PILOT_LARGURA * 0.6, 10.0)
+        # O limite tem de VOLTAR AO TERRENO ao subir, como o trapezio
+        # principal. Escrito como
+        #     min(z, (alvo - PILOT_PROF) + sobe * PILOT_PROF)
+        # o limite satura em 'alvo' longe do canal, e min(z, alvo) rebaixa a
+        # secao INTEIRA ate o fundo: as 1.232 secoes do modelo viraram bacias
+        # chatas com um entalhe no meio e parede vertical nas pontas. No
+        # Itajai_Acu R4 RS 34.956 o terreno real vai de 0,50 a 51,54 m, com a
+        # encosta subindo a 50 m, e a secao gravada tinha QUATRO cotas em
+        # 2.908 m de largura.
+        base_p = alvo - PILOT_PROF
+        sobe = np.clip((dist - meia_p) / talude_p, 0.0, 1.0)
+        z = np.minimum(z, base_p + sobe * np.maximum(z - base_p, 0.0))
+
     # SECAO RASA: onde o vale e plano de verdade, nem 10x a largura acha
     # terreno alto -- no Taio havia secoes de 1.000 m com 2,25 m de desnivel
     # TOTAL, e qualquer lamina extrapolava a tabela de conducao. O log do
@@ -294,12 +341,17 @@ def escavar(d):
     # e a tabela cobre a faixa toda. So entra em jogo se a lamina chegar la;
     # onde o terreno ja e alto, nada muda. Diferente da tentativa anterior,
     # aqui e aplicado APENAS as secoes que precisam, nao a todas.
+    precisa = altura_para_vazao(sta, z, d.get("n"), d.get("S_terreno"),
+                                vazao_projeto(d.get("area_km2", 10.0)))
+    minima = float(np.clip(FOLGA_ALTURA * precisa,
+                           ALTURA_MINIMA_SECAO, ALTURA_MAX_SECAO))
     util = float(z.max() - z[i0])
-    if util < ALTURA_MINIMA_SECAO:
-        alvo_topo = z[i0] + ALTURA_MINIMA_SECAO
+    if util < minima:
+        alvo_topo = z[i0] + minima
         z[0] = max(z[0], alvo_topo)
         z[-1] = max(z[-1], alvo_topo)
-        d["parede"] = round(ALTURA_MINIMA_SECAO - util, 2)
+        d["parede"] = round(minima - util, 2)
+    d["h_precisa"] = round(precisa, 2)
 
     d["z"] = z
     # A profundidade que a margem enxerga e a ESCAVACAO -- terreno menos o
@@ -313,7 +365,12 @@ def escavar(d):
 
 
 ALTURA_ALVO = 15.0    # m de desnivel que a secao deve ter acima do talvegue
-ALTURA_MINIMA_SECAO = 12.0   # abaixo disso, fecha com parede vertical
+ALTURA_MINIMA_SECAO = 12.0   # piso absoluto, quando a vazao pede menos
+ALTURA_MAX_SECAO = 30.0      # teto: parede mais alta que isto nao e fisica
+FOLGA_ALTURA = 1.4           # borda livre sobre a lamina de projeto
+# Q = K * A^EXP, ancorado nos ~5.700 m3/s de 1983 na foz com 15.000 km2. Serve
+# so para DIMENSIONAR a secao; a vazao que roda vem da hidrologia.
+Q_K, Q_EXP = 2.6, 0.80
 FATOR_MAX = 10.0      # ate quantas vezes a largura base pode ser esticada
 
 
@@ -343,6 +400,50 @@ def tirar_picos(z, janela=5, limite=3.0):
     fora = np.abs(z - med) > limite
     z[fora] = med[fora]
     return z
+
+
+def vazao_projeto(area_km2):
+    """Vazao de pico de referencia para uma area de drenagem."""
+    return Q_K * max(float(area_km2), 1.0) ** Q_EXP
+
+
+def altura_para_vazao(sta, z, n, S, Q, h_max=ALTURA_MAX_SECAO):
+    """Menor lamina sobre o talvegue que conduz Q, por Manning na PROPRIA secao.
+
+    O criterio anterior era um numero fixo (12 m de parede, 15 m de alvo) igual
+    para o Itajai-Acu e para um afluente de 30 km2. Fixo demais para o afluente
+    e de menos para o rio grande: o solver listou nominalmente as secoes que
+    passaram do topo da tabela ("Extrapolated above Cross Section Table"), e
+    todas estavam travadas em 12,00 m -- o piso, nao o terreno.
+    """
+    z0 = float(np.min(z))
+    S = max(float(S or 0.0), 1e-4)
+    n = max(float(n or 0.035), 0.02)
+    for h in np.arange(1.0, h_max + 0.01, 0.5):
+        prof = np.clip(z0 + h - z, 0.0, None)
+        A = float(np.trapezoid(prof, sta)) if hasattr(np, "trapezoid")             else float(np.trapz(prof, sta))
+        if A <= 0.0:
+            continue
+        molh = (prof[:-1] + prof[1:]) > 0.0
+        P = float(np.sum(np.hypot(np.diff(sta), np.diff(z))[molh]))
+        if P <= 0.0:
+            continue
+        if (A / n) * (A / P) ** (2.0 / 3.0) * S ** 0.5 >= Q:
+            return float(h)
+    return float(h_max)
+
+
+def alvo_por_area(area_km2, S):
+    """Altura alvo do ALARGAMENTO, antes de existir secao para medir.
+
+    Canal largo: R ~ h, entao h = (Q n / (w sqrt(S)))^(3/5), com w tomado como
+    tres vezes a largura de calha da relacao hidraulica.
+    """
+    Q = vazao_projeto(area_km2)
+    w = max(3.0 * CANAL_KW * max(float(area_km2), 1.0) ** CANAL_EW, 20.0)
+    S = max(float(S or 0.0), 1e-4)
+    h = (Q * 0.045 / (w * S ** 0.5)) ** 0.6
+    return float(np.clip(FOLGA_ALTURA * h, ALTURA_ALVO, ALTURA_MAX_SECAO))
 
 
 def alargar_ate_conter(linha, s, amostrador, he, hd, area_km2,
@@ -405,12 +506,37 @@ def cortar_trecho(linha, amostrador, area_foz, rs0=0.0, area_cabeceira=None):
     hw_e, hw_d = limites_por_curvatura(linha, ss, hw)
     # alarga onde o vale e raso, ANTES do corte definitivo
     for i, s in enumerate(ss):
-        hw_e[i], hw_d[i] = alargar_ate_conter(linha, s, amostrador,
-                                              hw_e[i], hw_d[i], areas[i])
+        hw_e[i], hw_d[i] = alargar_ate_conter(
+            linha, s, amostrador, hw_e[i], hw_d[i], areas[i],
+            alvo=alvo_por_area(areas[i], S_terr[i]))
     # e volta a limitar por curvatura, agora com as larguras novas
     hw_e2, hw_d2 = limites_por_curvatura(linha, ss, np.maximum(hw_e, hw_d))
     hw_e = np.minimum(hw_e, hw_e2)
     hw_d = np.minimum(hw_d, hw_d2)
+    # DESLOCA a janela do corte para a calha nao ficar no canto. Limitar a
+    # razao antes do alargamento nao adianta: e o alargamento que joga a calha
+    # para a borda, porque ele estica o lado onde houver encosta ate achar
+    # altura. No Itajai_Mirim RS 104738,3 -- onde o solver abortou -- a calha
+    # saiu em 511,54/616,95 num corte que termina em 620: TRES metros de
+    # planicie a direita do rio, contra 511 do outro lado.
+    #
+    # Deslocar e melhor que aparar, porque preserva a largura total: o que
+    # falta de um lado sai do outro. O que nao se pode e passar do limite de
+    # curvatura, que e onde as cutlines se cruzam. Entao desloca-se ate esse
+    # limite e, se ainda sobrar desequilibrio, ai sim apara-se o lado largo
+    # (estreitar nunca cria cruzamento).
+    minlado = (hw_e + hw_d) / (1.0 + RAZAO_LADOS)
+    for falta, pode, dar in ((minlado - hw_d, hw_d2 - hw_d, "d"),
+                             (minlado - hw_e, hw_e2 - hw_e, "e")):
+        outro = hw_e if dar == "d" else hw_d
+        mv = np.clip(np.minimum(np.minimum(falta, pode), outro - MINIMO_LADO),
+                     0.0, None)
+        if dar == "d":
+            hw_d, hw_e = hw_d + mv, hw_e - mv
+        else:
+            hw_e, hw_d = hw_e + mv, hw_d - mv
+    hw_e, hw_d = (np.minimum(hw_e, hw_d * RAZAO_LADOS),
+                  np.minimum(hw_d, hw_e * RAZAO_LADOS))
     xs = []
     for i, s in enumerate(ss):
         r = cortar(linha, s, amostrador, hw[i], areas[i],

@@ -1,0 +1,19 @@
+Camadas de relevo para o QGIS (tudo EPSG:31982, SIRGAS2000 / UTM 22S)
+=====================================================================
+
+1. MDT 1 m do SIG-SC (o relevo do modelo SIG-SC):
+     taha_ai_novo/Terrain/taha_ai_corredor_1m_completo.tif
+   Arraste direto para o QGIS. As piramides (.ovr ao lado) deixam a
+   navegacao fluida. nodata = -9999.
+
+2. doc/qgis/relevo_copernicus_30m_utm.tif
+   Bacia inteira a 30 m (o relevo do modelo Copernicus), ja em UTM.
+
+3. doc/qgis/hand_45m.tif
+   Altura acima do rio mais proximo (HAND, usando os talvegues do
+   modelo). Simbologia sugerida: 0-2-5-10-15-25 m; acima de 25 = encosta.
+
+Vetores (tambem EPSG:31982):
+   - secoes/edges/banks do modelo: python scripts/modelo_para_geojson.py taha_ai.g01.hdf --tipo cutline|edge|bank
+   - linhas HAND/FBDS do editor:  doc/linhas_hand/*.geojson
+   - hidrografia FBDS bruta:      doc/fbds/<municipio>/*.shp
