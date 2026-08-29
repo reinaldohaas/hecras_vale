@@ -81,12 +81,35 @@ def centerlines():
     return eixos
 
 
+def bacia_prep():
+    """Poligono oficial ANA (31982) preparado, com folga de 300 m."""
+    from shapely.geometry import shape
+    from shapely.prepared import prep
+    bac = json.load(open('doc/qgis/bacia_itajai_ana.geojson',
+                         encoding='utf-8'))
+    pol = shape(bac['features'][0]['geometry']).buffer(300.0)
+    return pol, prep(pol)
+
+
+def bacia_4326():
+    """O mesmo divisor, em graus (p/ dados que ja vem em 4326)."""
+    from shapely.ops import transform as stransform
+    from shapely.prepared import prep
+    from pyproj import Transformer
+    inv = Transformer.from_crs(31982, 4326, always_xy=True)
+    pol, _ = bacia_prep()
+    pol4326 = stransform(lambda x, y: inv.transform(x, y), pol)
+    return pol4326, prep(pol4326)
+
+
 def fbds_geojson(camada, tol=15.0, max_kb=2500):
-    """Poligonos/linhas da FBDS simplificados, em 4326."""
+    """Poligonos/linhas da FBDS DENTRO DA BACIA (divisor ANA),
+    simplificados, em 4326."""
     import pyogrio
     from pyproj import Transformer
     from shapely.ops import transform as stransform
     tr = Transformer.from_crs(31982, 4326, always_xy=True)
+    pol, prepped = bacia_prep()
 
     def p31982_4326(x, y):
         return tr.transform(x, y)
@@ -99,6 +122,10 @@ def fbds_geojson(camada, tol=15.0, max_kb=2500):
         for geom in g.geometry:
             if geom is None:
                 continue
+            if not prepped.intersects(geom):
+                continue                    # outra bacia: fora
+            if not prepped.contains(geom):
+                geom = geom.intersection(pol)
             s = geom.simplify(tol)
             if s.is_empty:
                 continue
@@ -143,6 +170,7 @@ const EIXOS = @@EIXOS@@;
 const MASSAS = @@MASSAS@@;
 const DUPLOS = @@DUPLOS@@;
 const LAMINA = @@LAMINA@@;
+const BARRAGENS = @@BARRAGENS@@;
 
 const mapa = L.map('mapa');
 const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -170,20 +198,38 @@ const linhas = {};
 for (const nome in RIOS) {
   const partes = EIXOS[nome] ||
     [RIOS[nome].map(p => [p[3], p[2]])];
-  const l = L.polyline(partes, {color:'#d62828', weight:3,
-                                opacity:0.9});
+  const l = L.polyline(partes, {color:'#d62828', weight:4,
+                                opacity:0.95});
   l.bindTooltip(nome, {sticky:true});
   l.on('click', () => desenhar(nome));
   l.addTo(camRios);
   linhas[nome] = l;
 }
+setTimeout(() => {
+  for (const n in linhas) linhas[n].bringToFront();
+}, 300);
+const camBarragens = L.geoJSON(BARRAGENS, {
+  pointToLayer: (f, ll) => {
+    const alt = f.properties.BAR_NU_ALT_MAX_NIVEL_TERRENO || 0;
+    return L.circleMarker(ll, {radius: alt > 10 ? 9 : 5,
+      color:'#5f3dc4', weight:2, fillColor:'#845ef7',
+      fillOpacity:0.8});
+  },
+  onEachFeature: (f, l) => {
+    const p = f.properties;
+    l.bindPopup('<b>'+(p.BAR_NM_NOME||'?')+'</b><br>altura: '+
+      (p.BAR_NU_ALT_MAX_NIVEL_TERRENO||'?')+' m<br>uso: '+
+      (p.USO_PRINCIPAL||'?')+'<br>material: '+(p.TIPO_MATERIAL||'?'));
+  }});
+camBarragens.addTo(mapa);
 L.control.layers(
   {'OpenStreetMap':osm, 'Google Satélite':gsat,
    'Google Híbrido':ghyb, 'Esri Imagery':esri},
   {'Rios do modelo (centerline)':camRios,
    'Lâmina d\\'água SIG-SC 2010':camLamina,
    "Massas d'água (FBDS)":camMassas,
-   'Rios duplos (FBDS)':camDuplos},
+   'Rios duplos (FBDS)':camDuplos,
+   'Barragens (SNISB)':camBarragens},
   {collapsed:false}).addTo(mapa);
 
 const todos = Object.values(RIOS).flat();
@@ -277,6 +323,19 @@ def main():
         print(f'lamina SIG-SC: {len(lamina["features"])} poligonos')
     else:
         print('lamina SIG-SC ausente (rode lamina_do_sigsc.py)')
+    # barragens do SNISB (cadastro oficial), recortadas pelo divisor
+    bar_arq = os.path.join('doc', 'osm', 'snisb_barragens.geojson')
+    barragens = {'type': 'FeatureCollection', 'features': []}
+    if os.path.exists(bar_arq):
+        from shapely.geometry import shape as sh2
+        bruto = json.load(open(bar_arq, encoding='utf-8'))
+        pol4326, prep4326 = bacia_4326()
+        barragens['features'] = [
+            f for f in bruto.get('features', [])
+            if f.get('geometry')
+            and prep4326.intersects(sh2(f['geometry']))]
+        print(f'barragens SNISB na bacia: '
+              f'{len(barragens["features"])}')
     os.makedirs(os.path.dirname(SAIDA), exist_ok=True)
     html = (HTML
             .replace('@@RIOS@@', json.dumps(rios,
@@ -285,6 +344,8 @@ def main():
                                              separators=(',', ':')))
             .replace('@@LAMINA@@', json.dumps(lamina,
                                               separators=(',', ':')))
+            .replace('@@BARRAGENS@@', json.dumps(
+                barragens, separators=(',', ':')))
             .replace('@@MASSAS@@', json.dumps(massas,
                                               separators=(',', ':')))
             .replace('@@DUPLOS@@', json.dumps(duplos,

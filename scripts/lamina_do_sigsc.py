@@ -101,14 +101,22 @@ def main():
     del zero, terra, plano
     print(f'candidatos: {int(cand.sum())} celulas')
 
-    # sementes: candidato sobre agua da FBDS (a FONTE EXTRA decide)
+    # fonte extra = FBDS DENTRO DO DIVISOR da bacia (ANA): fora dele
+    # e rio de outra bacia e nao semeia nada
     from rasterio.features import rasterize
+    from shapely.geometry import shape as sshape2
+    from shapely.prepared import prep
     import pyogrio
+    bac = json.load(open('doc/qgis/bacia_itajai_ana.geojson',
+                         encoding='utf-8'))
+    bacia = sshape2(bac['features'][0]['geometry']).buffer(300.0)
+    pbacia = prep(bacia)
     t = from_bounds(x0, y0, x1, y1, W, H)
-    fontes = []
+    fontes, duplos = [], []
     for shp in (glob.glob('doc/fbds/*/*_MASSAS_DAGUA.shp')
                 + glob.glob('doc/fbds/*/*_RIOS_DUPLOS.shp')
                 + glob.glob('doc/fbds/*/*_RIOS_SIMPLES.shp')):
+        eh_duplo = 'RIOS_DUPLOS' in shp or 'MASSAS' in shp
         try:
             g = pyogrio.read_dataframe(shp)
         except Exception:
@@ -116,19 +124,50 @@ def main():
         for geom in g.geometry:
             if geom is None or geom.is_empty:
                 continue
+            if not pbacia.intersects(geom):
+                continue
+            if not pbacia.contains(geom):
+                geom = geom.intersection(bacia)
+                if geom.is_empty:
+                    continue
             if geom.geom_type in ('LineString', 'MultiLineString'):
                 geom = geom.buffer(12.0)
             fontes.append(geom)
-    print(f'fonte extra (FBDS): {len(fontes)} feicoes')
+            if eh_duplo:
+                duplos.append(geom)
+    print(f'fonte extra (FBDS na bacia): {len(fontes)} feicoes, '
+          f'{len(duplos)} primarias (duplos+massas)')
     fbds = rasterize(((g, 1) for g in fontes), out_shape=(H, W),
                      transform=t, fill=0, dtype='uint8')
     semente = cand & (fbds == 1)
     del fbds
     print(f'sementes: {int(semente.sum())} celulas')
     agua = binary_propagation(semente, mask=cand)
-    del semente, cand
+    del semente
+    # duplos+massas sao FONTE PRIMARIA, mas com revisao: duplo sobre
+    # SOLO tambem existe (rio que mudou, mapeamento velho). O duplo so
+    # entra onde se conecta a apoio do MDT: semente = duplo sobre
+    # candidato dilatado, propagada DENTRO do proprio duplo. Corredeira
+    # ligada ao rio entra; mancha de duplo isolada no seco cai.
+    from scipy.ndimage import binary_dilation
+    prim = rasterize(((g, 1) for g in duplos), out_shape=(H, W),
+                     transform=t, fill=0, dtype='uint8') == 1
+    apoio = binary_dilation(cand, np.ones((3, 3), bool), iterations=2)
+    del cand
+    prim_ok = binary_propagation(prim & apoio, mask=prim)
+    print(f'duplos: {int(prim.sum())} celulas mapeadas, '
+          f'{int(prim_ok.sum())} com apoio do MDT '
+          f'({int(prim.sum() - prim_ok.sum())} sobre solo, fora)')
+    del prim, apoio
+    agua |= prim_ok
+    del prim_ok
+    # divisor tambem recorta a SAIDA (mar e bacias vizinhas fora)
+    dentro = rasterize([(bacia, 1)], out_shape=(H, W), transform=t,
+                       fill=0, dtype='uint8')
+    agua &= dentro == 1
+    del dentro
     agua = binary_closing(agua, np.ones((3, 3), bool))
-    print(f'agua propagada: {int(agua.sum())} celulas')
+    print(f'agua final: {int(agua.sum())} celulas')
     t = from_bounds(x0, y0, x1, y1, W, H)
     feats = []
     for geom, val in rshapes(agua.astype(np.uint8), mask=agua,
