@@ -25,6 +25,32 @@ os.chdir(RAIZ)
 PASTA = r'C:\Users\haas\Downloads\sigsc'
 
 
+def codigo_carta(lon, lat):
+    """Nomenclatura sistematica brasileira ate 1:10.000 (ex.
+    SG-22-Z-B-V-1-SO-F) a partir de um ponto lon/lat (graus)."""
+    faixa = 'ABCDEFGHIJ'[int(-lat // 4)]        # hemisferio sul
+    fuso = int((lon + 180) // 6) + 1
+    x0 = (fuso - 1) * 6 - 180
+    y0 = -4 * (int(-lat // 4) + 1)
+    partes = [f'S{faixa}-{fuso}']
+    # (ncol, nlin, rotulos em ordem de leitura NW->SE)
+    niveis = [(2, 2, ['V', 'X', 'Y', 'Z']),
+              (2, 2, ['A', 'B', 'C', 'D']),
+              (3, 2, ['I', 'II', 'III', 'IV', 'V', 'VI']),
+              (2, 2, ['1', '2', '3', '4']),
+              (2, 2, ['NO', 'NE', 'SO', 'SE']),
+              (2, 3, ['A', 'B', 'C', 'D', 'E', 'F'])]
+    dx, dy = 6.0, 4.0
+    for ncol, nlin, rot in niveis:
+        dx, dy = dx / ncol, dy / nlin
+        i = min(int((lon - x0) / dx), ncol - 1)
+        j = min(int((y0 + nlin * dy - lat) / dy), nlin - 1)
+        partes.append(rot[j * ncol + i])
+        x0 += i * dx
+        y0 += (nlin - 1 - j) * dy
+    return '-'.join(partes)
+
+
 def main():
     import rasterio
     import matplotlib
@@ -50,22 +76,40 @@ def main():
     y0 = min(f[1] for f in folhas)
     print(f'{len(folhas)} folhas existentes; molde {W:.0f} x {H:.0f} m')
 
-    # dominio: corredor da rede completa
+    # dominio: TODOS os fios da FBDS dos municipios da bacia (a rede
+    # geojson e recortada -- nem chega a Alfredo Wagner/Santa Cecilia)
     tr = Transformer.from_crs(4326, 31982, always_xy=True)
-    rede = json.load(open('vale_itajai_full_network.geojson',
-                          encoding='utf-8'))
+    import geopandas as gpd
+    from scipy.spatial import cKDTree
+    pontos_rio = []
     linhas = []
-    for f in rede['features']:
-        g = f['geometry']
-        cs = [g['coordinates']] if g['type'] == 'LineString' \
-            else g['coordinates']
-        for c in cs:
-            if len(c) > 1:
-                linhas.append(LineString([tr.transform(x, y)
-                                          for x, y in c]))
-    corredor = unary_union([l.buffer(2000, resolution=4)
-                            for l in linhas])
-    print('corredor da bacia pronto')
+    for shp in (glob.glob('doc/fbds/*/*_RIOS_SIMPLES.shp')
+                + glob.glob('doc/fbds/*/*_RIOS_DUPLOS.shp')):
+        try:
+            g = gpd.read_file(shp)
+            for geom in g.geometry:
+                if geom is None:
+                    continue
+                gs = [geom] if geom.geom_type in ('LineString',
+                                                  'Polygon') \
+                    else list(geom.geoms)
+                for gg in gs:
+                    ls = LineString(gg.exterior.coords) \
+                        if gg.geom_type == 'Polygon' else gg
+                    linhas.append(ls)
+                    for s in np.arange(0, ls.length, 300):
+                        p = ls.interpolate(s)
+                        pontos_rio.append((p.x, p.y))
+        except Exception:
+            pass
+    print(f'fios FBDS (desenho): {len(linhas)}')
+    # dominio OFICIAL: Micro Regiao Hidrografica Itajai (ANA/IBGE),
+    # baixada de snirh.gov.br -> doc/qgis/bacia_itajai_ana.geojson
+    from shapely.geometry import shape
+    bac = json.load(open('doc/qgis/bacia_itajai_ana.geojson',
+                         encoding='utf-8'))
+    corredor = shape(bac['features'][0]['geometry'])
+    print(f'dominio: bacia oficial ANA ({corredor.area/1e6:.0f} km2)')
 
     # grade ancorada no molde das folhas existentes
     bx = corredor.bounds
@@ -86,17 +130,39 @@ def main():
     print(f'celulas no corredor: {len(presentes)} presentes, '
           f'{len(faltantes)} FALTANTES')
 
-    # geojson das faltantes
+    # valida codigo_carta contra os nomes das folhas existentes
+    inv = Transformer.from_crs(31982, 4326, always_xy=True)
+    ok = err = 0
+    for f in folhas:
+        lon, lat = inv.transform((f[0] + f[2]) / 2, (f[1] + f[3]) / 2)
+        esperado = f[4].replace('MDT_', '').replace('.tif', '')
+        if codigo_carta(lon, lat) == esperado:
+            ok += 1
+        else:
+            err += 1
+            if err <= 3:
+                print(f'  DIVERGE: {esperado} != '
+                      f'{codigo_carta(lon, lat)}')
+    print(f'validacao da nomenclatura: {ok} ok, {err} divergentes')
+
+    # geojson das faltantes, com o codigo da carta a baixar
     os.makedirs('doc/qgis', exist_ok=True)
+    cartas = []
+    for c in faltantes:
+        lon, lat = inv.transform(c.centroid.x, c.centroid.y)
+        cartas.append(codigo_carta(lon, lat))
     geo = {'type': 'FeatureCollection',
            'crs': {'type': 'name',
                    'properties': {'name': 'EPSG:31982'}},
            'features': [{'type': 'Feature',
-                         'properties': {'n': k + 1},
+                         'properties': {'n': k + 1, 'carta': cartas[k]},
                          'geometry': json.loads(json.dumps(
                              c.__geo_interface__))}
                         for k, c in enumerate(faltantes)]}
     json.dump(geo, open('doc/qgis/folhas_faltantes.geojson', 'w'))
+    with open('doc/qgis/folhas_faltantes.txt', 'w') as fh:
+        fh.write('\n'.join(sorted(cartas)) + '\n')
+    print('lista p/ portal: doc/qgis/folhas_faltantes.txt')
 
     # cidades de referencia
     cidades = {'Alfredo Wagner': (-49.3344, -27.7000),
@@ -115,9 +181,17 @@ def main():
             xs, ys = c.exterior.xy
             ax.fill(xs, ys, color=cor, alpha=alfa, lw=0)
             ax.plot(xs, ys, color=cor, lw=0.4)
-    for l in linhas:
+    for l in linhas[::4]:
         x, y = l.xy
-        ax.plot(x, y, '-', color='navy', lw=0.3, alpha=0.5)
+        ax.plot(x, y, '-', color='navy', lw=0.15, alpha=0.35)
+    bx_, by_ = corredor.exterior.xy
+    ax.plot(bx_, by_, 'k-', lw=1.6, alpha=0.8,
+            label='bacia do Itajaí (ANA/IBGE)')
+    for c, carta in zip(faltantes, cartas):
+        ax.annotate(carta.replace('SG-22-', ''),
+                    (c.centroid.x, c.centroid.y), ha='center',
+                    va='center', fontsize=5.5, color='#7a0000')
+    ax.legend(loc='lower left', fontsize=10)
     for nome, (lon, lat) in cidades.items():
         x, y = tr.transform(lon, lat)
         ax.plot(x, y, 'k*', ms=12)
