@@ -194,7 +194,14 @@ def mosaico():
     from rasterio.warp import reproject, Resampling
     from scipy.ndimage import distance_transform_edt
 
-    velho = rasterio.open(MOSAICO_VELHO)
+    # molde (grade + pegada do corredor): o completo se ainda existir,
+    # senao o proprio v2 da rodada anterior (saida vai para .novo e
+    # substitui no fim)
+    molde_p = MOSAICO_VELHO if os.path.exists(MOSAICO_VELHO) \
+        else MOSAICO_NOVO
+    destino = MOSAICO_NOVO if molde_p != MOSAICO_NOVO \
+        else MOSAICO_NOVO + '.novo.tif'
+    velho = rasterio.open(molde_p)
     prof = velho.profile.copy()
     prof.update(nodata=-9999.0, compress='deflate', predictor=3,
                 tiled=True, blockxsize=512, blockysize=512,
@@ -212,7 +219,7 @@ def mosaico():
 
     T = velho.transform
     W, H = velho.width, velho.height
-    with rasterio.open(MOSAICO_NOVO, 'w', **prof) as out:
+    with rasterio.open(destino, 'w', **prof) as out:
         ny = int(np.ceil(H / BLOCO))
         nx = int(np.ceil(W / BLOCO))
         for jy in range(ny):
@@ -278,7 +285,10 @@ def mosaico():
                               c0 - hc0:c0 - hc0 + (c1 - c0)],
                           1, window=Window(c0, r0, c1 - c0, r1 - r0))
             print(f'  faixa {jy + 1}/{ny}', flush=True)
-    print(f'mosaico novo: {MOSAICO_NOVO} (o velho fica intacto)')
+    velho.close()
+    if destino != MOSAICO_NOVO:
+        os.replace(destino, MOSAICO_NOVO)
+    print(f'mosaico novo: {MOSAICO_NOVO}')
 
 
 def suave_borda(a, inv):
