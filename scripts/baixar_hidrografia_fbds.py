@@ -22,7 +22,7 @@ BASE = "https://geo.fbds.org.br/SC/{mun}/HIDROGRAFIA/"
 
 MUNICIPIOS = [
     # baixo vale / Acu
-    "ITAJAI", "NAVEGANTES", "ILHOTA", "LUIS_ALVES", "GASPAR", "BLUMENAU", "INDAIAL",
+    "ITAJAI", "NAVEGANTES", "ILHOTA", "LUIZ_ALVES", "GASPAR", "BLUMENAU", "INDAIAL",
     "ASCURRA", "APIUNA",
     # Benedito / Cedros / Testo
     "TIMBO", "POMERODE", "RIO_DOS_CEDROS", "BENEDITO_NOVO",
@@ -67,9 +67,10 @@ def main(argv):
             print(f"   {mun:20s} FALHOU indice ({e})")
             sem.append(mun)
             continue
-        m = re.search(r"SC_(\d+)_RIOS_DUPLOS\.shp", indice)
+        m = (re.search(r"SC_(\d+)_RIOS_DUPLOS\.shp", indice)
+             or re.search(r"SC_(\d+)_RIOS_SIMPLES\.shp", indice))
         if not m:
-            print(f"   {mun:20s} sem RIOS_DUPLOS no indice")
+            print(f"   {mun:20s} sem RIOS_* no indice")
             sem.append(mun)
             continue
         cod = m.group(1)
