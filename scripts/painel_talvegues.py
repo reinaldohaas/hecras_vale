@@ -59,6 +59,28 @@ def talvegues():
     return rios
 
 
+def centerlines():
+    """Eixo suave de cada rio (River Centerlines do RAS), em 4326."""
+    import h5py
+    from pyproj import Transformer
+    tr = Transformer.from_crs(31982, 4326, always_xy=True)
+    f = h5py.File(G01_HDF, 'r')
+    rc = f['Geometry/River Centerlines']
+    at = rc['Attributes'][:]
+    pl_info = rc['Polyline Info'][:]
+    pl_pts = rc['Polyline Points'][:]
+    eixos = {}
+    for k in range(len(at)):
+        rio = at['River Name'][k].decode().strip()
+        j0, m = pl_info[k][0], pl_info[k][1]
+        pts = pl_pts[j0:j0 + m]
+        lon, lat = tr.transform(pts[:, 0], pts[:, 1])
+        eixos.setdefault(rio, []).append(
+            [[round(float(la), 6), round(float(lo), 6)]
+             for lo, la in zip(lon, lat)])
+    return eixos
+
+
 def fbds_geojson(camada, tol=15.0, max_kb=2500):
     """Poligonos/linhas da FBDS simplificados, em 4326."""
     import pyogrio
@@ -117,8 +139,10 @@ HTML = """<!DOCTYPE html>
 </div>
 <script>
 const RIOS = @@RIOS@@;
+const EIXOS = @@EIXOS@@;
 const MASSAS = @@MASSAS@@;
 const DUPLOS = @@DUPLOS@@;
+const LAMINA = @@LAMINA@@;
 
 const mapa = L.map('mapa');
 const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -137,15 +161,17 @@ const camDuplos = L.geoJSON(DUPLOS, {style:{color:'#0a6cbf',weight:1,
   fillColor:'#7fc4ff',fillOpacity:0.4}});
 camMassas.addTo(mapa); camDuplos.addTo(mapa);
 
-const cores = {};
+const camLamina = L.geoJSON(LAMINA, {style:{color:'#087f5b',weight:1,
+  fillColor:'#12b886',fillOpacity:0.55}});
+
 const camRios = L.layerGroup().addTo(mapa);
 let marcador = null, atual = null;
 const linhas = {};
 for (const nome in RIOS) {
-  const v = RIOS[nome];
-  const latlngs = v.map(p => [p[3], p[2]]);
-  const l = L.polyline(latlngs, {color:'#d62828', weight:3,
-                                 opacity:0.9});
+  const partes = EIXOS[nome] ||
+    [RIOS[nome].map(p => [p[3], p[2]])];
+  const l = L.polyline(partes, {color:'#d62828', weight:3,
+                                opacity:0.9});
   l.bindTooltip(nome, {sticky:true});
   l.on('click', () => desenhar(nome));
   l.addTo(camRios);
@@ -154,7 +180,9 @@ for (const nome in RIOS) {
 L.control.layers(
   {'OpenStreetMap':osm, 'Google Satélite':gsat,
    'Google Híbrido':ghyb, 'Esri Imagery':esri},
-  {'Rios do modelo':camRios, "Massas d'água (FBDS)":camMassas,
+  {'Rios do modelo (centerline)':camRios,
+   'Lâmina d\\'água SIG-SC 2010':camLamina,
+   "Massas d'água (FBDS)":camMassas,
    'Rios duplos (FBDS)':camDuplos},
   {collapsed:false}).addTo(mapa);
 
@@ -237,13 +265,26 @@ def main():
     rios = talvegues()
     for n, v in sorted(rios.items()):
         print(f'  {n}: {len(v)} secoes, z {v[0][1]}..{v[-1][1]} m')
+    eixos = centerlines()
+    print(f'centerlines: {sum(len(v) for v in eixos.values())} reaches')
     print('recortando FBDS...')
     massas = fbds_geojson('MASSAS_DAGUA')
     duplos = fbds_geojson('RIOS_DUPLOS')
+    lam_arq = os.path.join('doc', 'painel', 'lamina_sigsc.geojson')
+    lamina = {'type': 'FeatureCollection', 'features': []}
+    if os.path.exists(lam_arq):
+        lamina = json.load(open(lam_arq))
+        print(f'lamina SIG-SC: {len(lamina["features"])} poligonos')
+    else:
+        print('lamina SIG-SC ausente (rode lamina_do_sigsc.py)')
     os.makedirs(os.path.dirname(SAIDA), exist_ok=True)
     html = (HTML
             .replace('@@RIOS@@', json.dumps(rios,
                                             separators=(',', ':')))
+            .replace('@@EIXOS@@', json.dumps(eixos,
+                                             separators=(',', ':')))
+            .replace('@@LAMINA@@', json.dumps(lamina,
+                                              separators=(',', ':')))
             .replace('@@MASSAS@@', json.dumps(massas,
                                               separators=(',', ':')))
             .replace('@@DUPLOS@@', json.dumps(duplos,
