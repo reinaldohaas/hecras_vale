@@ -59,6 +59,36 @@ def talvegues():
     return rios
 
 
+def eixos_arquivados():
+    """Rios arquivados (fora do modelo): Reach XY dos g01 de texto em
+    modelos/*/ -- Luis Alves, Krauel."""
+    import re
+    from pyproj import Transformer
+    tr = Transformer.from_crs(31982, 4326, always_xy=True)
+    out = {}
+    for g01 in glob.glob(os.path.join('modelos', '*', '*.g01')):
+        try:
+            txt = open(g01, encoding='latin-1').read()
+        except OSError:
+            continue
+        nome = os.path.basename(os.path.dirname(g01))
+        for m in re.finditer(
+                r'River Reach=([^,]+),[^\n]*\n'
+                r'Reach XY= *(\d+)\s*\n((?:[ \d.\-]+\n)+)', txt):
+            n = int(m.group(2))
+            vals = re.findall(r'[-\d.]+', m.group(3))
+            vals = [float(v) for v in vals[:2 * n]]
+            pts = list(zip(vals[0::2], vals[1::2]))
+            if len(pts) < 2:
+                continue
+            lon, lat = tr.transform([p[0] for p in pts],
+                                    [p[1] for p in pts])
+            out.setdefault(nome, []).append(
+                [[round(float(la), 6), round(float(lo), 6)]
+                 for lo, la in zip(lon, lat)])
+    return out
+
+
 def centerlines():
     """Eixo suave de cada rio (River Centerlines do RAS), em 4326."""
     import h5py
@@ -171,6 +201,7 @@ const MASSAS = @@MASSAS@@;
 const DUPLOS = @@DUPLOS@@;
 const LAMINA = @@LAMINA@@;
 const BARRAGENS = @@BARRAGENS@@;
+const ARQUIVADOS = @@ARQUIVADOS@@;
 
 const mapa = L.map('mapa');
 const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -210,7 +241,11 @@ setTimeout(() => {
 }, 300);
 const camBarragens = L.geoJSON(BARRAGENS, {
   pointToLayer: (f, ll) => {
-    const alt = f.properties.BAR_NU_ALT_MAX_NIVEL_TERRENO || 0;
+    const p = f.properties;
+    const alt = p.BAR_NU_ALT_MAX_NIVEL_TERRENO || 0;
+    if ((p.USO_PRINCIPAL||'').indexOf('inunda') >= 0)
+      return L.circleMarker(ll, {radius:13, color:'#c92a2a',
+        weight:4, fillColor:'#ffa8a8', fillOpacity:0.9});
     return L.circleMarker(ll, {radius: alt > 10 ? 9 : 5,
       color:'#5f3dc4', weight:2, fillColor:'#845ef7',
       fillOpacity:0.8});
@@ -222,6 +257,13 @@ const camBarragens = L.geoJSON(BARRAGENS, {
       (p.USO_PRINCIPAL||'?')+'<br>material: '+(p.TIPO_MATERIAL||'?'));
   }});
 camBarragens.addTo(mapa);
+const camArquivados = L.layerGroup();
+for (const nome in ARQUIVADOS) {
+  const l = L.polyline(ARQUIVADOS[nome], {color:'#868e96', weight:3,
+    dashArray:'8 6', opacity:0.9});
+  l.bindTooltip(nome + ' (fora do modelo)', {sticky:true});
+  l.addTo(camArquivados);
+}
 L.control.layers(
   {'OpenStreetMap':osm, 'Google Satélite':gsat,
    'Google Híbrido':ghyb, 'Esri Imagery':esri},
@@ -229,7 +271,8 @@ L.control.layers(
    'Lâmina d\\'água SIG-SC 2010':camLamina,
    "Massas d'água (FBDS)":camMassas,
    'Rios duplos (FBDS)':camDuplos,
-   'Barragens (SNISB)':camBarragens},
+   'Barragens (SNISB)':camBarragens,
+   'Rios arquivados (fora do modelo)':camArquivados},
   {collapsed:false}).addTo(mapa);
 
 const todos = Object.values(RIOS).flat();
@@ -313,6 +356,8 @@ def main():
         print(f'  {n}: {len(v)} secoes, z {v[0][1]}..{v[-1][1]} m')
     eixos = centerlines()
     print(f'centerlines: {sum(len(v) for v in eixos.values())} reaches')
+    arquivados = eixos_arquivados()
+    print(f'arquivados: {list(arquivados.keys())}')
     print('recortando FBDS...')
     massas = fbds_geojson('MASSAS_DAGUA')
     duplos = fbds_geojson('RIOS_DUPLOS')
@@ -346,6 +391,8 @@ def main():
                                               separators=(',', ':')))
             .replace('@@BARRAGENS@@', json.dumps(
                 barragens, separators=(',', ':')))
+            .replace('@@ARQUIVADOS@@', json.dumps(
+                arquivados, separators=(',', ':')))
             .replace('@@MASSAS@@', json.dumps(massas,
                                               separators=(',', ':')))
             .replace('@@DUPLOS@@', json.dumps(duplos,
