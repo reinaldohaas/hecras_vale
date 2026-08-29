@@ -280,7 +280,7 @@ L.control.layers(
    'Rios duplos (FBDS)':camDuplos,
    'Barragens (SNISB)':camBarragens,
    'Rios arquivados (fora do modelo)':camArquivados,
-   'Cursos d'água ANA (código Otto)':camAna},
+   "Cursos d'água ANA (código Otto)":camAna},
   {collapsed:false}).addTo(mapa);
 
 const todos = Object.values(RIOS).flat();
