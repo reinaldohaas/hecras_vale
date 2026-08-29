@@ -6,13 +6,13 @@
   </Features>
   <Geometries Checked="True" Expanded="True">
     <Layer Name="taha_ai - relevo SIG-SC 1 m" Type="RASGeometry" Checked="True" Expanded="True" Filename=".\taha_ai_sigsc.g01.hdf">
-      <Layer Type="RASRiver" Checked="True" Expanded="True" />
+      <Layer Type="RASRiver" Checked="True" />
       <Layer Type="RASBankLines" Checked="True" />
-      <Layer Type="RASXS" Checked="True" Expanded="True" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
+      <Layer Type="RASXS" Checked="True" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
       <Layer Type="RASEdgeLines" Checked="True" />
       <Layer Name="Culvert Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
       <Layer Name="Culvert Barrels" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Bridges/Culverts" />
-      <Layer Type="InlineStructureLayer" Checked="True" Expanded="True" />
+      <Layer Type="InlineStructureLayer" Checked="True" />
       <Layer Name="Gate Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
       <Layer Name="Gate Openings" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Inline Structures" />
       <Layer Name="Culvert Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
@@ -294,10 +294,10 @@
   <MapLayers Checked="True" />
   <Terrains Checked="True" />
   <CurrentView>
-    <MaxX>670414.885231514</MaxX>
-    <MinX>622343.366631314</MinX>
-    <MaxY>7005010.91209435</MaxY>
-    <MinY>6967379.85551308</MinY>
+    <MaxX>711609.316893159</MaxX>
+    <MinX>652261.763065752</MinX>
+    <MaxY>7003490.23610464</MaxY>
+    <MinY>6957032.14155986</MinY>
   </CurrentView>
   <VelocitySettings>
     <Density>1.5</Density>

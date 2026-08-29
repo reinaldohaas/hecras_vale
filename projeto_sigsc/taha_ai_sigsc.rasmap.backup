@@ -6,12 +6,13 @@
   </Features>
   <Geometries Checked="True" Expanded="True">
     <Layer Name="taha_ai - relevo SIG-SC 1 m" Type="RASGeometry" Checked="True" Expanded="True" Filename=".\taha_ai_sigsc.g01.hdf">
-      <Layer Type="RASRiver" Checked="True" />
+      <Layer Type="RASRiver" Checked="True" Expanded="True" />
       <Layer Type="RASBankLines" Checked="True" />
-      <Layer Type="RASXS" Checked="True" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
+      <Layer Type="RASXS" Checked="True" Expanded="True" UnitsRiverStation="Feet" RiverStationDecimalPlaces="0" />
       <Layer Type="RASEdgeLines" Checked="True" />
       <Layer Name="Culvert Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
       <Layer Name="Culvert Barrels" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Bridges/Culverts" />
+      <Layer Type="InlineStructureLayer" Checked="True" Expanded="True" />
       <Layer Name="Gate Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
       <Layer Name="Gate Openings" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="Inline Structures" />
       <Layer Name="Culvert Groups" Type="VirtualGeometryFeatureLayer" ParentIdentifiers="" />
@@ -143,8 +144,8 @@
   <EventConditions>
     <Layer Name="Cheia_taha_ai" Type="RASEventConditions" Filename=".\taha_ai_sigsc.u01.hdf" />
   </EventConditions>
-  <Results>
-    <Layer Name="1983_sigsc" Type="RASResults" Expanded="True" Filename=".\taha_ai_sigsc.p01.hdf">
+  <Results Checked="True" Expanded="True">
+    <Layer Name="1983_sigsc" Type="RASResults" Checked="True" Expanded="True" Filename=".\taha_ai_sigsc.p01.hdf">
       <Layer Name="Event Conditions" Type="RASEventConditions" Filename=".\taha_ai_sigsc.p01.hdf" />
       <Layer Type="RASGeometry" Checked="True" Filename=".\taha_ai_sigsc.p01.hdf">
         <Layer Type="RASRiver" Checked="True" />
@@ -279,24 +280,24 @@
         <Layer Name="Zones" Type="RASEncroachmentZones" Filename=".\taha_ai_sigsc.p01.hdf" />
         <Layer Name="Regions" Type="RASEncroachmentPolygons" Filename=".\taha_ai_sigsc.p01.hdf" />
       </Layer>
-      <Layer Name="Depth" Type="RASResultsMap">
+      <Layer Name="Depth" Type="RASResultsMap" Checked="True">
         <MapParameters MapType="depth" ProfileIndex="2147483647" ProfileName="Max" />
       </Layer>
-      <Layer Name="Velocity" Type="RASResultsMap">
+      <Layer Name="Velocity" Type="RASResultsMap" Checked="True">
         <MapParameters MapType="velocity" ProfileIndex="2147483647" ProfileName="Max" />
       </Layer>
-      <Layer Name="WSE" Type="RASResultsMap">
+      <Layer Name="WSE" Type="RASResultsMap" Checked="True">
         <MapParameters MapType="elevation" ProfileIndex="2147483647" ProfileName="Max" />
       </Layer>
     </Layer>
   </Results>
-  <MapLayers />
-  <Terrains />
+  <MapLayers Checked="True" />
+  <Terrains Checked="True" />
   <CurrentView>
-    <MaxX>653089.203112838</MaxX>
-    <MinX>571679.664254946</MinX>
-    <MaxY>7024927.18792173</MaxY>
-    <MinY>6961198.66316895</MinY>
+    <MaxX>670414.885231514</MaxX>
+    <MinX>622343.366631314</MinX>
+    <MaxY>7005010.91209435</MaxY>
+    <MinY>6967379.85551308</MinY>
   </CurrentView>
   <VelocitySettings>
     <Density>1.5</Density>
