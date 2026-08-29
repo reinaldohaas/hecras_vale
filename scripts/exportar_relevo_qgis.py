@@ -23,7 +23,8 @@ from rasterio.windows import from_bounds
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(RAIZ)
-BB = (580000, 6933000, 740000, 7070000)
+BB = (565000, 6933000, 740000, 7070000)   # oeste ate cobrir o corredor
+                                          # inteiro (v2 comeca em 572489)
 
 # 1. Copernicus em UTM
 src = rasterio.open('dem_bacia_itajai.tif')
