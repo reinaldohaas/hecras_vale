@@ -4,10 +4,16 @@ Default Exp/Contr=0.3,0.1
 SI Units
 Geom File=g01
 Geom File=g02
+Geom File=g96
+Geom File=g03
 Unsteady File=u01
 Unsteady File=u02
+Unsteady File=u06
+Unsteady File=u03
 Plan File=p01
 Plan File=p02
+Plan File=p06
+Plan File=p03
 Y Axis Title=Elevation
 X Axis Title(PF)=Main Channel Distance
 X Axis Title(XS)=Station

@@ -46,36 +46,24 @@ CRLF = '\r\n'
 
 
 def eixo_extensao():
-    """LineString 31982 do curso 775499, da ancora rumo a montante."""
-    from shapely.geometry import shape, LineString, Point
-    from shapely.ops import linemerge, transform as stransform, \
-        substring
+    """LineString 31982 real (por conectividade espacial na malha
+    bruta da ANA) da ancora ate alem da Barragem Oeste.
+
+    O metodo antigo agrupava por codigo Otto (775499) e projetava a
+    ancora na linha mais longa com esse codigo -- a ancora ficou a
+    3131 m dessa linha (codigo ERRADO; o de verdade, 775495882, passa
+    a 20 m). Root cause do "Overflow"/"Error plotting cross section
+    lines": um teleporte de 3 km disfarcado de reach continuo.
+    """
     from pyproj import Transformer
+    from shapely.geometry import Point
+    from costurar_rio_do_campo import eixo_por_conectividade
     tr = Transformer.from_crs(4326, 31982, always_xy=True)
-    gj = json.load(open(ANA_RIOS, encoding='utf-8'))
-    linhas = [shape(f['geometry']) for f in gj['features']
-              if f['properties'].get('curso') == '775499']
-    assert linhas, 'curso 775499 ausente em ana_rios.geojson'
-    m = linemerge(linhas) if len(linhas) > 1 else linhas[0]
-    if m.geom_type == 'MultiLineString':
-        m = max(m.geoms, key=lambda g: g.length)
-    eixo = stransform(lambda x, y: tr.transform(x, y), m)
-    pa = Point(*ANCORA)
-    dx, dy = tr.transform(*SNISB_DAM)
-    pd = Point(dx, dy)
-    sa = eixo.project(pa)
-    sd = eixo.project(pd)
-    print(f'ancora s={sa:.0f} m, barragem s={sd:.0f} m '
-          f'(dist eixo-barragem: {eixo.distance(pd):.0f} m)')
-    if sd > sa:
-        ext = substring(eixo, sa, min(sa + ALCANCE, eixo.length))
-        s_dam = sd - sa
-    else:
-        ext = substring(eixo, max(0.0, sa - ALCANCE), sa)
-        ext = LineString(list(ext.coords)[::-1])
-        s_dam = sa - sd
-    print(f'extensao: {ext.length:.0f} m; barragem a s={s_dam:.0f} m '
-          f'do topo velho (RS {RS_TOPO + s_dam:.1f})')
+    dam_xy = tr.transform(*SNISB_DAM)
+    ext = eixo_por_conectividade(dam_xy)   # coords[0]=ancora (Taio)
+    s_dam = ext.project(Point(*dam_xy))     # distancia ancora->barragem
+    print(f'extensao real: {ext.length:.0f} m; barragem a s={s_dam:.0f} m '
+          f'da ancora (RS {RS_TOPO + s_dam:.1f})')
     return ext, s_dam
 
 
@@ -118,11 +106,13 @@ def cortar_secoes(ext, s_dam):
 def bloco_secao(sec, comprimento):
     """Texto CRLF de um bloco de secao no dialeto do g01."""
     sta, z = sec['sta'], np.round(sec['z'], 2)
-    # bancas: minimo central +- 40 m, na grade
+    # bancas: minimo central +- largura MEDIDA no SIG-SC (sec['largura_
+    # alvo']/2); sem medida, cai no chute antigo de 40 m
+    meia = sec.get('largura_alvo', 80.0) / 2.0
     c0, c1 = len(sta) // 4, 3 * len(sta) // 4
     imin = c0 + int(np.argmin(z[c0:c1]))
-    ib0 = max(0, imin - int(40 / DX))
-    ib1 = min(len(sta) - 1, imin + int(40 / DX))
+    ib0 = max(0, imin - int(meia / DX))
+    ib1 = min(len(sta) - 1, imin + int(meia / DX))
     linhas = [f'Type RM Length L Ch R = 1 ,{sec["rs"]:8.2f},'
               f'{comprimento:8.2f},{comprimento:8.2f},'
               f'{comprimento:8.2f}',
@@ -147,18 +137,81 @@ def bloco_secao(sec, comprimento):
     linhas.append(f'{0.0:8.3f}{0.06:8.3f}{0.0:8.3f}'
                   f'{sta[ib0]:8.3f}{0.035:8.3f}{0.0:8.3f}'
                   f'{sta[ib1]:8.3f}{0.06:8.3f}{0.0:8.3f}')
+    # HTab explicito -- padrao do gerador comprovado (gerar_mirim_do_
+    # zero.py); secoes novas sem isto foram a causa provavel do
+    # "Overflow" (junto com a ancora errada, ja corrigida acima)
+    z_min = float(z.min())
+    linhas.append(f'XS HTab Starting El and Incr={z_min + 0.02:.2f},'
+                  '0.100, 500 ')
+    linhas.append('XS HTab Horizontal Distribution=-1,-1,-1')
     linhas.append('XS Rating Curve= 0 ,0')
     linhas.append('Exp/Cntr=0.3,0.1')
     linhas.append('')
     return CRLF.join(linhas) + CRLF
 
 
+GAP_BARRAGEM = 300.0
+MIN_DECL = 0.0001
+
+
+def largura_alvo_serie(csv_path, janela_km=1.0, cada_km=0.25,
+                       fator=1.0):
+    """(d_km ordenado, largura suavizada) do CSV de largura_do_sigsc,
+    ou None. Mediana movel de `janela_km`, igual ao encolher_canal.py."""
+    import csv
+    if not os.path.exists(csv_path):
+        return None
+    pares = []
+    for r in csv.reader(open(csv_path, encoding='utf-8'),
+                        delimiter=';'):
+        if r[0] == 'dist_foz_km' or len(r) < 3 or not r[2]:
+            continue
+        pares.append((float(r[0]), float(r[2]) * fator))
+    if len(pares) < 3:
+        return None
+    pares.sort()
+    d = np.array([p[0] for p in pares])
+    w = np.array([p[1] for p in pares])
+    meia = max(1, int(round(janela_km / cada_km / 2)))
+    suave = np.array([np.median(w[max(0, i - meia):i + meia + 1])
+                      for i in range(len(w))])
+    return d, suave
+
+
+def aplicar_largura_medida(ordenadas, serie, minimo=20.0):
+    """Preenche sec['largura_alvo'] por interpolacao na quilometragem
+    (sec['s'] = distancia da FOZ/ancora, m)."""
+    if serie is None:
+        return ordenadas
+    d_km, w = serie
+    for sec in ordenadas:
+        alvo = float(np.interp(sec['s'] / 1000.0, d_km, w))
+        sec['largura_alvo'] = max(alvo, minimo)
+    return ordenadas
+
+
+def suavizar_talvegue(ordenadas):
+    """Desloca cada secao (montante->jusante) p/ nunca subir o
+    talvegue, exceto no vao da barragem (degrau real, nao mexe)."""
+    for i in range(1, len(ordenadas)):
+        prev, cur = ordenadas[i - 1], ordenadas[i]
+        dx = prev['rs'] - cur['rs']
+        if dx > GAP_BARRAGEM:
+            continue
+        teto = float(np.min(prev['z'])) - MIN_DECL * dx
+        z_min_cur = float(np.min(cur['z']))
+        if z_min_cur > teto:
+            cur['z'] = cur['z'] + (teto - z_min_cur)
+    return ordenadas
+
+
 def montar_g98(ext, secoes):
     txt = open('taha_ai.g01', encoding='latin-1', newline='').read()
-    # 1) Reach XY do R1: prepende o eixo da extensao (montante 1o)
-    pts_ext = list(ext.coords)[::-1]          # montante -> jusante??
-    # ext esta ancora->montante; Reach XY comeca no MONTANTE:
-    pts_ext = list(ext.coords)[1:][::-1]      # montante ... ate ancora
+    # 1) Reach XY do R1: prepende o eixo da extensao. ext vai
+    # ancora(coords[0])->cabeceira(coords[-1]); Reach XY comeca no
+    # MONTANTE (cabeceira), entao inverte e tira a ancora (ja e o 1o
+    # ponto do bloco velho, nao duplicar)
+    pts_ext = list(ext.coords)[1:][::-1]
     m = re.search(r'(River Reach=Itajai_Oeste {4},R1 +\r?\n'
                   r'Reach XY= *)(\d+)( *\r?\n)((?:.+\r?\n)+?)'
                   r'(Rch Text X Y=)', txt)
@@ -183,6 +236,7 @@ def montar_g98(ext, secoes):
     assert k > 0
     blocos = ''
     ordenadas = sorted(secoes, key=lambda s: -s['rs'])
+    ordenadas = suavizar_talvegue(ordenadas)
     for i, sec in enumerate(ordenadas):
         comprimento = (ordenadas[i]['rs']
                        - (ordenadas[i + 1]['rs']
