@@ -412,9 +412,12 @@ def main():
         from shapely.geometry import shape as sh2
         bruto = json.load(open(bar_arq, encoding='utf-8'))
         pol4326, prep4326 = bacia_4326()
+        # SOMENTE as 3 barragens de contencao (ordem do professor)
         barragens['features'] = [
             f for f in bruto.get('features', [])
             if f.get('geometry')
+            and 'inunda' in (f['properties'].get('USO_PRINCIPAL')
+                             or '').lower()
             and prep4326.intersects(sh2(f['geometry']))]
         print(f'barragens SNISB na bacia: '
               f'{len(barragens["features"])}')

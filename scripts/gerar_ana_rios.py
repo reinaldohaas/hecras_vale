@@ -24,11 +24,20 @@ SAIDA = os.path.join('doc', 'painel', 'ana_rios.geojson')
 # ancoras (lon, lat) SO onde a identificacao conferiu; os demais
 # cursos ficam com o codigo Otto (melhor sem nome que nome errado)
 ANCORAS = {
-    'Rio Mirim Doce':    (-50.3600, -27.1980),   # perto de Mirim Doce
     'Rio Trombudo':      (-49.7930, -27.3010),   # Trombudo Central
     'Itajaí do Sul':     (-49.6050, -27.4090),   # Ituporanga
     'Rio Taió':          (-50.1130, -27.1650),   # sul de Taio
 }
+# troncos identificados pelo comprimento + sondas de prefixo
+NOMES_POR_CODIGO = {
+    '77542':  'Itajaí-Mirim (tronco)',
+    '77546':  'Itajaí do Norte / Hercílio (tronco)',
+    '775499': 'Itajaí do Oeste (alto, montante de Taió)',
+}
+# fora do divisor, mas mantido a pedido: o Mirim Doce drena para
+# OUTRA bacia otto (789646*) -- e a prova de que o alto "Oeste" do
+# legado pegava rio alheio
+EXCECOES = {'789646': 'Rio Mirim Doce (FORA do divisor ANA)'}
 
 
 def main():
@@ -41,10 +50,20 @@ def main():
     bac = json.load(open('doc/qgis/bacia_itajai_ana.geojson',
                          encoding='utf-8'))
     from shapely.geometry import shape
-    bacia = shape(bac['features'][0]['geometry']).buffer(2000)
+    bacia = shape(bac['features'][0]['geometry']).buffer(300)
     bx = bacia.bounds
     g = pyogrio.read_dataframe(SHP, bbox=bx)
     print(f'{len(g)} segmentos na caixa da bacia')
+    # recorte pelo DIVISOR (nao so a caixa): fora do vale, fora
+    from shapely.prepared import prep
+    pb = prep(bacia)
+    dentro = g.geometry.apply(pb.intersects)
+    g = g[dentro].copy()
+    g['geometry'] = g.geometry.apply(
+        lambda geo: geo if pb.contains(geo)
+        else geo.intersection(bacia))
+    g = g[~g.geometry.is_empty]
+    print(f'{len(g)} segmentos dentro do divisor')
 
     # todos os cursos com >= 15 km dentro da bacia, por codigo
     comp = g.assign(L=g.geometry.length).groupby('COCURSODAG')['L'] \
@@ -59,10 +78,34 @@ def main():
         x, y = tr.transform(lon, lat)
         d = g.geometry.distance(Point(x, y))
         k = int(np.argmin(d.values))
-        if d.values[k] < 800:
+        if d.values[k] < 2500:
             cod = g.iloc[k]['COCURSODAG']
-            if cod in cursos.index and cod not in nomes:
+            if cod not in nomes:
                 nomes[cod] = nome
+            if cod not in cursos.index:
+                cursos.loc[cod] = float(
+                    g[g['COCURSODAG'] == cod].geometry.length.sum())
+    nomes.update({c: n for c, n in NOMES_POR_CODIGO.items()
+                  if c in cursos.index or c in comp.index})
+    for c in NOMES_POR_CODIGO:
+        if c in comp.index and c not in cursos.index:
+            cursos.loc[c] = comp[c]
+    # excecoes fora do divisor (le do bbox SEM recorte)
+    g_bbox = pyogrio.read_dataframe(SHP, bbox=bx)
+    for pref, nome in EXCECOES.items():
+        sel = g_bbox[g_bbox['COCURSODAG'] == pref]
+        if len(sel) == 0:
+            # tronco = codigo mais curto com o prefixo
+            cands = sorted(c for c in g_bbox['COCURSODAG'].unique()
+                           if str(c).startswith(pref))
+            if not cands:
+                continue
+            sel = g_bbox[g_bbox['COCURSODAG'] == cands[0]]
+        L = float(sel.geometry.length.sum())
+        cod = str(sel.iloc[0]['COCURSODAG'])
+        g = __import__('pandas').concat([g, sel])
+        cursos.loc[cod] = L
+        nomes[cod] = nome
     feats = []
     for cod, L in cursos.items():
         sel = g[g['COCURSODAG'] == cod]
