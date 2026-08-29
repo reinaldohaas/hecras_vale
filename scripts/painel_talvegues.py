@@ -442,6 +442,23 @@ def main():
     if os.path.exists(ana_arq):
         anarios = json.load(open(ana_arq))
         print(f'cursos ANA: {len(anarios["features"])} tracos')
+        # Rio do Campo (curso 775499) tambem entra nos "fora do
+        # modelo": e a extensao pendente do Oeste ate a Barragem Oeste
+        partes = []
+        for f2 in anarios['features']:
+            if f2['properties'].get('curso') == '775499':
+                g2 = f2['geometry']
+                linhas2 = ([g2['coordinates']]
+                           if g2['type'] == 'LineString'
+                           else g2['coordinates'])
+                for ln in linhas2:
+                    partes.append([[round(c[1], 6), round(c[0], 6)]
+                                   for c in ln])
+        if partes:
+            arquivados['rio_do_campo (a incluir p/ Barragem '
+                       'Oeste)'] = partes
+            print(f'rio_do_campo: {len(partes)} partes nos '
+                  f'fora-do-modelo')
     print('recortando FBDS...')
     massas = fbds_geojson('MASSAS_DAGUA')
     duplos = fbds_geojson('RIOS_DUPLOS')
