@@ -131,6 +131,12 @@ def main(argv):
     base = argv[0].rstrip("/\\")
     pasta = argv[argv.index("--series") + 1] if "--series" in argv \
         else "doc/ana_1983"
+    # --fracao Rio=0.18,Rio2=0.5 sobrepoe FRACAO_TOPO (rio mantido
+    # inteiro: a fracao da regua nao vale na cabeceira la de cima)
+    if "--fracao" in argv:
+        for par in argv[argv.index("--fracao") + 1].split(","):
+            r, v = par.split("=")
+            FRACAO_TOPO[r.strip()] = float(v)
     u01 = base + ".u01"
     p01 = base + ".p01"
     shutil.copy2(u01, u01 + ".antes_do_observado")

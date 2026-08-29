@@ -121,8 +121,10 @@ def main(argv):
     # ------------------------------------------------------------- u01/p01
     shutil.copy2(os.path.join(RAIZ, "taha_ai.u01.antes_do_observado"),
                  g("u01"))
+    extra_ctr = (["--fracao", _arg(argv, "--fracao")]
+                 if "--fracao" in argv else [])
     rodar(prog("contorno_observado.py", "taha_ai",
-               "--series", "doc/ana_1983"),
+               "--series", "doc/ana_1983", *extra_ctr),
           "a. contorno observado de 1983 (fracao de cabeceira por area)")
     rodar(prog("converter_inicial.py", "taha_ai.u01"),
           "b. Initial RS= fantasma -> Initial Flow Loc=")
@@ -160,10 +162,15 @@ def main(argv):
 
     if ate >= 6 and sem_amputar:
         print("\n=== 6. amputacoes PULADAS (--sem-amputar: rios inteiros)")
+    # --manter Rio_X,Rio_Y : rios que NAO serao amputados
+    manter = set((_arg(argv, "--manter", "") or "").split(","))
     if ate >= 6 and not sem_amputar:
         for reach, corte in [("Itajai_Mirim,R1", "40000"),
                              ("Rio_Benedito,R1", "23000"),
                              ("Rio_dos_Cedros,R1", "12000")]:
+            if reach.split(",")[0] in manter:
+                print(f"\n=== 6. {reach} MANTIDO inteiro (--manter)")
+                continue
             rodar(prog("amputar_cabeceira.py", "taha_ai.g01",
                        "--reach", reach, "--rs-corte", corte,
                        "--saida", "z06"),
