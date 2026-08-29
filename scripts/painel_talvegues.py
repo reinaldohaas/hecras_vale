@@ -111,6 +111,53 @@ def centerlines():
     return eixos
 
 
+def emendar_eixos(eixos):
+    """Fecha os vaos visuais: cada ponta de reach e atada a juncao
+    mais proxima (ou ao vertice mais proximo de OUTRO rio) ate 600 m.
+    So visual -- a geometria do modelo nao muda."""
+    import h5py
+    import numpy as np
+    from pyproj import Transformer
+    tr = Transformer.from_crs(31982, 4326, always_xy=True)
+    f = h5py.File(G01_HDF, 'r')
+    jp = f['Geometry/Junctions/Points'][:]
+    jlon, jlat = tr.transform(jp[:, 0].astype(float),
+                              jp[:, 1].astype(float))
+    juncoes = np.column_stack([jlat, jlon])
+    todos = []
+    for nome, partes in eixos.items():
+        for p in partes:
+            todos.extend([(nome, tuple(pt)) for pt in p])
+    import math
+
+    def d_m(a, b):
+        return math.hypot((a[0] - b[0]) * 111000,
+                          (a[1] - b[1]) * 99000)
+    for nome, partes in eixos.items():
+        for parte in partes:
+            for idx in (0, -1):
+                ponta = tuple(parte[idx])
+                melhor, dm = None, 600.0
+                for j in juncoes:
+                    d = d_m(ponta, j)
+                    if 1.0 < d < dm:
+                        melhor, dm = [round(float(j[0]), 6),
+                                      round(float(j[1]), 6)], d
+                if melhor is None:
+                    for outro, pt in todos:
+                        if outro == nome:
+                            continue
+                        d = d_m(ponta, pt)
+                        if 1.0 < d < dm:
+                            melhor, dm = list(pt), d
+                if melhor:
+                    if idx == 0:
+                        parte.insert(0, melhor)
+                    else:
+                        parte.append(melhor)
+    return eixos
+
+
 def bacia_prep():
     """Poligono oficial ANA (31982) preparado, com folga de 300 m."""
     from shapely.geometry import shape
@@ -377,7 +424,7 @@ def main():
     rios = talvegues()
     for n, v in sorted(rios.items()):
         print(f'  {n}: {len(v)} secoes, z {v[0][1]}..{v[-1][1]} m')
-    eixos = centerlines()
+    eixos = emendar_eixos(centerlines())
     print(f'centerlines: {sum(len(v) for v in eixos.values())} reaches')
     arquivados = eixos_arquivados()
     print(f'arquivados: {list(arquivados.keys())}')

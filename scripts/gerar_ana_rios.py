@@ -32,7 +32,7 @@ ANCORAS = {
 NOMES_POR_CODIGO = {
     '77542':  'Itajaí-Mirim (tronco)',
     '77546':  'Itajaí do Norte / Hercílio (tronco)',
-    '775499': 'Itajaí do Oeste (alto, montante de Taió)',
+    '775499': 'Itajaí do Oeste / Rio do Campo (p/ Barragem Oeste)',
 }
 # fora do divisor, mas mantido a pedido: o Mirim Doce drena para
 # OUTRA bacia otto (789646*) -- e a prova de que o alto "Oeste" do
