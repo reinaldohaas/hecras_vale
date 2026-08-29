@@ -39,12 +39,15 @@ def main(argv):
         tmp = p + '.tmp'
         with rasterio.open(tmp, 'w', **prof) as o:
             o.write(dados)
+        # conferencia EXATA: mesma janela nos dois (deflate e lossless,
+        # qualquer diferenca e corrupcao de escrita)
+        from rasterio.windows import Window
+        h2 = dados.shape[1]
+        j0 = h2 // 2
+        jn = min(256, h2 - j0)
         with rasterio.open(tmp) as s2:
-            amostra = s2.read(1, out_shape=(500, 500))
-        if not np.array_equal(amostra[:100],
-                              dados[0][::dados.shape[1] // 500 or 1,
-                                       ::dados.shape[2] // 500 or 1
-                                       ][:100]):
+            volta = s2.read(1, window=Window(0, j0, dados.shape[2], jn))
+        if not np.array_equal(volta, dados[0][j0:j0 + jn]):
             os.remove(tmp)
             print(f'  DIVERGIU (mantida original): {os.path.basename(p)}')
             continue
