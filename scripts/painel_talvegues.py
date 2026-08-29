@@ -203,6 +203,7 @@ const LAMINA = @@LAMINA@@;
 const BARRAGENS = @@BARRAGENS@@;
 const ARQUIVADOS = @@ARQUIVADOS@@;
 const ANARIOS = @@ANARIOS@@;
+const MUROS = @@MUROS@@;
 
 const mapa = L.map('mapa');
 const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -264,6 +265,19 @@ const camAna = L.geoJSON(ANARIOS, {
     opacity:0.85}),
   onEachFeature: (f, l) => l.bindTooltip(f.properties.nome,
                                          {sticky:true})});
+const CORMURO = {ponte:'#1864ab', represa:'#5f3dc4', '?':'#e67700'};
+const camMuros = L.geoJSON(MUROS, {
+  pointToLayer: (f, ll) => {
+    const m = f.properties;
+    return L.circleMarker(ll, {radius: Math.min(4 + m.altura_m, 14),
+      color: CORMURO[m.classe] || '#e67700', weight: 2,
+      fillOpacity: 0.75, fillColor: CORMURO[m.classe] || '#ffd43b'});
+  },
+  onEachFeature: (f, l) => {
+    const m = f.properties;
+    l.bindPopup('<b>muro ' + m.classe + '</b> ' + (m.nome || '') +
+      '<br>degrau: ' + m.altura_m + ' m<br>área: ' + m.area_m2 + ' m²');
+  }});
 const camArquivados = L.layerGroup();
 for (const nome in ARQUIVADOS) {
   const l = L.polyline(ARQUIVADOS[nome], {color:'#868e96', weight:3,
@@ -280,7 +294,8 @@ L.control.layers(
    'Rios duplos (FBDS)':camDuplos,
    'Barragens (SNISB)':camBarragens,
    'Rios arquivados (fora do modelo)':camArquivados,
-   "Cursos d'água ANA (código Otto)":camAna},
+   "Cursos d'água ANA (código Otto)":camAna,
+   'Muros no MDT (degraus >1 m)':camMuros},
   {collapsed:false}).addTo(mapa);
 
 const todos = Object.values(RIOS).flat();
@@ -366,6 +381,15 @@ def main():
     print(f'centerlines: {sum(len(v) for v in eixos.values())} reaches')
     arquivados = eixos_arquivados()
     print(f'arquivados: {list(arquivados.keys())}')
+    mur_arq = os.path.join('doc', 'painel', 'muros.geojson')
+    muros = {'type': 'FeatureCollection', 'features': []}
+    if os.path.exists(mur_arq):
+        todos = json.load(open(mur_arq))['features']
+        muros['features'] = [f for f in todos
+                             if f['properties']['classe'] != '?'
+                             or f['properties']['altura_m'] >= 2.0
+                             ][:600]
+        print(f'muros no painel: {len(muros["features"])}')
     ana_arq = os.path.join('doc', 'painel', 'ana_rios.geojson')
     anarios = {'type': 'FeatureCollection', 'features': []}
     if os.path.exists(ana_arq):
@@ -408,6 +432,8 @@ def main():
                 arquivados, separators=(',', ':')))
             .replace('@@ANARIOS@@', json.dumps(
                 anarios, separators=(',', ':')))
+            .replace('@@MUROS@@', json.dumps(
+                muros, separators=(',', ':')))
             .replace('@@MASSAS@@', json.dumps(massas,
                                               separators=(',', ':')))
             .replace('@@DUPLOS@@', json.dumps(duplos,
