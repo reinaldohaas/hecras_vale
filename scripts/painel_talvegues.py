@@ -1,0 +1,257 @@
+# -*- coding: utf-8 -*-
+"""Painel interativo: talvegues dos rios + massas d'agua + mapa base.
+
+    python scripts/painel_talvegues.py
+
+Sai doc/painel/talvegues.html — autocontido, abre no navegador com
+duplo clique. Leaflet via CDN; camadas base OSM / Google Satelite /
+Esri Imagery; overlays: eixos dos rios do modelo (clicaveis), massas
+d'agua e rios duplos da FBDS. Clicar num rio desenha o perfil do
+talvegue embaixo; passar o mouse no perfil move um marcador no mapa.
+"""
+import glob
+import json
+import os
+
+import numpy as np
+
+DIR = os.path.dirname(os.path.abspath(__file__))
+RAIZ = os.path.dirname(DIR)
+os.chdir(RAIZ)
+
+G01_HDF = 'taha_ai.g01.hdf'
+SAIDA = os.path.join('doc', 'painel', 'talvegues.html')
+
+
+def talvegues():
+    """Por rio/reach: [(RS, z_talvegue, lon, lat)] na ordem de jusante."""
+    import h5py
+    from pyproj import Transformer
+    tr = Transformer.from_crs(31982, 4326, always_xy=True)
+    f = h5py.File(G01_HDF, 'r')
+    cs = f['Geometry/Cross Sections']
+    at = cs['Attributes'][:]
+    se_info = cs['Station Elevation Info'][:]
+    se_val = cs['Station Elevation Values'][:]
+    pl_info = cs['Polyline Info'][:]
+    pl_pts = cs['Polyline Points'][:]
+    rios = {}
+    for k in range(len(at)):
+        rio = at['River'][k].decode().strip()
+        reach = at['Reach'][k].decode().strip()
+        try:
+            rs = float(at['RS'][k].decode())
+        except ValueError:
+            continue
+        i0, n = se_info[k]
+        if n < 2:
+            continue
+        z = float(se_val[i0:i0 + n, 1].min())
+        j0, m = pl_info[k][0], pl_info[k][1]
+        pts = pl_pts[j0:j0 + m]
+        # ponto do talvegue ~ meio da cutline (bom o bastante p/ mapa)
+        meio = pts[len(pts) // 2]
+        lon, lat = tr.transform(float(meio[0]), float(meio[1]))
+        rios.setdefault(rio, []).append(
+            (rs, round(z, 2), round(lon, 6), round(lat, 6)))
+    for nome in rios:
+        rios[nome].sort(key=lambda t: t[0])
+    return rios
+
+
+def fbds_geojson(camada, tol=15.0, max_kb=2500):
+    """Poligonos/linhas da FBDS simplificados, em 4326."""
+    import pyogrio
+    from pyproj import Transformer
+    from shapely.ops import transform as stransform
+    tr = Transformer.from_crs(31982, 4326, always_xy=True)
+
+    def p31982_4326(x, y):
+        return tr.transform(x, y)
+    feats = []
+    for shp in sorted(glob.glob(f'doc/fbds/*/*_{camada}.shp')):
+        try:
+            g = pyogrio.read_dataframe(shp)
+        except Exception:
+            continue
+        for geom in g.geometry:
+            if geom is None:
+                continue
+            s = geom.simplify(tol)
+            if s.is_empty:
+                continue
+            s = stransform(p31982_4326, s)
+            feats.append({'type': 'Feature', 'properties': {},
+                          'geometry': s.__geo_interface__})
+    gj = {'type': 'FeatureCollection', 'features': feats}
+    txt = json.dumps(gj, separators=(',', ':'))
+    print(f'  {camada}: {len(feats)} feicoes, {len(txt) // 1024} kB')
+    if len(txt) > max_kb * 1024:
+        print(f'  ({camada} acima de {max_kb} kB -- simplificando 3x)')
+        return fbds_geojson(camada, tol * 3, max_kb * 10)
+    return gj
+
+
+HTML = """<!DOCTYPE html>
+<html lang="pt-br"><head><meta charset="utf-8">
+<title>Talvegues do Vale do Itajaí</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet"
+ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+ html,body{margin:0;height:100%;font-family:system-ui,sans-serif}
+ #mapa{height:62%}
+ #painel{height:38%;position:relative;background:#101418}
+ #perfil{width:100%;height:100%;display:block}
+ #titulo{position:absolute;top:6px;left:12px;color:#eee;font-size:14px;
+         font-weight:600;pointer-events:none}
+ #dica{position:absolute;top:6px;right:12px;color:#9ab;font-size:12px;
+       pointer-events:none}
+</style></head><body>
+<div id="mapa"></div>
+<div id="painel">
+ <canvas id="perfil"></canvas>
+ <div id="titulo">clique num rio (linha vermelha) para ver o talvegue</div>
+ <div id="dica">passe o mouse no perfil para localizar no mapa</div>
+</div>
+<script>
+const RIOS = @@RIOS@@;
+const MASSAS = @@MASSAS@@;
+const DUPLOS = @@DUPLOS@@;
+
+const mapa = L.map('mapa');
+const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom:19, attribution:'&copy; OpenStreetMap'});
+const gsat = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+  {maxZoom:20, attribution:'Google'});
+const ghyb = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+  {maxZoom:20, attribution:'Google'});
+const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom:19, attribution:'Esri'});
+osm.addTo(mapa);
+
+const camMassas = L.geoJSON(MASSAS, {style:{color:'#0a6cbf',weight:1,
+  fillColor:'#3fa7ff',fillOpacity:0.45}});
+const camDuplos = L.geoJSON(DUPLOS, {style:{color:'#0a6cbf',weight:1,
+  fillColor:'#7fc4ff',fillOpacity:0.4}});
+camMassas.addTo(mapa); camDuplos.addTo(mapa);
+
+const cores = {};
+const camRios = L.layerGroup().addTo(mapa);
+let marcador = null, atual = null;
+const linhas = {};
+for (const nome in RIOS) {
+  const v = RIOS[nome];
+  const latlngs = v.map(p => [p[3], p[2]]);
+  const l = L.polyline(latlngs, {color:'#d62828', weight:3,
+                                 opacity:0.9});
+  l.bindTooltip(nome, {sticky:true});
+  l.on('click', () => desenhar(nome));
+  l.addTo(camRios);
+  linhas[nome] = l;
+}
+L.control.layers(
+  {'OpenStreetMap':osm, 'Google Satélite':gsat,
+   'Google Híbrido':ghyb, 'Esri Imagery':esri},
+  {'Rios do modelo':camRios, "Massas d'água (FBDS)":camMassas,
+   'Rios duplos (FBDS)':camDuplos},
+  {collapsed:false}).addTo(mapa);
+
+const todos = Object.values(RIOS).flat();
+mapa.fitBounds(todos.map(p => [p[3], p[2]]));
+
+const cv = document.getElementById('perfil');
+const tt = document.getElementById('titulo');
+let dadosPerfil = null;
+function desenhar(nome) {
+  atual = nome;
+  for (const n in linhas)
+    linhas[n].setStyle({color: n===nome ? '#ffd60a' : '#d62828',
+                        weight: n===nome ? 5 : 3});
+  const v = RIOS[nome];
+  const km = v.map(p => p[0]/1000), z = v.map(p => p[1]);
+  dadosPerfil = {nome, v, km, z};
+  tt.textContent = nome + ' — talvegue (' + v.length + ' seções)';
+  pintar(null);
+}
+function pintar(ix) {
+  const d = dadosPerfil; if (!d) return;
+  const W = cv.width = cv.clientWidth * devicePixelRatio;
+  const H = cv.height = cv.clientHeight * devicePixelRatio;
+  const g = cv.getContext('2d');
+  g.clearRect(0,0,W,H);
+  const m = {l:70*devicePixelRatio, r:20*devicePixelRatio,
+             t:34*devicePixelRatio, b:38*devicePixelRatio};
+  const k0 = Math.min(...d.km), k1 = Math.max(...d.km);
+  const z0 = Math.min(...d.z), z1 = Math.max(...d.z);
+  const X = k => m.l + (k-k0)/(k1-k0||1)*(W-m.l-m.r);
+  const Y = z => H-m.b - (z-z0)/(z1-z0||1)*(H-m.t-m.b);
+  g.strokeStyle='#2c3b4a'; g.lineWidth=1; g.beginPath();
+  for (let i=0;i<=5;i++){const y=m.t+i*(H-m.t-m.b)/5;
+    g.moveTo(m.l,y); g.lineTo(W-m.r,y);}
+  g.stroke();
+  g.fillStyle='#9ab'; g.font = (12*devicePixelRatio)+'px sans-serif';
+  for (let i=0;i<=5;i++){
+    const z = z1 - i*(z1-z0)/5, y=m.t+i*(H-m.t-m.b)/5;
+    g.fillText(z.toFixed(1)+' m', 8*devicePixelRatio, y+4);}
+  for (let i=0;i<=8;i++){
+    const k = k0 + i*(k1-k0)/8;
+    g.fillText(k.toFixed(1)+' km', X(k)-16, H-10);}
+  g.strokeStyle='#4dabf7'; g.lineWidth=2*devicePixelRatio;
+  g.beginPath();
+  d.km.forEach((k,i)=>{i?g.lineTo(X(k),Y(d.z[i])):g.moveTo(X(k),Y(d.z[i]));});
+  g.stroke();
+  if (ix!=null){
+    g.fillStyle='#ffd60a';
+    g.beginPath();
+    g.arc(X(d.km[ix]), Y(d.z[ix]), 5*devicePixelRatio, 0, 7);
+    g.fill();
+    g.fillStyle='#ffd60a';
+    g.fillText('RS '+d.v[ix][0]+'  z='+d.z[ix].toFixed(2)+' m',
+               X(d.km[ix])+8, Y(d.z[ix])-8);
+  }
+}
+cv.addEventListener('mousemove', e=>{
+  const d = dadosPerfil; if (!d) return;
+  const r = cv.getBoundingClientRect();
+  const fx = (e.clientX-r.left)/r.width;
+  const k0 = Math.min(...d.km), k1 = Math.max(...d.km);
+  const alvo = k0 + fx*(k1-k0);
+  let ix = 0, best = 1e18;
+  d.km.forEach((k,i)=>{const q=Math.abs(k-alvo);
+                       if(q<best){best=q;ix=i;}});
+  pintar(ix);
+  const p = d.v[ix];
+  if (!marcador) marcador = L.circleMarker([p[3],p[2]],
+    {radius:8, color:'#ffd60a', weight:3, fillOpacity:0.3}).addTo(mapa);
+  else marcador.setLatLng([p[3],p[2]]);
+});
+window.addEventListener('resize', ()=>pintar(null));
+</script></body></html>
+"""
+
+
+def main():
+    print('extraindo talvegues...')
+    rios = talvegues()
+    for n, v in sorted(rios.items()):
+        print(f'  {n}: {len(v)} secoes, z {v[0][1]}..{v[-1][1]} m')
+    print('recortando FBDS...')
+    massas = fbds_geojson('MASSAS_DAGUA')
+    duplos = fbds_geojson('RIOS_DUPLOS')
+    os.makedirs(os.path.dirname(SAIDA), exist_ok=True)
+    html = (HTML
+            .replace('@@RIOS@@', json.dumps(rios,
+                                            separators=(',', ':')))
+            .replace('@@MASSAS@@', json.dumps(massas,
+                                              separators=(',', ':')))
+            .replace('@@DUPLOS@@', json.dumps(duplos,
+                                              separators=(',', ':'))))
+    with open(SAIDA, 'w', encoding='utf-8') as fh:
+        fh.write(html)
+    print(f'painel: {SAIDA} ({os.path.getsize(SAIDA) // 1024} kB)')
+
+
+if __name__ == '__main__':
+    main()
